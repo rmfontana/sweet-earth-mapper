@@ -5,32 +5,79 @@ import { mockBrixData } from '../../data/mockData';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { MapPin, Calendar, User, CheckCircle } from 'lucide-react';
+import { MapPin, Calendar, User, CheckCircle, Eye } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-// Mock Mapbox implementation since we can't use real Mapbox without API key
-const InteractiveMap: React.FC = () => {
+interface InteractiveMapProps {
+  filters?: {
+    cropTypes: string[];
+    brixRange: [number, number];
+    dateRange: [string, string];
+    verifiedOnly: boolean;
+    submittedBy: string;
+  };
+}
+
+const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<string | null>(null);
+  const [filteredData, setFilteredData] = useState<BrixDataPoint[]>(mockBrixData);
 
-  // Simulate map initialization
+  // Apply filters to data
   useEffect(() => {
-    console.log('Map initialized with mock data');
-  }, []);
+    if (!filters) {
+      setFilteredData(mockBrixData);
+      return;
+    }
+
+    let filtered = mockBrixData.filter(point => {
+      // Crop type filter
+      if (filters.cropTypes.length > 0 && !filters.cropTypes.includes(point.cropType)) {
+        return false;
+      }
+
+      // BRIX range filter
+      if (point.brixLevel < filters.brixRange[0] || point.brixLevel > filters.brixRange[1]) {
+        return false;
+      }
+
+      // Date range filter
+      if (filters.dateRange[0] && new Date(point.measurementDate) < new Date(filters.dateRange[0])) {
+        return false;
+      }
+      if (filters.dateRange[1] && new Date(point.measurementDate) > new Date(filters.dateRange[1])) {
+        return false;
+      }
+
+      // Verified only filter
+      if (filters.verifiedOnly && !point.verified) {
+        return false;
+      }
+
+      // Submitted by filter
+      if (filters.submittedBy && !point.submittedBy.toLowerCase().includes(filters.submittedBy.toLowerCase())) {
+        return false;
+      }
+
+      return true;
+    });
+
+    setFilteredData(filtered);
+  }, [filters]);
 
   // Convert lat/lng to pixel coordinates for demo purposes
   const getPointPosition = (lat: number, lng: number) => {
-    // Simple conversion for demonstration - in real app, Mapbox handles this
-    const x = ((lng + 74.5) * 800) / 1.5; // Rough conversion for NYC area
+    const x = ((lng + 74.5) * 800) / 1.5;
     const y = ((40.9 - lat) * 600) / 0.3;
     return { x: Math.max(0, Math.min(800, x)), y: Math.max(0, Math.min(600, y)) };
   };
 
   const getBrixColor = (brixLevel: number) => {
-    if (brixLevel < 10) return '#ef4444'; // Red for low
-    if (brixLevel < 15) return '#f97316'; // Orange for medium
-    if (brixLevel < 20) return '#eab308'; // Yellow for good
-    return '#22c55e'; // Green for excellent
+    if (brixLevel < 10) return '#ef4444';
+    if (brixLevel < 15) return '#f97316';
+    if (brixLevel < 20) return '#eab308';
+    return '#22c55e';
   };
 
   return (
@@ -44,7 +91,7 @@ const InteractiveMap: React.FC = () => {
         }}
       >
         {/* Map data points */}
-        {mockBrixData.map((point) => {
+        {filteredData.map((point) => {
           const position = getPointPosition(point.latitude, point.longitude);
           const isHovered = hoveredPoint === point.id;
           const isSelected = selectedPoint?.id === point.id;
@@ -71,7 +118,7 @@ const InteractiveMap: React.FC = () => {
               {isHovered && !isSelected && (
                 <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 text-xs whitespace-nowrap z-30">
                   <div className="font-semibold">{point.cropType}</div>
-                  <div className="text-gray-600">Brix: {point.brixLevel}°</div>
+                  <div className="text-gray-600">BRIX: {point.brixLevel}</div>
                   <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white"></div>
                 </div>
               )}
@@ -100,24 +147,27 @@ const InteractiveMap: React.FC = () => {
         {/* Legend */}
         <Card className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm">
           <CardContent className="p-3">
-            <div className="text-sm font-semibold mb-2">Brix Levels</div>
+            <div className="text-sm font-semibold mb-2">BRIX Levels</div>
             <div className="space-y-1 text-xs">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                <span>&lt; 10° (Low)</span>
+                <span>&lt; 10 (Low)</span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                <span>10-15° (Medium)</span>
+                <span>10-15 (Medium)</span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                <span>15-20° (Good)</span>
+                <span>15-20 (Good)</span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                <span>&gt; 20° (Excellent)</span>
+                <span>&gt; 20 (Excellent)</span>
               </div>
+            </div>
+            <div className="mt-2 pt-2 border-t text-xs text-gray-600">
+              Showing {filteredData.length} measurements
             </div>
           </CardContent>
         </Card>
@@ -152,12 +202,12 @@ const InteractiveMap: React.FC = () => {
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Brix Level</span>
+                  <span className="text-sm font-medium">BRIX Reading</span>
                   <Badge 
                     style={{ backgroundColor: getBrixColor(selectedPoint.brixLevel) }}
                     className="text-white"
                   >
-                    {selectedPoint.brixLevel}°
+                    {selectedPoint.brixLevel}
                   </Badge>
                 </div>
 
@@ -181,6 +231,15 @@ const InteractiveMap: React.FC = () => {
                     <p className="text-sm text-gray-700">{selectedPoint.notes}</p>
                   </div>
                 )}
+
+                <div className="mt-4 pt-4 border-t">
+                  <Link to={`/data-point/${selectedPoint.id}`}>
+                    <Button className="w-full" size="sm">
+                      <Eye className="w-4 h-4 mr-2" />
+                      View Full Details
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -1,0 +1,80 @@
+
+import React, { useState } from 'react';
+import Header from '../components/Layout/Header';
+import InteractiveMap from '../components/Map/InteractiveMap';
+import MapFilters from '../components/Map/MapFilters';
+import { Card, CardContent } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Filter, List } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+const MapView = () => {
+  const [showFilters, setShowFilters] = useState(true);
+  const [filters, setFilters] = useState({
+    cropTypes: [] as string[],
+    brixRange: [0, 30] as [number, number],
+    dateRange: ['', ''] as [string, string],
+    verifiedOnly: false,
+    submittedBy: ''
+  });
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              BRIX Measurement Map
+            </h1>
+            <p className="text-gray-600">
+              Explore bionutrient density measurements from refractometer readings worldwide
+            </p>
+          </div>
+          
+          <div className="flex space-x-3 mt-4 md:mt-0">
+            <Button
+              variant="outline"
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center space-x-2"
+            >
+              <Filter className="w-4 h-4" />
+              <span>{showFilters ? 'Hide' : 'Show'} Filters</span>
+            </Button>
+            
+            <Link to="/data">
+              <Button variant="outline" className="flex items-center space-x-2">
+                <List className="w-4 h-4" />
+                <span>Data List</span>
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Filters Sidebar */}
+          {showFilters && (
+            <div className="lg:col-span-1">
+              <MapFilters filters={filters} onFiltersChange={setFilters} />
+            </div>
+          )}
+          
+          {/* Map Area */}
+          <div className={showFilters ? "lg:col-span-3" : "lg:col-span-4"}>
+            <Card>
+              <CardContent className="p-0">
+                <div className="h-[600px] w-full relative">
+                  <InteractiveMap filters={filters} />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default MapView;

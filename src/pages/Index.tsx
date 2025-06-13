@@ -1,260 +1,175 @@
 
-import React from 'react';
-import Header from '../components/Layout/Header';
-import InteractiveMap from '../components/Map/InteractiveMap';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
-import { MapPin, BarChart3, Users, TrendingUp, Plus } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { mockBrixData } from '../data/mockData';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
+import { useToast } from '../hooks/use-toast';
 
 const Index = () => {
-  const { isAuthenticated } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  
+  const { login, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
-  // Calculate some statistics for the dashboard
-  const totalMeasurements = mockBrixData.length;
-  const verifiedMeasurements = mockBrixData.filter(d => d.verified).length;
-  const avgBrix = (mockBrixData.reduce((sum, d) => sum + d.brixLevel, 0) / mockBrixData.length).toFixed(1);
-  const uniqueCrops = new Set(mockBrixData.map(d => d.cropType)).size;
+  // Redirect authenticated users to map
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/map');
+    }
+  }, [isAuthenticated, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const success = await login(email, password);
+      
+      if (success) {
+        toast({
+          title: "Welcome to BRIX!",
+          description: "You've been successfully logged in.",
+        });
+        navigate('/map');
+      } else {
+        setError('Invalid email or password. Try email: john@farm.com, password: password');
+      }
+    } catch (err) {
+      setError('An error occurred during login. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Hero Section */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Discover Crop Sweetness Worldwide
-          </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-6">
-            BRIX is a collaborative platform where farmers, researchers, and enthusiasts share 
-            Brix measurements to understand crop sweetness patterns across different regions and conditions.
-          </p>
-          {!isAuthenticated && (
-            <div className="flex justify-center space-x-4">
-              <Link to="/register">
-                <Button size="lg" className="bg-green-600 hover:bg-green-700">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Start Contributing
-                </Button>
-              </Link>
-              <Link to="/data">
-                <Button variant="outline" size="lg">
-                  <BarChart3 className="w-4 h-4 mr-2" />
-                  Explore Data
-                </Button>
-              </Link>
-            </div>
-          )}
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        {/* App Logo and Title */}
+        <div className="flex justify-center items-center space-x-3 mb-8">
+          <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg">
+            <span className="text-white font-bold text-2xl">B</span>
+          </div>
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-900">BRIX</h1>
+            <p className="text-sm text-gray-600">Bionutrient Refractometer App</p>
+          </div>
         </div>
-
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardContent className="flex items-center p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <BarChart3 className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{totalMeasurements}</p>
-                  <p className="text-sm text-gray-600">Total Measurements</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="flex items-center p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <TrendingUp className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{avgBrix}°</p>
-                  <p className="text-sm text-gray-600">Average Brix</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="flex items-center p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <MapPin className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{uniqueCrops}</p>
-                  <p className="text-sm text-gray-600">Crop Types</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="flex items-center p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <Users className="w-6 h-6 text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{verifiedMeasurements}</p>
-                  <p className="text-sm text-gray-600">Verified</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Interactive Map Section */}
-        <Card className="mb-8">
+        
+        <Card className="shadow-xl">
           <CardHeader>
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle className="flex items-center space-x-2">
-                  <MapPin className="w-5 h-5" />
-                  <span>Interactive Brix Map</span>
-                </CardTitle>
-                <p className="text-gray-600 mt-1">
-                  Explore Brix measurements from around the world. Click on points to see detailed information.
-                </p>
-              </div>
-              <Link to="/data">
-                <Button variant="outline">
-                  View All Data
-                </Button>
-              </Link>
-            </div>
+            <CardTitle className="text-center text-2xl font-bold text-gray-900">
+              Sign in to continue
+            </CardTitle>
+            <p className="text-center text-sm text-gray-600">
+              Access your BRIX measurement data and contribute to the community.
+            </p>
           </CardHeader>
+          
           <CardContent>
-            <div className="h-96 w-full">
-              <InteractiveMap />
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <div>
+                <Label htmlFor="email">Email address</Label>
+                <div className="mt-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10"
+                    placeholder="john@farm.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="password">Password</Label>
+                <div className="mt-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10 pr-10"
+                    placeholder="Enter your password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <Eye className="h-5 w-5 text-gray-400" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-green-600 hover:bg-green-700"
+              >
+                {isLoading ? 'Signing in...' : 'Sign in'}
+              </Button>
+            </form>
+
+            {/* Demo credentials info */}
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
+                <User className="w-4 h-4 mr-2" />
+                Demo Credentials
+              </h4>
+              <p className="text-xs text-blue-700">
+                Email: john@farm.com<br />
+                Password: password
+              </p>
+            </div>
+
+            <div className="mt-6 text-center">
+              <p className="text-sm text-gray-600">
+                Don't have an account?{' '}
+                <Link 
+                  to="/register" 
+                  className="font-medium text-green-600 hover:text-green-500"
+                >
+                  Sign up
+                </Link>
+              </p>
             </div>
           </CardContent>
         </Card>
-
-        {/* Recent Activity & Features */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Measurements */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Measurements</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {mockBrixData.slice(0, 5).map((point) => (
-                  <div key={point.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                      <div>
-                        <p className="font-medium">{point.cropType}</p>
-                        <p className="text-sm text-gray-600">by {point.submittedBy}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <Badge className="bg-green-100 text-green-800">
-                        {point.brixLevel}°
-                      </Badge>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {new Date(point.measurementDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Platform Features */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Why Use BRIX?</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <MapPin className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Geographic Insights</h4>
-                    <p className="text-sm text-gray-600">
-                      See how location affects crop sweetness and discover optimal growing regions.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <BarChart3 className="w-4 h-4 text-green-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Data-Driven Decisions</h4>
-                    <p className="text-sm text-gray-600">
-                      Make informed choices about harvesting, breeding, and crop management.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <Users className="w-4 h-4 text-purple-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Community Knowledge</h4>
-                    <p className="text-sm text-gray-600">
-                      Join a global community of farmers and researchers sharing expertise.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-orange-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium">Track Progress</h4>
-                    <p className="text-sm text-gray-600">
-                      Monitor your contributions and earn badges for your participation.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Call to Action for unauthenticated users */}
-        {!isAuthenticated && (
-          <Card className="mt-8 bg-gradient-to-r from-green-50 to-blue-50 border-green-200">
-            <CardContent className="text-center py-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                Ready to Start Contributing?
-              </h3>
-              <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
-                Join thousands of farmers, researchers, and agricultural enthusiasts 
-                who are building the world's largest database of crop sweetness data.
-              </p>
-              <div className="flex justify-center space-x-4">
-                <Link to="/register">
-                  <Button size="lg" className="bg-green-600 hover:bg-green-700">
-                    Create Account
-                  </Button>
-                </Link>
-                <Link to="/login">
-                  <Button variant="outline" size="lg">
-                    Sign In
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </main>
+      </div>
     </div>
   );
 };
