@@ -1,144 +1,265 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Layout/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
-import { Slider } from '../components/ui/slider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Plus, MapPin, Calendar, Beaker, Camera, Upload } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { Slider } from '../components/ui/slider';
+import { MapPin, Calendar, Camera, Upload, Loader2 } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
+import { cropTypes } from '../data/mockData';
 
 const DataEntry = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
+  // Security check - redirect if not authorized
+  useEffect(() => {
+    if (!user || (!user.isAdmin && user.username !== 'farmerjohn')) {
+      navigate('/');
+      return;
+    }
+  }, [user, navigate]);
+
   const [formData, setFormData] = useState({
     cropType: '',
     variety: '',
-    brixLevel: [12] as [number],
+    brixLevel: [12],
+    latitude: 0,
+    longitude: 0,
     location: '',
-    latitude: '',
-    longitude: '',
     measurementDate: new Date().toISOString().split('T')[0],
     notes: '',
-    cropImage: null as File | null
+    images: [] as File[]
   });
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  // Check if user has citizen scientist role
-  const isCitizenScientist = user?.isAdmin || user?.username === 'farmerjohn';
+  const [isLoading, setIsLoading] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  if (!isCitizenScientist) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header />
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <Card>
-            <CardContent className="text-center py-12">
-              <Beaker className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Restricted</h2>
-              <p className="text-gray-600 mb-6">
-                Only users with Citizen Scientist role can access the data entry form.
-              </p>
-              <Button onClick={() => navigate('/map')}>
-                Return to Map
-              </Button>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
+  // Input sanitization function
+  const sanitizeInput = (input: string): string => {
+    return input.trim().replace(/[<>]/g, '');
+  };
+
+  // Validate file uploads
+  const validateFile = (file: File): boolean => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+
+    if (!allowedTypes.includes(file.type)) {
+      setErrors(prev => ({ ...prev, images: 'Only JPEG, PNG, and WebP images are allowed' }));
+      return false;
+    }
+
+    if (file.size > maxSize) {
+      setErrors(prev => ({ ...prev, images: 'File size must be less than 5MB' }));
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleLocationCapture = () => {
+    if (!navigator.geolocation) {
+      setErrors(prev => ({ ...prev, location: 'Geolocation is not supported by this browser' }));
+      return;
+    }
+
+    setLocationLoading(true);
+    setErrors(prev => ({ ...prev, location: '' }));
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setFormData(prev => ({
+          ...prev,
+          latitude,
+          longitude
+        }));
+
+        // Simulate reverse geocoding (in production, use a secure API)
+        const mockLocation = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        setFormData(prev => ({
+          ...prev,
+          location: mockLocation
+        }));
+
+        setLocationLoading(false);
+        toast({
+          title: "Location captured",
+          description: "Your current location has been recorded.",
+        });
+      },
+      (error) => {
+        setLocationLoading(false);
+        let errorMessage = 'Unable to retrieve your location';
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Location access denied. Please enable location permissions.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location information is unavailable.';
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'Location request timed out.';
+            break;
+        }
+        
+        setErrors(prev => ({ ...prev, location: errorMessage }));
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
     );
-  }
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFormData(prev => ({ ...prev, cropImage: file }));
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+    const files = Array.from(e.target.files || []);
+    
+    if (files.length === 0) return;
+
+    // Validate each file
+    const validFiles = files.filter(validateFile);
+    
+    if (validFiles.length !== files.length) {
+      return; // Error already set by validateFile
     }
+
+    if (formData.images.length + validFiles.length > 3) {
+      setErrors(prev => ({ ...prev, images: 'Maximum 3 images allowed' }));
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      images: [...prev.images, ...validFiles]
+    }));
+
+    setErrors(prev => ({ ...prev, images: '' }));
   };
 
-  const getCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          
-          setFormData(prev => ({
-            ...prev,
-            latitude: lat.toFixed(6),
-            longitude: lng.toFixed(6)
-          }));
+  const removeImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
 
-          // Mock reverse geocoding for location name
-          const mockLocationName = "Walmart, Birmingham, Alabama";
-          setFormData(prev => ({
-            ...prev,
-            location: mockLocationName
-          }));
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
 
-          toast({
-            title: "Location captured",
-            description: "Current coordinates and location have been added to the form.",
-          });
-        },
-        (error) => {
-          toast({
-            title: "Location error",
-            description: "Unable to get current location. Please enter coordinates manually.",
-            variant: "destructive"
-          });
-        }
-      );
+    if (!formData.cropType) {
+      newErrors.cropType = 'Crop type is required';
     }
+
+    if (!formData.variety.trim()) {
+      newErrors.variety = 'Variety is required';
+    } else if (formData.variety.length > 50) {
+      newErrors.variety = 'Variety name too long (max 50 characters)';
+    }
+
+    if (formData.brixLevel[0] < 0 || formData.brixLevel[0] > 30) {
+      newErrors.brixLevel = 'BRIX level must be between 0 and 30';
+    }
+
+    if (!formData.location.trim()) {
+      newErrors.location = 'Location is required';
+    }
+
+    if (!formData.measurementDate) {
+      newErrors.measurementDate = 'Measurement date is required';
+    } else {
+      const selectedDate = new Date(formData.measurementDate);
+      const today = new Date();
+      if (selectedDate > today) {
+        newErrors.measurementDate = 'Measurement date cannot be in the future';
+      }
+    }
+
+    if (formData.notes.length > 500) {
+      newErrors.notes = 'Notes too long (max 500 characters)';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setError('');
+
+    if (!validateForm()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fix the errors in the form.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
-      // Validate required fields
-      if (!formData.cropType || !formData.brixLevel[0] || (!formData.latitude && !formData.location)) {
-        setError('Please fill in all required fields.');
-        return;
-      }
+      // Simulate API submission with validation
+      const submissionData = {
+        ...formData,
+        variety: sanitizeInput(formData.variety),
+        location: sanitizeInput(formData.location),
+        notes: sanitizeInput(formData.notes),
+        submittedBy: user?.username,
+        submittedAt: new Date().toISOString(),
+        verified: false
+      };
 
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      // In production, submit to secure backend API
+      console.log('Submitting data:', submissionData);
+
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       toast({
         title: "Data submitted successfully!",
-        description: "Your BRIX measurement has been added to the database.",
+        description: "Your BRIX measurement has been recorded.",
       });
-      
-      navigate('/map');
-    } catch (err) {
-      setError('Failed to submit data. Please try again.');
+
+      // Reset form
+      setFormData({
+        cropType: '',
+        variety: '',
+        brixLevel: [12],
+        latitude: 0,
+        longitude: 0,
+        location: '',
+        measurementDate: new Date().toISOString().split('T')[0],
+        notes: '',
+        images: []
+      });
+
+      navigate('/your-data');
+    } catch (error) {
+      toast({
+        title: "Submission failed",
+        description: "Please try again later.",
+        variant: "destructive"
+      });
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
+
+  // Don't render if user is not authorized
+  if (!user || (!user.isAdmin && user.username !== 'farmerjohn')) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -150,218 +271,203 @@ const DataEntry = () => {
             Submit BRIX Measurement
           </h1>
           <p className="text-gray-600">
-            Add a new bionutrient density measurement from your refractometer reading
+            Record your bionutrient density measurement from refractometer readings
           </p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              <Plus className="w-5 h-5" />
+              <Upload className="w-5 h-5" />
               <span>New Measurement Entry</span>
             </CardTitle>
           </CardHeader>
           
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              {/* Crop Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="cropType" className="required">Crop Type *</Label>
-                  <Input
-                    id="cropType"
-                    name="cropType"
-                    value={formData.cropType}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Tomato, Carrot, Apple"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="variety">Variety (optional)</Label>
-                  <Input
-                    id="variety"
-                    name="variety"
-                    value={formData.variety}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Cherry, Heirloom, Gala"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="cropType">Crop Type</Label>
+                <Select onValueChange={(value) => setFormData(prev => ({ ...prev, cropType: value }))}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a crop type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cropTypes.map(crop => (
+                      <SelectItem key={crop} value={crop}>{crop}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.cropType && (
+                  <p className="mt-1 text-sm text-red-600">{errors.cropType}</p>
+                )}
               </div>
 
-              {/* BRIX Measurement with Slider */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label className="flex items-center space-x-2 mb-4">
-                    <Beaker className="w-4 h-4" />
-                    <span>BRIX Reading: {formData.brixLevel[0]} *</span>
-                  </Label>
-                  <Slider
-                    value={formData.brixLevel}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, brixLevel: value as [number] }))}
-                    max={30}
-                    min={0}
-                    step={0.1}
-                    className="w-full"
-                  />
-                  <div className="flex justify-between text-xs text-gray-600 mt-1">
-                    <span>0</span>
-                    <span>15</span>
-                    <span>30</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Slide to set the refractometer reading (0-30 range)
-                  </p>
-                </div>
+              <div>
+                <Label htmlFor="variety">Variety</Label>
+                <Input
+                  id="variety"
+                  type="text"
+                  value={formData.variety}
+                  onChange={(e) => setFormData(prev => ({ ...prev, variety: e.target.value }))}
+                  placeholder="Enter the crop variety"
+                />
+                {errors.variety && (
+                  <p className="mt-1 text-sm text-red-600">{errors.variety}</p>
+                )}
+              </div>
 
-                <div>
-                  <Label htmlFor="measurementDate" className="flex items-center space-x-2">
-                    <Calendar className="w-4 h-4" />
-                    <span>Measurement Date</span>
-                  </Label>
+              <div>
+                <Label>BRIX Level</Label>
+                <Slider
+                  defaultValue={formData.brixLevel}
+                  max={30}
+                  step={0.5}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, brixLevel: value }))}
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Selected BRIX level: {formData.brixLevel[0]}
+                </p>
+                {errors.brixLevel && (
+                  <p className="mt-1 text-sm text-red-600">{errors.brixLevel}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="location">Location</Label>
+                <div className="relative">
+                  <Input
+                    id="location"
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                    placeholder="Enter location or capture from map"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={locationLoading}
+                    className="absolute right-1 top-1 rounded-md"
+                    onClick={handleLocationCapture}
+                  >
+                    {locationLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        <span>Locating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <MapPin className="w-4 h-4 mr-2" />
+                        <span>Capture Location</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {errors.location && (
+                  <p className="mt-1 text-sm text-red-600">{errors.location}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="measurementDate">Measurement Date</Label>
+                <div className="relative">
                   <Input
                     id="measurementDate"
-                    name="measurementDate"
                     type="date"
                     value={formData.measurementDate}
-                    onChange={handleInputChange}
-                    required
+                    onChange={(e) => setFormData(prev => ({ ...prev, measurementDate: e.target.value }))}
                   />
+                  <Calendar className="w-5 h-5 absolute right-2 top-2 text-gray-500" />
                 </div>
+                {errors.measurementDate && (
+                  <p className="mt-1 text-sm text-red-600">{errors.measurementDate}</p>
+                )}
               </div>
 
-              {/* Location */}
               <div>
-                <Label className="flex items-center space-x-2 mb-3">
-                  <MapPin className="w-4 h-4" />
-                  <span>Location *</span>
-                </Label>
-                
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="location" className="text-sm">Store/Address</Label>
-                    <Input
-                      id="location"
-                      name="location"
-                      value={formData.location}
-                      onChange={handleInputChange}
-                      placeholder="e.g., Walmart, Birmingham, Alabama"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="latitude" className="text-sm">Latitude</Label>
-                      <Input
-                        id="latitude"
-                        name="latitude"
-                        type="number"
-                        step="0.000001"
-                        value={formData.latitude}
-                        onChange={handleInputChange}
-                        placeholder="40.7128"
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="longitude" className="text-sm">Longitude</Label>
-                      <Input
-                        id="longitude"
-                        name="longitude"
-                        type="number"
-                        step="0.000001"
-                        value={formData.longitude}
-                        onChange={handleInputChange}
-                        placeholder="-74.0060"
-                      />
-                    </div>
-                    
-                    <div className="flex items-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={getCurrentLocation}
-                        className="w-full"
-                      >
-                        <MapPin className="w-4 h-4 mr-2" />
-                        Use Current
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Crop Image Upload */}
-              <div>
-                <Label className="flex items-center space-x-2 mb-3">
-                  <Camera className="w-4 h-4" />
-                  <span>Crop Image</span>
-                </Label>
-                
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-4">
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="flex-1"
-                    />
-                    <Button type="button" variant="outline" size="sm">
-                      <Upload className="w-4 h-4 mr-2" />
-                      Upload
-                    </Button>
-                  </div>
-                  
-                  {imagePreview && (
-                    <div className="mt-4">
-                      <img
-                        src={imagePreview}
-                        alt="Crop preview"
-                        className="w-32 h-32 object-cover rounded-lg border"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <Label htmlFor="notes">Additional Notes (optional)</Label>
+                <Label htmlFor="notes">Notes</Label>
                 <Textarea
                   id="notes"
-                  name="notes"
+                  placeholder="Enter any additional notes about the measurement"
                   value={formData.notes}
-                  onChange={handleInputChange}
-                  placeholder="Any additional information about the sample, growing conditions, or measurement context..."
-                  rows={4}
+                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                 />
+                {errors.notes && (
+                  <p className="mt-1 text-sm text-red-600">{errors.notes}</p>
+                )}
               </div>
 
-              {/* Submit Buttons */}
-              <div className="flex space-x-4 pt-6">
-                <Button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  {isSubmitting ? 'Submitting...' : 'Submit Measurement'}
-                </Button>
-                
+              <div>
+                <Label htmlFor="images">Images</Label>
+                <Input
+                  id="images"
+                  type="file"
+                  multiple
+                  accept="image/jpeg, image/png, image/webp"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <div className="flex items-center justify-between">
+                  <Button variant="secondary" asChild>
+                    <label htmlFor="images" className="flex items-center space-x-2 cursor-pointer">
+                      <Camera className="w-4 h-4" />
+                      <span>Upload Images</span>
+                    </label>
+                  </Button>
+                  <p className="text-sm text-gray-500">
+                    {formData.images.length} images selected (max 3)
+                  </p>
+                </div>
+                {errors.images && (
+                  <p className="mt-1 text-sm text-red-600">{errors.images}</p>
+                )}
+
+                {formData.images.length > 0 && (
+                  <div className="mt-4 grid grid-cols-3 gap-4">
+                    {formData.images.map((image, index) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={URL.createObjectURL(image)}
+                          alt={`Uploaded image ${index + 1}`}
+                          className="w-full h-32 object-cover rounded-md"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-1 right-1 bg-white/50 hover:bg-white/80 text-gray-900"
+                          onClick={() => removeImage(index)}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex space-x-4">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate('/map')}
-                  disabled={isSubmitting}
+                  onClick={() => navigate('/your-data')}
+                  className="flex-1"
                 >
                   Cancel
+                </Button>
+                
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    'Submit Measurement'
+                  )}
                 </Button>
               </div>
             </form>

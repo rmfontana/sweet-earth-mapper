@@ -16,13 +16,64 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [attemptCount, setAttemptCount] = useState(0);
   
   const { login } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Input sanitization function
+  const sanitizeInput = (input: string): string => {
+    return input.trim().replace(/[<>]/g, '');
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitizedEmail = sanitizeInput(e.target.value);
+    setEmail(sanitizedEmail);
+    setError(''); // Clear error when user starts typing
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sanitizedPassword = sanitizeInput(e.target.value);
+    setPassword(sanitizedPassword);
+    setError(''); // Clear error when user starts typing
+  };
+
+  const validateForm = (): boolean => {
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      return false;
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
+      return false;
+    }
+
+    // Basic password validation
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Rate limiting on frontend (basic protection)
+    if (attemptCount >= 5) {
+      setError('Too many login attempts. Please wait before trying again.');
+      return;
+    }
+
+    if (!validateForm()) {
+      return;
+    }
+
     setIsLoading(true);
     setError('');
 
@@ -34,11 +85,14 @@ const Login = () => {
           title: "Welcome back!",
           description: "You've been successfully logged in.",
         });
-        navigate('/');
+        setAttemptCount(0); // Reset attempt count on success
+        navigate('/map');
       } else {
-        setError('Invalid email or password. Try email: john@farm.com, password: password');
+        setAttemptCount(prev => prev + 1);
+        setError('Invalid email or password. Please try again.');
       }
     } catch (err) {
+      setAttemptCount(prev => prev + 1);
       setError('An error occurred during login. Please try again.');
     } finally {
       setIsLoading(false);
@@ -86,9 +140,10 @@ const Login = () => {
                     autoComplete="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={handleEmailChange}
                     className="pl-10"
                     placeholder="john@farm.com"
+                    maxLength={100}
                   />
                 </div>
               </div>
@@ -106,9 +161,10 @@ const Login = () => {
                     autoComplete="current-password"
                     required
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={handlePasswordChange}
                     className="pl-10 pr-10"
                     placeholder="Enter your password"
+                    maxLength={100}
                   />
                   <button
                     type="button"
@@ -137,14 +193,14 @@ const Login = () => {
 
               <Button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || attemptCount >= 5}
                 className="w-full bg-green-600 hover:bg-green-700"
               >
                 {isLoading ? 'Signing in...' : 'Sign in'}
               </Button>
             </form>
 
-            {/* Demo credentials info */}
+            {/* Demo credentials info - Remove in production */}
             <div className="mt-6 p-4 bg-blue-50 rounded-lg">
               <h4 className="text-sm font-medium text-blue-900 mb-2">Demo Credentials</h4>
               <p className="text-xs text-blue-700">

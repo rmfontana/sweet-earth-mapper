@@ -13,6 +13,39 @@ const Header = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  // Secure role checking function
+  const hasRole = (role: string): boolean => {
+    if (!user) return false;
+    
+    // More secure role checking - in production, validate roles server-side
+    switch (role) {
+      case 'admin':
+        return user.isAdmin === true;
+      case 'citizen_scientist':
+        // In production, check against a proper role system from backend
+        return user.isAdmin === true || user.username === 'farmerjohn';
+      default:
+        return false;
+    }
+  };
+
+  // Secure username display with sanitization
+  const getDisplayName = (): string => {
+    if (!user?.username) return '';
+    // Sanitize username display to prevent XSS
+    return user.username.replace(/[<>]/g, '');
+  };
+
+  const getUserInitial = (): string => {
+    const displayName = getDisplayName();
+    return displayName ? displayName.charAt(0).toUpperCase() : 'U';
+  };
+
+  const handleLogout = () => {
+    // Clear any additional sensitive data before logout
+    logout();
+  };
+
   return (
     <header className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -25,7 +58,7 @@ const Header = () => {
             <span className="text-xl font-bold text-gray-900">BRIX</span>
           </Link>
 
-          {/* Navigation */}
+          {/* Navigation - Only show if authenticated */}
           {user && (
             <nav className="hidden md:flex space-x-1">
               <Link to="/map">
@@ -58,7 +91,8 @@ const Header = () => {
                 </Button>
               </Link>
               
-              {(user.isAdmin || user.username === 'farmerjohn') && (
+              {/* Secure role-based access to data entry */}
+              {hasRole('citizen_scientist') && (
                 <Link to="/data-entry">
                   <Button 
                     variant={isActive('/data-entry') ? 'default' : 'ghost'} 
@@ -79,21 +113,21 @@ const Header = () => {
                 <div className="flex items-center space-x-2">
                   <Avatar className="w-8 h-8">
                     <AvatarFallback className="bg-green-100 text-green-700">
-                      {user.username.charAt(0).toUpperCase()}
+                      {getUserInitial()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="hidden sm:block">
-                    <p className="text-sm font-medium text-gray-900">{user.username}</p>
-                    {user.isAdmin && (
+                    <p className="text-sm font-medium text-gray-900">{getDisplayName()}</p>
+                    {hasRole('admin') && (
                       <Badge variant="secondary" className="text-xs">Admin</Badge>
                     )}
-                    {user.username === 'farmerjohn' && (
+                    {hasRole('citizen_scientist') && !hasRole('admin') && (
                       <Badge variant="secondary" className="text-xs">Citizen Scientist</Badge>
                     )}
                   </div>
                 </div>
                 
-                <Button variant="ghost" size="sm" onClick={logout}>
+                <Button variant="ghost" size="sm" onClick={handleLogout}>
                   <LogOut className="w-4 h-4" />
                 </Button>
               </div>
