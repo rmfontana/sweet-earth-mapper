@@ -15,14 +15,28 @@ interface InteractiveMapProps {
     dateRange: [string, string];
     verifiedOnly: boolean;
     submittedBy: string;
+    nearbyOnly?: boolean;
   };
+  userLocation?: {lat: number, lng: number} | null;
 }
 
-const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters }) => {
+const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<string | null>(null);
   const [filteredData, setFilteredData] = useState<BrixDataPoint[]>(mockBrixData);
+
+  // Calculate distance between two points in miles
+  const getDistanceInMiles = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+    const R = 3959; // Earth's radius in miles
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
 
   // Apply filters to data
   useEffect(() => {
@@ -60,11 +74,22 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters }) => {
         return false;
       }
 
+      // Nearby filter (within 1 mile)
+      if (filters.nearbyOnly && userLocation) {
+        const distance = getDistanceInMiles(
+          userLocation.lat, userLocation.lng,
+          point.latitude, point.longitude
+        );
+        if (distance > 1) {
+          return false;
+        }
+      }
+
       return true;
     });
 
     setFilteredData(filtered);
-  }, [filters]);
+  }, [filters, userLocation]);
 
   // Convert lat/lng to pixel coordinates for demo purposes
   const getPointPosition = (lat: number, lng: number) => {
@@ -90,6 +115,24 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters }) => {
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23e5e7eb' fill-opacity='0.3'%3E%3Cpath d='M0 0h40v40H0z'/%3E%3C/g%3E%3C/svg%3E")`,
         }}
       >
+        {/* User location marker */}
+        {userLocation && (
+          <div
+            className="absolute transform -translate-x-1/2 -translate-y-1/2 z-30"
+            style={{ 
+              left: getPointPosition(userLocation.lat, userLocation.lng).x, 
+              top: getPointPosition(userLocation.lat, userLocation.lng).y 
+            }}
+          >
+            <div className="w-6 h-6 rounded-full bg-blue-600 border-4 border-white shadow-lg flex items-center justify-center">
+              <div className="w-2 h-2 rounded-full bg-white"></div>
+            </div>
+            <div className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+              Your Location
+            </div>
+          </div>
+        )}
+
         {/* Map data points */}
         {filteredData.map((point) => {
           const position = getPointPosition(point.latitude, point.longitude);
@@ -165,6 +208,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters }) => {
                 <div className="w-3 h-3 rounded-full bg-green-500"></div>
                 <span>&gt; 20 (Excellent)</span>
               </div>
+              {userLocation && (
+                <div className="flex items-center space-x-2 pt-1 border-t">
+                  <div className="w-3 h-3 rounded-full bg-blue-600"></div>
+                  <span>Your Location</span>
+                </div>
+              )}
             </div>
             <div className="mt-2 pt-2 border-t text-xs text-gray-600">
               Showing {filteredData.length} measurements

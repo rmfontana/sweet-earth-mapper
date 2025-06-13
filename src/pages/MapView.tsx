@@ -5,18 +5,55 @@ import InteractiveMap from '../components/Map/InteractiveMap';
 import MapFilters from '../components/Map/MapFilters';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Filter, List } from 'lucide-react';
+import { Filter, List, Locate } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useToast } from '../hooks/use-toast';
 
 const MapView = () => {
+  const { toast } = useToast();
   const [showFilters, setShowFilters] = useState(true);
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [filters, setFilters] = useState({
     cropTypes: [] as string[],
     brixRange: [0, 30] as [number, number],
     dateRange: ['', ''] as [string, string],
     verifiedOnly: false,
-    submittedBy: ''
+    submittedBy: '',
+    nearbyOnly: false
   });
+
+  const handleLocationSearch = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userLoc = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setUserLocation(userLoc);
+          setFilters(prev => ({ ...prev, nearbyOnly: true }));
+          
+          toast({
+            title: "Location found",
+            description: "Showing measurements within 1 mile of your location.",
+          });
+        },
+        (error) => {
+          toast({
+            title: "Location error",
+            description: "Unable to access your location. Please enable location services.",
+            variant: "destructive"
+          });
+        }
+      );
+    } else {
+      toast({
+        title: "Not supported",
+        description: "Geolocation is not supported by this browser.",
+        variant: "destructive"
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -35,6 +72,15 @@ const MapView = () => {
           </div>
           
           <div className="flex space-x-3 mt-4 md:mt-0">
+            <Button
+              variant="outline"
+              onClick={handleLocationSearch}
+              className="flex items-center space-x-2"
+            >
+              <Locate className="w-4 h-4" />
+              <span>Near Me</span>
+            </Button>
+
             <Button
               variant="outline"
               onClick={() => setShowFilters(!showFilters)}
@@ -66,7 +112,7 @@ const MapView = () => {
             <Card>
               <CardContent className="p-0">
                 <div className="h-[600px] w-full relative">
-                  <InteractiveMap filters={filters} />
+                  <InteractiveMap filters={filters} userLocation={userLocation} />
                 </div>
               </CardContent>
             </Card>

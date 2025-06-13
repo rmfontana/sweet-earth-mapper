@@ -7,8 +7,9 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
+import { Slider } from '../components/ui/slider';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Plus, MapPin, Calendar, Beaker } from 'lucide-react';
+import { Plus, MapPin, Calendar, Beaker, Camera, Upload } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/use-toast';
 
@@ -20,18 +21,21 @@ const DataEntry = () => {
   const [formData, setFormData] = useState({
     cropType: '',
     variety: '',
-    brixLevel: '',
+    brixLevel: [12] as [number],
+    location: '',
     latitude: '',
     longitude: '',
     measurementDate: new Date().toISOString().split('T')[0],
-    notes: ''
+    notes: '',
+    cropImage: null as File | null
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // Check if user has citizen scientist role
-  const isCitizenScientist = user?.isAdmin || user?.username === 'farmerjohn'; // Mock role check
+  const isCitizenScientist = user?.isAdmin || user?.username === 'farmerjohn';
 
   if (!isCitizenScientist) {
     return (
@@ -60,18 +64,41 @@ const DataEntry = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFormData(prev => ({ ...prev, cropImage: file }));
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const getCurrentLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          
           setFormData(prev => ({
             ...prev,
-            latitude: position.coords.latitude.toFixed(6),
-            longitude: position.coords.longitude.toFixed(6)
+            latitude: lat.toFixed(6),
+            longitude: lng.toFixed(6)
           }));
+
+          // Mock reverse geocoding for location name
+          const mockLocationName = "Walmart, Birmingham, Alabama";
+          setFormData(prev => ({
+            ...prev,
+            location: mockLocationName
+          }));
+
           toast({
             title: "Location captured",
-            description: "Current coordinates have been added to the form.",
+            description: "Current coordinates and location have been added to the form.",
           });
         },
         (error) => {
@@ -92,7 +119,7 @@ const DataEntry = () => {
 
     try {
       // Validate required fields
-      if (!formData.cropType || !formData.brixLevel || !formData.latitude || !formData.longitude) {
+      if (!formData.cropType || !formData.brixLevel[0] || (!formData.latitude && !formData.location)) {
         setError('Please fill in all required fields.');
         return;
       }
@@ -169,27 +196,28 @@ const DataEntry = () => {
                 </div>
               </div>
 
-              {/* BRIX Measurement */}
+              {/* BRIX Measurement with Slider */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <Label htmlFor="brixLevel" className="required flex items-center space-x-2">
+                  <Label className="flex items-center space-x-2 mb-4">
                     <Beaker className="w-4 h-4" />
-                    <span>BRIX Reading *</span>
+                    <span>BRIX Reading: {formData.brixLevel[0]} *</span>
                   </Label>
-                  <Input
-                    id="brixLevel"
-                    name="brixLevel"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="30"
+                  <Slider
                     value={formData.brixLevel}
-                    onChange={handleInputChange}
-                    placeholder="0.0"
-                    required
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, brixLevel: value as [number] }))}
+                    max={30}
+                    min={0}
+                    step={0.1}
+                    className="w-full"
                   />
-                  <p className="text-sm text-gray-600 mt-1">
-                    Enter the refractometer reading (0-30 range)
+                  <div className="flex justify-between text-xs text-gray-600 mt-1">
+                    <span>0</span>
+                    <span>15</span>
+                    <span>30</span>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-2">
+                    Slide to set the refractometer reading (0-30 range)
                   </p>
                 </div>
 
@@ -216,46 +244,91 @@ const DataEntry = () => {
                   <span>Location *</span>
                 </Label>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-4">
                   <div>
-                    <Label htmlFor="latitude" className="text-sm">Latitude *</Label>
+                    <Label htmlFor="location" className="text-sm">Store/Address</Label>
                     <Input
-                      id="latitude"
-                      name="latitude"
-                      type="number"
-                      step="0.000001"
-                      value={formData.latitude}
+                      id="location"
+                      name="location"
+                      value={formData.location}
                       onChange={handleInputChange}
-                      placeholder="40.7128"
+                      placeholder="e.g., Walmart, Birmingham, Alabama"
                       required
                     />
                   </div>
                   
-                  <div>
-                    <Label htmlFor="longitude" className="text-sm">Longitude *</Label>
-                    <Input
-                      id="longitude"
-                      name="longitude"
-                      type="number"
-                      step="0.000001"
-                      value={formData.longitude}
-                      onChange={handleInputChange}
-                      placeholder="-74.0060"
-                      required
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="latitude" className="text-sm">Latitude</Label>
+                      <Input
+                        id="latitude"
+                        name="latitude"
+                        type="number"
+                        step="0.000001"
+                        value={formData.latitude}
+                        onChange={handleInputChange}
+                        placeholder="40.7128"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="longitude" className="text-sm">Longitude</Label>
+                      <Input
+                        id="longitude"
+                        name="longitude"
+                        type="number"
+                        step="0.000001"
+                        value={formData.longitude}
+                        onChange={handleInputChange}
+                        placeholder="-74.0060"
+                      />
+                    </div>
+                    
+                    <div className="flex items-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={getCurrentLocation}
+                        className="w-full"
+                      >
+                        <MapPin className="w-4 h-4 mr-2" />
+                        Use Current
+                      </Button>
+                    </div>
                   </div>
-                  
-                  <div className="flex items-end">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={getCurrentLocation}
-                      className="w-full"
-                    >
-                      <MapPin className="w-4 h-4 mr-2" />
-                      Use Current
+                </div>
+              </div>
+
+              {/* Crop Image Upload */}
+              <div>
+                <Label className="flex items-center space-x-2 mb-3">
+                  <Camera className="w-4 h-4" />
+                  <span>Crop Image</span>
+                </Label>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-4">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="flex-1"
+                    />
+                    <Button type="button" variant="outline" size="sm">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload
                     </Button>
                   </div>
+                  
+                  {imagePreview && (
+                    <div className="mt-4">
+                      <img
+                        src={imagePreview}
+                        alt="Crop preview"
+                        className="w-32 h-32 object-cover rounded-lg border"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

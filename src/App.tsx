@@ -10,6 +10,7 @@ import MapView from "./pages/MapView";
 import DataBrowser from "./pages/DataBrowser";
 import DataPointDetail from "./pages/DataPointDetail";
 import DataEntry from "./pages/DataEntry";
+import YourData from "./pages/YourData";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/data" element={<DataBrowser />} />
             <Route path="/data-point/:id" element={<DataPointDetail />} />
             <Route path="/data-entry" element={<DataEntry />} />
+            <Route path="/your-data" element={<YourData />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
