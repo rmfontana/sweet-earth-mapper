@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState } from '../types';
 
@@ -116,15 +115,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user && password === 'password') {
       const secureToken = generateSecureToken(user.id);
       
+      // Create user object with proper boolean type for isAdmin
+      const authenticatedUser = {
+        ...user,
+        isAdmin: user.username === 'farmerjohn' // Ensure this is boolean
+      };
+      
       setAuthState({
         isAuthenticated: true,
-        user,
+        user: authenticatedUser,
         token: secureToken
       });
       
       // Use sessionStorage instead of localStorage for better security
       sessionStorage.setItem('brix_token', secureToken);
-      sessionStorage.setItem('brix_user', JSON.stringify(user));
+      sessionStorage.setItem('brix_user', JSON.stringify(authenticatedUser));
       
       return true;
     }
@@ -166,14 +171,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Mock registration - In production, hash password and store in secure database
-    const newUser: User = {
+    const newUser = {
       id: crypto.getRandomValues(new Uint32Array(1))[0].toString(),
       username,
       email,
       joinDate: new Date().toISOString().split('T')[0],
       totalSubmissions: 0,
       verifiedSubmissions: 0,
-      badges: []
+      badges: [],
+      isAdmin: false // Ensure this is boolean
     };
     
     const secureToken = generateSecureToken(newUser.id);

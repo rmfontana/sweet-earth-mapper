@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,7 +11,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Slider } from '../components/ui/slider';
-import { MapPin, Calendar, Camera, Upload, Loader2 } from 'lucide-react';
+import { MapPin, Calendar, Camera, Upload, Loader2, X } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 import { cropTypes } from '../data/mockData';
 
