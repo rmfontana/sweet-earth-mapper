@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState } from '../types';
 
@@ -116,9 +117,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const secureToken = generateSecureToken(user.id);
       
       // Create user object with proper boolean type for isAdmin
-      const authenticatedUser = {
+      const authenticatedUser: User = {
         ...user,
-        isAdmin: user.username === 'farmerjohn' // Ensure this is boolean
+        isAdmin: user.username === 'farmerjohn' // This ensures boolean type
       };
       
       setAuthState({
@@ -171,7 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Mock registration - In production, hash password and store in secure database
-    const newUser = {
+    const newUser: User = {
       id: crypto.getRandomValues(new Uint32Array(1))[0].toString(),
       username,
       email,
@@ -179,7 +180,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       totalSubmissions: 0,
       verifiedSubmissions: 0,
       badges: [],
-      isAdmin: false // Ensure this is boolean
+      isAdmin: false // Explicitly set as boolean
     };
     
     const secureToken = generateSecureToken(newUser.id);
