@@ -77,6 +77,7 @@ Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-trick
 TODO: Redo this awful README 
 
 // Explanation of .github YAML 
+// Adding a line in the readme to trigger the action
 `on: push` triggers this workflow every time you push
 `jobs:` defines a job (i.e., set of steps to run on "runner" VM)
 `runs-on: ubuntu-latest` GitHub gives you a free Linux VM 
@@ -84,3 +85,4 @@ TODO: Redo this awful README
 `git config` sets user info for pushing
 `git remote add` adds gitlab as a second remote 
 `git push` pushes from GitHub -> GitLab
+
