@@ -3,7 +3,7 @@ name: Sync to GitLab
 on:
   push:
     branches:
-      - main  # Replace with your default branch if not 'main'
+      - main  
 
 jobs:
   sync:
@@ -13,13 +13,20 @@ jobs:
       - name: Checkout GitHub repo
         uses: actions/checkout@v4
 
-      - name: Push to GitLab
+      - name: Add GitLab remote and pull
         env:
           GITLAB_USERNAME: ${{ secrets.GITLAB_USERNAME }}
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           GITLAB_REPO: ${{ secrets.GITLAB_REPO }}
         run: |
           git config --global user.name "GitHub Sync Bot"
-          git config --global user.email "github-sync-bot@example.com"
+          git config --global user.email "sync@github-actions.local"
+          
           git remote add gitlab https://$GITLAB_USERNAME:$GITLAB_TOKEN@${GITLAB_REPO#https://}
+          
+          # Pull GitLab main and merge it into GitHub's main
+          git fetch gitlab main
+          git merge --allow-unrelated-histories --no-edit gitlab/main
+
+          # Now push merged history to GitLab (safe push, no force)
           git push gitlab HEAD:main
