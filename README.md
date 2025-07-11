@@ -71,3 +71,16 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+
+---------------
+TODO: Redo this awful README 
+
+// Explanation of .github YAML 
+`on: push` triggers this workflow every time you push
+`jobs:` defines a job (i.e., set of steps to run on "runner" VM)
+`runs-on: ubuntu-latest` GitHub gives you a free Linux VM 
+`actions/checkout` Clones your repo into that VM 
+`git config` sets user info for pushing
+`git remote add` adds gitlab as a second remote 
+`git push` pushes from GitHub -> GitLab
