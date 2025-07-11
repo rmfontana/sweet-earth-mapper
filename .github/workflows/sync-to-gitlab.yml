@@ -22,4 +22,4 @@ jobs:
           git config --global user.name "GitHub Sync Bot"
           git config --global user.email "github-sync-bot@example.com"
           git remote add gitlab https://$GITLAB_USERNAME:$GITLAB_TOKEN@${GITLAB_REPO#https://}
-          git push --force gitlab HEAD:main
+          git push gitlab HEAD:main
