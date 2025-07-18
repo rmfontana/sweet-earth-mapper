@@ -1,14 +1,18 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../integrations/supabase/client';
-import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
-interface User {
+interface UserProfile {
   id: string;
-  email: string;
+  display_name: string;
+  role: string; // 'admin', 'citizen_scientist', 'user'
+  points?: number;
+  submission_count?: number;
+  last_submission?: string | null;
+  email?: string; // from auth user
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: UserProfile | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -17,26 +21,51 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, display_name, role, points, submission_count, last_submission')
+    .eq('id', userId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching user profile:', error.message);
+    return null;
+  }
+  return data;
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     const fetchSession = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
-      if (error) console.error(error);
+      if (error) {
+        console.error(error);
+        return;
+      }
       if (session?.user) {
-        setUser({ id: session.user.id, email: session.user.email ?? '' });
-        setIsAuthenticated(true);
+        const profile = await fetchUserProfile(session.user.id);
+        if (profile) {
+          profile.email = session.user.email ?? undefined;
+          setUser(profile);
+          setIsAuthenticated(true);
+        }
       }
     };
 
     fetchSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        setUser({ id: session.user.id, email: session.user.email ?? '' });
-        setIsAuthenticated(true);
+        const profile = await fetchUserProfile(session.user.id);
+        if (profile) {
+          profile.email = session.user.email ?? undefined;
+          setUser(profile);
+          setIsAuthenticated(true);
+        }
       } else {
         setUser(null);
         setIsAuthenticated(false);
@@ -52,10 +81,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Login error:', error.message);
       return false;
     }
-    if (data?.user) {
-      setUser({ id: data.user.id, email: data.user.email ?? '' });
-      setIsAuthenticated(true);
-      return true;
+    if (data.user) {
+      const profile = await fetchUserProfile(data.user.id);
+      if (profile) {
+        profile.email = data.user.email ?? undefined;
+        setUser(profile);
+        setIsAuthenticated(true);
+        return true;
+      }
     }
     return false;
   };
@@ -66,10 +99,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Registration error:', error.message);
       return false;
     }
-    if (data?.user) {
-      setUser({ id: data.user.id, email: data.user.email ?? '' });
-      setIsAuthenticated(true);
-      return true;
+    if (data.user) {
+      // OPTIONAL: Insert into your users table if needed, e.g.:
+      // await supabase.from('users').insert([{ id: data.user.id, display_name: 'New User', role: 'user' }]);
+
+      const profile = await fetchUserProfile(data.user.id);
+      if (profile) {
+        profile.email = data.user.email ?? undefined;
+        setUser(profile);
+        setIsAuthenticated(true);
+        return true;
+      }
     }
     return false;
   };

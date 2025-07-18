@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '../ui/button';
@@ -13,27 +12,25 @@ const Header = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Secure role checking function
+  // Role checking based on user.role string
   const hasRole = (role: string): boolean => {
     if (!user) return false;
     
-    // More secure role checking - in production, validate roles server-side
     switch (role) {
       case 'admin':
-        return user.isAdmin === true;
+        return user.role === 'admin';
       case 'citizen_scientist':
-        // In production, check against a proper role system from backend
-        return user.isAdmin === true || user.username === 'farmerjohn';
+        // Citizen scientists have that role explicitly or admin can access too
+        return user.role === 'citizen_scientist' || user.role === 'admin';
       default:
         return false;
     }
   };
 
-  // Secure username display with sanitization
+  // Sanitize display_name to prevent XSS
   const getDisplayName = (): string => {
-    if (!user?.username) return '';
-    // Sanitize username display to prevent XSS
-    return user.username.replace(/[<>]/g, '');
+    if (!user?.display_name) return '';
+    return user.display_name.replace(/[<>]/g, '');
   };
 
   const getUserInitial = (): string => {
@@ -42,7 +39,6 @@ const Header = () => {
   };
 
   const handleLogout = () => {
-    // Clear any additional sensitive data before logout
     logout();
   };
 
@@ -58,7 +54,7 @@ const Header = () => {
             <span className="text-xl font-bold text-gray-900">BRIX</span>
           </Link>
 
-          {/* Navigation - Only show if authenticated */}
+          {/* Navigation - only if authenticated */}
           {user && (
             <nav className="hidden md:flex space-x-1">
               <Link to="/map">
@@ -91,7 +87,7 @@ const Header = () => {
                 </Button>
               </Link>
               
-              {/* Secure role-based access to data entry */}
+              {/* Role-based access to data entry */}
               {hasRole('citizen_scientist') && (
                 <Link to="/data-entry">
                   <Button 
@@ -106,7 +102,7 @@ const Header = () => {
             </nav>
           )}
 
-          {/* User Menu */}
+          {/* User menu */}
           <div className="flex items-center space-x-4">
             {user ? (
               <div className="flex items-center space-x-3">

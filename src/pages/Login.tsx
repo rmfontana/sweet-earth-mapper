@@ -200,15 +200,6 @@ const Login = () => {
               </Button>
             </form>
 
-            {/* Demo credentials info - Remove in production */}
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-              <h4 className="text-sm font-medium text-blue-900 mb-2">Demo Credentials</h4>
-              <p className="text-xs text-blue-700">
-                Email: john@farm.com<br />
-                Password: password
-              </p>
-            </div>
-
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
                 Don't have an account?{' '}

@@ -43,7 +43,7 @@ const Index = () => {
         });
         navigate('/map');
       } else {
-        setError('Invalid email or password. Try email: john@farm.com, password: password');
+        setError('Invalid email or password.');
       }
     } catch (err) {
       setError('An error occurred during login. Please try again.');
@@ -99,7 +99,7 @@ const Index = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
-                    placeholder="john@farm.com"
+                    placeholder="Enter your email"
                   />
                 </div>
               </div>
@@ -143,18 +143,6 @@ const Index = () => {
                 {isLoading ? 'Signing in...' : 'Sign in'}
               </Button>
             </form>
-
-            {/* Demo credentials info */}
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h4 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
-                <User className="w-4 h-4 mr-2" />
-                Demo Credentials
-              </h4>
-              <p className="text-xs text-blue-700">
-                Email: john@farm.com<br />
-                Password: password
-              </p>
-            </div>
 
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
