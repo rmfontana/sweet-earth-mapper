@@ -1,7 +1,6 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { BrixDataPoint } from '../../types';
-import { mockBrixData } from '../../data/mockData';
+import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -17,79 +16,111 @@ interface InteractiveMapProps {
     submittedBy: string;
     nearbyOnly?: boolean;
   };
-  userLocation?: {lat: number, lng: number} | null;
+  userLocation?: { lat: number; lng: number } | null;
 }
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<string | null>(null);
-  const [filteredData, setFilteredData] = useState<BrixDataPoint[]>(mockBrixData);
 
-  // Calculate distance between two points in miles
-  const getDistanceInMiles = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+  const [allData, setAllData] = useState<BrixDataPoint[]>([]);
+  const [filteredData, setFilteredData] = useState<BrixDataPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+   // Calculate distance between two points in miles
+   const getDistanceInMiles = (lat1: number, lng1: number, lat2: number, lng2: number) => {
     const R = 3959; // Earth's radius in miles
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
-  // Apply filters to data
+  
+  // Fetch data on mount
   useEffect(() => {
-    if (!filters) {
-      setFilteredData(mockBrixData);
-      return;
+    async function loadData() {
+      setLoading(true);
+      try {
+        const submissions = await fetchFormattedSubmissions();
+        setAllData(submissions);
+        setError(null);
+      } catch (err) {
+        setError('Failed to load data');
+        setAllData([]);
+      } finally {
+        setLoading(false);
+      }
     }
 
-    let filtered = mockBrixData.filter(point => {
-      // Crop type filter
-      if (filters.cropTypes.length > 0 && !filters.cropTypes.includes(point.cropType)) {
-        return false;
-      }
+    loadData();
+  }, []);
 
-      // BRIX range filter
-      if (point.brixLevel < filters.brixRange[0] || point.brixLevel > filters.brixRange[1]) {
-        return false;
+    // Filter data whenever filters, allData, or userLocation change
+    useEffect(() => {
+      if (!filters) {
+        setFilteredData(allData);
+        return;
       }
-
-      // Date range filter
-      if (filters.dateRange[0] && new Date(point.measurementDate) < new Date(filters.dateRange[0])) {
-        return false;
-      }
-      if (filters.dateRange[1] && new Date(point.measurementDate) > new Date(filters.dateRange[1])) {
-        return false;
-      }
-
-      // Verified only filter
-      if (filters.verifiedOnly && !point.verified) {
-        return false;
-      }
-
-      // Submitted by filter
-      if (filters.submittedBy && !point.submittedBy.toLowerCase().includes(filters.submittedBy.toLowerCase())) {
-        return false;
-      }
-
-      // Nearby filter (within 1 mile)
-      if (filters.nearbyOnly && userLocation) {
-        const distance = getDistanceInMiles(
-          userLocation.lat, userLocation.lng,
-          point.latitude, point.longitude
-        );
-        if (distance > 1) {
+  
+      let filtered = allData.filter((point) => {
+        // Crop type filter
+        if (filters.cropTypes.length > 0 && !filters.cropTypes.includes(point.cropType)) {
           return false;
         }
-      }
-
-      return true;
-    });
-
-    setFilteredData(filtered);
-  }, [filters, userLocation]);
+  
+        // Brix range filter
+        if (point.brixLevel < filters.brixRange[0] || point.brixLevel > filters.brixRange[1]) {
+          return false;
+        }
+  
+        // Date range filter using submittedAt
+        if (filters.dateRange[0] && new Date(point.submittedAt) < new Date(filters.dateRange[0])) {
+          return false;
+        }
+        if (filters.dateRange[1] && new Date(point.submittedAt) > new Date(filters.dateRange[1])) {
+          return false;
+        }
+  
+        // Verified only filter
+        if (filters.verifiedOnly && !point.verified) {
+          return false;
+        }
+  
+        // Submitted by filter
+        if (
+          filters.submittedBy &&
+          !point.submittedBy.toLowerCase().includes(filters.submittedBy.toLowerCase())
+        ) {
+          return false;
+        }
+  
+        // Nearby only filter (within 1 mile)
+        if (filters.nearbyOnly && userLocation) {
+          const distance = getDistanceInMiles(
+            userLocation.lat,
+            userLocation.lng,
+            point.latitude,
+            point.longitude
+          );
+          if (distance > 1) {
+            return false;
+          }
+        }
+  
+        return true;
+      });
+  
+      setFilteredData(filtered);
+    }, [filters, allData, userLocation]);
 
   // Convert lat/lng to pixel coordinates for demo purposes
   const getPointPosition = (lat: number, lng: number) => {
@@ -235,9 +266,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
                       <CheckCircle className="w-4 h-4 text-green-600" />
                     )}
                   </h3>
-                  {selectedPoint.variety && (
-                    <p className="text-sm text-gray-600">{selectedPoint.variety}</p>
-                  )}
                 </div>
                 <Button
                   variant="ghost"
@@ -262,7 +290,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
 
                 <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <Calendar className="w-4 h-4" />
-                  <span>{new Date(selectedPoint.measurementDate).toLocaleDateString()}</span>
+                  <span>{new Date(selectedPoint.submittedAt).toLocaleDateString()}</span>
                 </div>
 
                 <div className="flex items-center space-x-2 text-sm text-gray-600">
@@ -274,12 +302,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
                   <MapPin className="w-4 h-4" />
                   <span>{selectedPoint.latitude.toFixed(4)}, {selectedPoint.longitude.toFixed(4)}</span>
                 </div>
-
-                {selectedPoint.notes && (
-                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-700">{selectedPoint.notes}</p>
-                  </div>
-                )}
 
                 <div className="mt-4 pt-4 border-t">
                   <Link to={`/data-point/${selectedPoint.id}`}>

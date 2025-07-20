@@ -2,17 +2,19 @@
 // Core TypeScript interfaces for the BRIX platform
 export interface BrixDataPoint {
   id: string;
+  brixLevel: number;
+  verified: boolean;
+  verifiedAt: string;
+  label: string;
+  cropType: string;
   latitude: number;
   longitude: number;
-  brixLevel: number;
-  cropType: string;
-  variety?: string;
-  measurementDate: string;
+  storeName: string;
+  brandName: string;
   submittedBy: string;
+  verifiedBy: string;
   submittedAt: string;
-  verified: boolean;
-  notes?: string;
-  images?: string[];
+  images?: string[]
 }
 
 export interface User {

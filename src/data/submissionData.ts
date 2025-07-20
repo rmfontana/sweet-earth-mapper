@@ -2,6 +2,7 @@
 import { BrixDataPoint, Badge } from '../types';
 
 // Mock Brix data points for demonstration
+/* 
 export const mockBrixData: BrixDataPoint[] = [
   {
     id: '1',
@@ -71,14 +72,19 @@ export const mockBrixData: BrixDataPoint[] = [
     notes: 'Exceptionally sweet, perfect for harvest'
   }
 ];
+*/ 
 
 // Available crop types for filtering
+// Moved this to an actual function in lib/fetchCropTypes
+/*
 export const cropTypes = [
   'Apple', 'Grapes', 'Tomato', 'Strawberry', 'Watermelon', 
   'Orange', 'Peach', 'Cherry', 'Corn', 'Carrot'
 ];
+*/
 
 // Achievement badges for gamification
+// Keeping this mocked for now
 export const availableBadges: Badge[] = [
   {
     id: 'first-submission',

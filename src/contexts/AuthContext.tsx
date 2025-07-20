@@ -4,7 +4,7 @@ import { supabase } from '../integrations/supabase/client';
 interface UserProfile {
   id: string;
   display_name: string;
-  role: string; // 'admin', 'citizen_scientist', 'user'
+  role: string; // 'admin', 'contributor', 'user'
   points?: number;
   submission_count?: number;
   last_submission?: string | null;
@@ -16,7 +16,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  register: (email: string, password: string) => Promise<boolean>;
+  register: (email: string, password: string, username?: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -93,16 +93,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false;
   };
 
-  const register = async (email: string, password: string): Promise<boolean> => {
+  const register = async (email: string, password: string, username?: string): Promise<boolean> => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
       console.error('Registration error:', error.message);
       return false;
     }
     if (data.user) {
-      // OPTIONAL: Insert into your users table if needed, e.g.:
-      // await supabase.from('users').insert([{ id: data.user.id, display_name: 'New User', role: 'user' }]);
-
+      if (username) {
+        // Insert user profile with username into your users table
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert([{ id: data.user.id, display_name: username, role: 'contributor' }]);
+        if (insertError) {
+          console.error('Error inserting user profile:', insertError.message);
+          return false;
+        }
+      }
+  
       const profile = await fetchUserProfile(data.user.id);
       if (profile) {
         profile.email = data.user.email ?? undefined;

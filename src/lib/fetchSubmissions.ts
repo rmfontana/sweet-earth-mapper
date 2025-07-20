@@ -58,7 +58,6 @@ export async function fetchFormattedSubmissions() {
   
     return data!.map(item => ({
       id: item.id,
-      measurementDate: item.timestamp,
       brixLevel: item.brix_value,
       verified: item.verified,
       verifiedAt: item.verified_at,
@@ -70,6 +69,7 @@ export async function fetchFormattedSubmissions() {
       brandName: item.brand?.name ?? '',
       submittedBy: item.user?.display_name ?? 'Anonymous',
       verifiedBy: item.verifier?.display_name ?? 'Unknown',
+      submittedAt: item.timestamp,
       variety: undefined,  // fill in if you add it later
       notes: item.label ?? '',
       images: []  // you can extend this later

@@ -1,24 +1,29 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { BrixDataPoint, MapFilter } from '../../types';
-import { mockBrixData, cropTypes } from '../../data/mockData';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
+import { Badge } from '../ui/badge';
 import { Calendar, User, MapPin, CheckCircle, Filter, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
 
 const DataTable: React.FC = () => {
+  const [data, setData] = useState<BrixDataPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [sortBy, setSortBy] = useState<keyof BrixDataPoint>('measurementDate');
+  const [sortBy, setSortBy] = useState<keyof BrixDataPoint>('submittedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  
+
+  const [cropTypes, setCropTypes] = useState<string[]>([]);
+
+
   const [filters, setFilters] = useState<MapFilter>({
     cropTypes: [],
     brixRange: [0, 30],
@@ -26,15 +31,39 @@ const DataTable: React.FC = () => {
     verifiedOnly: false
   });
 
-  // Filter and sort data
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const submissions = await fetchFormattedSubmissions();
+        setData(submissions);
+        // Derive unique crop types from submissions
+        const uniqueCropTypes = Array.from(
+          new Set(submissions.map(s => s.cropType).filter(Boolean))
+        ).sort();
+        setCropTypes(uniqueCropTypes);
+
+        setError(null);
+      } catch {
+        setError('Failed to load data');
+        setData([]);
+        setCropTypes([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+
   const filteredData = useMemo(() => {
-    let data = mockBrixData.filter(point => {
+    let filtered = data.filter(point => {
       // Search filter
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
         if (!point.cropType.toLowerCase().includes(searchLower) &&
-            !point.submittedBy.toLowerCase().includes(searchLower) &&
-            !(point.variety?.toLowerCase().includes(searchLower))) {
+            !point.submittedBy.toLowerCase().includes(searchLower)) {
           return false;
         }
       }
@@ -50,7 +79,7 @@ const DataTable: React.FC = () => {
       }
 
       // Date range filter
-      if (point.measurementDate < filters.dateRange[0] || point.measurementDate > filters.dateRange[1]) {
+      if (point.submittedAt < filters.dateRange[0] || point.submittedAt > filters.dateRange[1]) {
         return false;
       }
 
@@ -79,8 +108,8 @@ const DataTable: React.FC = () => {
       }
     });
 
-    return data;
-  }, [searchTerm, filters, sortBy, sortOrder]);
+    return filtered;
+  }, [data, searchTerm, filters, sortBy, sortOrder]);
 
   // Pagination
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -102,6 +131,18 @@ const DataTable: React.FC = () => {
     if (brixLevel < 20) return 'bg-yellow-100 text-yellow-800';
     return 'bg-green-100 text-green-800';
   };
+
+  if (loading) {
+    return (
+      <div className="py-12 text-center text-gray-600">Loading data...</div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="py-12 text-center text-red-600">{error}</div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -257,10 +298,10 @@ const DataTable: React.FC = () => {
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('measurementDate')}
+                    onClick={() => handleSort('submittedAt')}
                   >
                     Date
-                    {sortBy === 'measurementDate' && (
+                    {sortBy === 'submittedAt' && (
                       <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </th>
@@ -287,9 +328,6 @@ const DataTable: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">{point.cropType}</div>
-                        {point.variety && (
-                          <div className="text-sm text-gray-500">{point.variety}</div>
-                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -298,7 +336,7 @@ const DataTable: React.FC = () => {
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(point.measurementDate).toLocaleDateString()}
+                      {new Date(point.submittedAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {point.submittedBy}
@@ -421,9 +459,6 @@ const DataTable: React.FC = () => {
                       <CheckCircle className="w-5 h-5 text-green-600" />
                     )}
                   </CardTitle>
-                  {selectedPoint.variety && (
-                    <p className="text-gray-600 mt-1">{selectedPoint.variety}</p>
-                  )}
                 </div>
                 <Button
                   variant="ghost"
@@ -444,7 +479,7 @@ const DataTable: React.FC = () => {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Calendar className="w-4 h-4 text-gray-500" />
-                  <span>{new Date(selectedPoint.measurementDate).toLocaleDateString()}</span>
+                  <span>{new Date(selectedPoint.submittedAt).toLocaleDateString()}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <User className="w-4 h-4 text-gray-500" />
@@ -455,13 +490,6 @@ const DataTable: React.FC = () => {
                   <span>{selectedPoint.latitude.toFixed(4)}, {selectedPoint.longitude.toFixed(4)}</span>
                 </div>
               </div>
-
-              {selectedPoint.notes && (
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h4 className="font-medium mb-2">Notes</h4>
-                  <p className="text-gray-700">{selectedPoint.notes}</p>
-                </div>
-              )}
 
               <div className="text-xs text-gray-500 border-t pt-4">
                 Submitted on {new Date(selectedPoint.submittedAt).toLocaleString()}

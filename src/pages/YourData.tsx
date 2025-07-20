@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../components/Layout/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -9,15 +8,35 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Plus, Edit, Trash2, Eye, MapPin, Calendar, Beaker, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { mockBrixData } from '../data/mockData';
+import { fetchFormattedSubmissions } from '../lib/fetchSubmissions';
+
 
 const YourData = () => {
   const { user } = useAuth();
-  
-  // Filter mock data to show only user's submissions
-  const userSubmissions = mockBrixData.filter(point => 
-    point.submittedBy === user?.username || point.submittedBy === 'farmerjohn'
-  );
+  const [userSubmissions, setUserSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadSubmissions = async () => {
+      if (!user?.display_name) {
+        setUserSubmissions([]);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const submissions = await fetchFormattedSubmissions();
+        setUserSubmissions(submissions.filter(sub => sub.submittedBy === user.display_name));
+      } catch (e) {
+        console.error(e);
+        setUserSubmissions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSubmissions();
+  }, [user?.display_name]);
 
   const getBrixColor = (brixLevel: number) => {
     if (brixLevel < 10) return 'bg-red-500';
@@ -52,6 +71,17 @@ const YourData = () => {
               </Link>
             </CardContent>
           </Card>
+        </main>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center">
+          <p className="text-gray-600">Loading your submissions...</p>
         </main>
       </div>
     );

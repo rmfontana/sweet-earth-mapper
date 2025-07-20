@@ -1,20 +1,55 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Layout/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { ArrowLeft, MapPin, Calendar, User, CheckCircle, AlertCircle, Edit, Trash2 } from 'lucide-react';
-import { mockBrixData } from '../data/mockData';
 import { useAuth } from '../contexts/AuthContext';
+import { fetchFormattedSubmissions } from '../lib/fetchSubmissions';
 
 const DataPointDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
-  const dataPoint = mockBrixData.find(point => point.id === id);
+
+  const [dataPoint, setDataPoint] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadDataPoint = async () => {
+      if (!id) {
+        setDataPoint(null);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const submissions = await fetchFormattedSubmissions();
+        const found = submissions.find(point => point.id === id);
+        setDataPoint(found || null);
+      } catch (error) {
+        console.error('Failed to load data point:', error);
+        setDataPoint(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDataPoint();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center">
+          <p className="text-gray-600">Loading measurement details...</p>
+        </main>
+      </div>
+    );
+  }
 
   if (!dataPoint) {
     return (
@@ -50,7 +85,7 @@ const DataPointDetail = () => {
     return 'Excellent';
   };
 
-  const isOwner = user?.username === dataPoint.submittedBy;
+  const isOwner = user?.display_name === dataPoint.submittedBy;
 
   return (
     <div className="min-h-screen bg-gray-50">
