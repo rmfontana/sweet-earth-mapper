@@ -12,22 +12,19 @@ const Header = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Role checking based on user.role string
   const hasRole = (role: string): boolean => {
     if (!user) return false;
-    
+
     switch (role) {
       case 'admin':
         return user.role === 'admin';
-      case 'citizen_scientist':
-        // Citizen scientists have that role explicitly or admin can access too
-        return user.role === 'citizen_scientist' || user.role === 'admin';
+      case 'contributor':
+        return user.role === 'contributor' || user.role === 'admin';
       default:
         return false;
     }
   };
 
-  // Sanitize display_name to prevent XSS
   const getDisplayName = (): string => {
     if (!user?.display_name) return '';
     return user.display_name.replace(/[<>]/g, '');
@@ -58,18 +55,18 @@ const Header = () => {
           {user && (
             <nav className="hidden md:flex space-x-1">
               <Link to="/map">
-                <Button 
-                  variant={isActive('/map') ? 'default' : 'ghost'} 
+                <Button
+                  variant={isActive('/map') ? 'default' : 'ghost'}
                   className="flex items-center space-x-2"
                 >
                   <Map className="w-4 h-4" />
                   <span>Map</span>
                 </Button>
               </Link>
-              
+
               <Link to="/data">
-                <Button 
-                  variant={isActive('/data') ? 'default' : 'ghost'} 
+                <Button
+                  variant={isActive('/data') ? 'default' : 'ghost'}
                   className="flex items-center space-x-2"
                 >
                   <Database className="w-4 h-4" />
@@ -78,20 +75,19 @@ const Header = () => {
               </Link>
 
               <Link to="/your-data">
-                <Button 
-                  variant={isActive('/your-data') ? 'default' : 'ghost'} 
+                <Button
+                  variant={isActive('/your-data') ? 'default' : 'ghost'}
                   className="flex items-center space-x-2"
                 >
                   <User className="w-4 h-4" />
                   <span>Your Data</span>
                 </Button>
               </Link>
-              
-              {/* Role-based access to data entry */}
-              {hasRole('citizen_scientist') && (
+
+              {hasRole('contributor') && (
                 <Link to="/data-entry">
-                  <Button 
-                    variant={isActive('/data-entry') ? 'default' : 'ghost'} 
+                  <Button
+                    variant={isActive('/data-entry') ? 'default' : 'ghost'}
                     className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white"
                   >
                     <Plus className="w-4 h-4" />
@@ -106,7 +102,8 @@ const Header = () => {
           <div className="flex items-center space-x-4">
             {user ? (
               <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-2">
+                {/* Link wrapping avatar + display name */}
+                <Link to="/profile" className="flex items-center space-x-2 cursor-pointer">
                   <Avatar className="w-8 h-8">
                     <AvatarFallback className="bg-green-100 text-green-700">
                       {getUserInitial()}
@@ -115,14 +112,18 @@ const Header = () => {
                   <div className="hidden sm:block">
                     <p className="text-sm font-medium text-gray-900">{getDisplayName()}</p>
                     {hasRole('admin') && (
-                      <Badge variant="secondary" className="text-xs">Admin</Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        Admin
+                      </Badge>
                     )}
-                    {hasRole('citizen_scientist') && !hasRole('admin') && (
-                      <Badge variant="secondary" className="text-xs">Citizen Scientist</Badge>
+                    {hasRole('contributor') && !hasRole('admin') && (
+                      <Badge variant="secondary" className="text-xs">
+                        Citizen Scientist
+                      </Badge>
                     )}
                   </div>
-                </div>
-                
+                </Link>
+
                 <Button variant="ghost" size="sm" onClick={handleLogout}>
                   <LogOut className="w-4 h-4" />
                 </Button>

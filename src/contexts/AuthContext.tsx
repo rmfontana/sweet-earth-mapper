@@ -1,137 +1,199 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
 import { supabase } from '../integrations/supabase/client';
 
 interface UserProfile {
   id: string;
-  display_name: string;
-  role: string; // 'admin', 'contributor', 'user'
-  points?: number;
-  submission_count?: number;
+  display_name: string | null;
+  role: string | null;
+  points?: number | null;
+  submission_count?: number | null;
   last_submission?: string | null;
-  email?: string; // from auth user
+  email?: string | null;
 }
 
 interface AuthContextType {
   user: UserProfile | null;
   isAuthenticated: boolean;
-  authError: string | null; // holds error messages for UI
+  authError: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  register: (email: string, password: string) => Promise<boolean>;  // Removed username param here
-  updateUsername: (newUsername: string) => Promise<boolean>;         // Added method
+  register: (email: string, password: string) => Promise<boolean>;
+  updateUsername: (newUsername: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Fetches user profile; returns null if none found
 async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, display_name, role, points, submission_count, last_submission')
-    .eq('id', userId)
-    .single();
+  try {
+    if (!userId) {
+      console.error('[fetchUserProfile] No userId provided');
+      return null;
+    }
 
-  if (error) {
-    console.error('Error fetching user profile:', error.message);
+    console.log('[fetchUserProfile] Looking up user with ID:', userId);
+
+    const { data, error } = await supabase
+      .from('users')
+      .select(
+        'id, display_name, role, points, submission_count, last_submission'
+      )
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      console.error('[fetchUserProfile] Supabase error:', error.message);
+      return null;
+    }
+
+    if (!data) {
+      console.warn('[fetchUserProfile] No user found for ID:', userId);
+      return null;
+    }
+
+    console.log('[fetchUserProfile] Fetched user:', data);
+    return data;
+  } catch (err: any) {
+    console.error('[fetchUserProfile] Unexpected error:', err.message || err);
     return null;
   }
-
-  return data;
 }
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSession() {
+      console.log('[Auth] Checking session...');
       const {
         data: { session },
         error,
       } = await supabase.auth.getSession();
 
       if (error) {
-        console.error('Error getting session:', error.message);
+        console.error('[Auth] Error getting session:', error.message);
+        setAuthError(error.message);
         return;
       }
 
       if (session?.user) {
-        const profile = await fetchUserProfile(session.user.id);
+        const { id, email } = session.user;
+        const profile = await fetchUserProfile(id);
         if (profile) {
-          profile.email = session.user.email ?? undefined;
+          profile.email = email;
           setUser(profile);
           setIsAuthenticated(true);
+        } else {
+          console.warn('[Auth] No profile found for session user.');
+          setAuthError('Profile not found.');
         }
       }
     }
+
     loadSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const profile = await fetchUserProfile(session.user.id);
-        if (profile) {
-          profile.email = session.user.email ?? undefined;
-          setUser(profile);
-          setIsAuthenticated(true);
-          setAuthError(null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        console.log('[Auth] Auth state changed:', _event);
+        if (session?.user) {
+          const { id, email } = session.user;
+          const profile = await fetchUserProfile(id);
+          if (profile) {
+            profile.email = email;
+            setUser(profile);
+            setIsAuthenticated(true);
+            setAuthError(null);
+          } else {
+            setUser(null);
+            setIsAuthenticated(false);
+            setAuthError('User profile not found.');
+          }
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
         }
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
       }
-    });
+    );
 
     return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setAuthError(null);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    console.log('[LOGIN] Logging in with', email);
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
     if (error) {
-      console.error('Login error:', error.message);
+      console.error('[LOGIN] Error:', error.message);
       setAuthError(error.message);
       return false;
     }
+
     if (data.user) {
       const profile = await fetchUserProfile(data.user.id);
       if (profile) {
-        profile.email = data.user.email ?? undefined;
+        profile.email = data.user.email;
         setUser(profile);
         setIsAuthenticated(true);
         return true;
+      } else {
+        setAuthError('User profile not found after login.');
+        return false;
       }
-      setAuthError('User profile not found.');
-      return false;
     }
-    setAuthError('Login failed.');
+
+    setAuthError('Login failed. No user returned.');
     return false;
+  };
+
+  const logout = async () => {
+    console.log('[LOGOUT] Logging out...');
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('[LOGOUT] Error:', error.message);
+      setAuthError(error.message);
+    }
+    setUser(null);
+    setIsAuthenticated(false);
   };
 
   const register = async (email: string, password: string): Promise<boolean> => {
     setAuthError(null);
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    console.log('[REGISTER] Creating account for', email);
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
 
     if (error) {
+      console.error('[REGISTER] Error:', error.message);
       setAuthError(error.message);
       return false;
     }
 
-    // If no user/session was returned, the email is likely already registered
     if (!data.user && !data.session) {
-      setAuthError("That email is already registered. Try signing in instead.");
+      setAuthError('Account created, but you must verify your email.');
       return false;
     }
-    
-    // Supabase trigger will create user profile automatically, so no manual insert here
 
     return true;
   };
 
-  // New method to update username/display_name on users table
   const updateUsername = async (newUsername: string): Promise<boolean> => {
     if (!user) {
-      setAuthError('No user logged in');
+      setAuthError('Not authenticated.');
       return false;
     }
 
@@ -141,23 +203,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .eq('id', user.id);
 
     if (error) {
+      console.error('[updateUsername] Error:', error.message);
       setAuthError(error.message);
       return false;
     }
 
-    // Update local state
-    setUser(prev => prev ? { ...prev, display_name: newUsername } : null);
+    setUser((prev) => (prev ? { ...prev, display_name: newUsername } : null));
     return true;
-  };
-
-  const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error('Logout error:', error.message);
-      setAuthError(error.message);
-    }
-    setUser(null);
-    setIsAuthenticated(false);
   };
 
   return (
@@ -169,7 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         register,
-        updateUsername,       
+        updateUsername,
       }}
     >
       {children}

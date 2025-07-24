@@ -17,7 +17,7 @@ const Login = () => {
   const [formError, setFormError] = useState('');
   const [attemptCount, setAttemptCount] = useState(0);
 
-  const { login, authError } = useAuth();
+  const { login, authError, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 

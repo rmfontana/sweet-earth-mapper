@@ -1,4 +1,3 @@
-
 import React from 'react';
 import Header from '../components/Layout/Header';
 import DataTable from '../components/DataBrowser/DataTable';
