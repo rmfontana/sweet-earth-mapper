@@ -14,13 +14,16 @@ interface UserProfile {
 interface AuthContextType {
   user: UserProfile | null;
   isAuthenticated: boolean;
+  authError: string | null; // holds error messages for UI
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  register: (email: string, password: string, username?: string) => Promise<boolean>;
+  register: (email: string, password: string) => Promise<boolean>;  // Removed username param here
+  updateUsername: (newUsername: string) => Promise<boolean>;         // Added method
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Fetches user profile; returns null if none found
 async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from('users')
@@ -32,20 +35,27 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
     console.error('Error fetching user profile:', error.message);
     return null;
   }
+
   return data;
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchSession = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
+    async function loadSession() {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
       if (error) {
-        console.error(error);
+        console.error('Error getting session:', error.message);
         return;
       }
+
       if (session?.user) {
         const profile = await fetchUserProfile(session.user.id);
         if (profile) {
@@ -54,9 +64,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsAuthenticated(true);
         }
       }
-    };
-
-    fetchSession();
+    }
+    loadSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
@@ -65,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           profile.email = session.user.email ?? undefined;
           setUser(profile);
           setIsAuthenticated(true);
+          setAuthError(null);
         }
       } else {
         setUser(null);
@@ -76,9 +86,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    setAuthError(null);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       console.error('Login error:', error.message);
+      setAuthError(error.message);
       return false;
     }
     if (data.user) {
@@ -89,54 +101,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsAuthenticated(true);
         return true;
       }
+      setAuthError('User profile not found.');
+      return false;
     }
+    setAuthError('Login failed.');
     return false;
   };
 
-  const register = async (email: string, password: string, username?: string): Promise<boolean> => {
+  const register = async (email: string, password: string): Promise<boolean> => {
+    setAuthError(null);
     const { data, error } = await supabase.auth.signUp({ email, password });
+
     if (error) {
-      console.error('Registration error:', error.message);
+      setAuthError(error.message);
       return false;
     }
-    if (data.user) {
-      if (username) {
-        // Insert user profile with username into your users table
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert([{ id: data.user.id, display_name: username, role: 'contributor' }]);
-        if (insertError) {
-          console.error('Error inserting user profile:', insertError.message);
-          return false;
-        }
-      }
-  
-      const profile = await fetchUserProfile(data.user.id);
-      if (profile) {
-        profile.email = data.user.email ?? undefined;
-        setUser(profile);
-        setIsAuthenticated(true);
-        return true;
-      }
+
+    // If no user/session was returned, the email is likely already registered
+    if (!data.user && !data.session) {
+      setAuthError("That email is already registered. Try signing in instead.");
+      return false;
     }
-    return false;
+    
+    // Supabase trigger will create user profile automatically, so no manual insert here
+
+    return true;
+  };
+
+  // New method to update username/display_name on users table
+  const updateUsername = async (newUsername: string): Promise<boolean> => {
+    if (!user) {
+      setAuthError('No user logged in');
+      return false;
+    }
+
+    const { error } = await supabase
+      .from('users')
+      .update({ display_name: newUsername })
+      .eq('id', user.id);
+
+    if (error) {
+      setAuthError(error.message);
+      return false;
+    }
+
+    // Update local state
+    setUser(prev => prev ? { ...prev, display_name: newUsername } : null);
+    return true;
   };
 
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
-    if (error) console.error('Logout error:', error.message);
+    if (error) {
+      console.error('Logout error:', error.message);
+      setAuthError(error.message);
+    }
     setUser(null);
     setIsAuthenticated(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, logout, register }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated,
+        authError,
+        login,
+        logout,
+        register,
+        updateUsername,       
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;

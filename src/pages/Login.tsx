@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -15,58 +14,52 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [attemptCount, setAttemptCount] = useState(0);
-  
-  const { login } = useAuth();
+
+  const { login, authError } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Input sanitization function
-  const sanitizeInput = (input: string): string => {
-    return input.trim().replace(/[<>]/g, '');
+  // Clear form error on input change
+  const clearErrors = () => {
+    setFormError('');
   };
 
+  const sanitizeInput = (input: string): string => input.trim().replace(/[<>]/g, '');
+
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const sanitizedEmail = sanitizeInput(e.target.value);
-    setEmail(sanitizedEmail);
-    setError(''); // Clear error when user starts typing
+    setEmail(sanitizeInput(e.target.value));
+    clearErrors();
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const sanitizedPassword = sanitizeInput(e.target.value);
-    setPassword(sanitizedPassword);
-    setError(''); // Clear error when user starts typing
+    setPassword(sanitizeInput(e.target.value));
+    clearErrors();
   };
 
   const validateForm = (): boolean => {
     if (!email || !password) {
-      setError('Please fill in all fields');
+      setFormError('Please fill in all fields');
       return false;
     }
-
-    // Email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setError('Please enter a valid email address');
+      setFormError('Please enter a valid email address');
       return false;
     }
-
-    // Basic password validation
     if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
+      setFormError('Password must be at least 6 characters long');
       return false;
     }
-
     return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Rate limiting on frontend (basic protection)
+
     if (attemptCount >= 5) {
-      setError('Too many login attempts. Please wait before trying again.');
+      setFormError('Too many login attempts. Please wait before trying again.');
       return;
     }
 
@@ -75,28 +68,24 @@ const Login = () => {
     }
 
     setIsLoading(true);
-    setError('');
+    setFormError('');
 
-    try {
-      const success = await login(email, password);
-      
-      if (success) {
-        toast({
-          title: "Welcome back!",
-          description: "You've been successfully logged in.",
-        });
-        setAttemptCount(0); // Reset attempt count on success
-        navigate('/map');
-      } else {
-        setAttemptCount(prev => prev + 1);
-        setError('Invalid email or password. Please try again.');
-      }
-    } catch (err) {
+    const success = await login(email, password);
+
+    if (success) {
+      toast({
+        title: "Welcome back!",
+        description: "You've been successfully logged in.",
+      });
+      setAttemptCount(0);
+      navigate('/map');
+    } else {
       setAttemptCount(prev => prev + 1);
-      setError('An error occurred during login. Please try again.');
-    } finally {
-      setIsLoading(false);
+      // Show authError from context if available, fallback to generic
+      setFormError(authError || 'Invalid email or password. Please try again.');
     }
+
+    setIsLoading(false);
   };
 
   return (
@@ -108,7 +97,7 @@ const Login = () => {
           </div>
           <span className="text-2xl font-bold text-gray-900">BRIX</span>
         </Link>
-        
+
         <Card>
           <CardHeader>
             <CardTitle className="text-center text-2xl font-bold text-gray-900">
@@ -118,12 +107,12 @@ const Login = () => {
               Welcome back! Enter your credentials to access your account.
             </p>
           </CardHeader>
-          
+
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
+              {(formError || authError) && (
                 <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>{formError || authError}</AlertDescription>
                 </Alert>
               )}
 
@@ -182,8 +171,8 @@ const Login = () => {
 
               <div className="flex items-center justify-between">
                 <div className="text-sm">
-                  <Link 
-                    to="/forgot-password" 
+                  <Link
+                    to="/forgot-password"
                     className="font-medium text-green-600 hover:text-green-500"
                   >
                     Forgot your password?
@@ -203,8 +192,8 @@ const Login = () => {
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
                 Don't have an account?{' '}
-                <Link 
-                  to="/register" 
+                <Link
+                  to="/register"
                   className="font-medium text-green-600 hover:text-green-500"
                 >
                   Sign up

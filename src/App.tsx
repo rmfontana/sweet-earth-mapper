@@ -14,6 +14,8 @@ import YourData from "./pages/YourData";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
+import VerifyEmailNotice from "./pages/VerifyEmailNotice";
+import Profile from './pages/Profile';
 
 const queryClient = new QueryClient();
 
@@ -34,6 +36,8 @@ const App = () => (
             <Route path="/data-entry" element={<DataEntry />} />
             <Route path="/your-data" element={<YourData />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="/verify-email" element={<VerifyEmailNotice />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
