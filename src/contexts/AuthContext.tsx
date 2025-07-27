@@ -40,9 +40,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
 
     const { data, error } = await supabase
       .from('users')
-      .select(
-        'id, display_name, role, points, submission_count, last_submission'
-      )
+      .select('id, display_name, role, points, submission_count, last_submission')
       .eq('id', userId)
       .single();
 
@@ -157,15 +155,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return false;
   };
 
-  const logout = async () => {
-    console.log('[LOGOUT] Logging out...');
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error('[LOGOUT] Error:', error.message);
-      setAuthError(error.message);
+  const logout = async (): Promise<void> => {
+    try {
+      console.log('[LOGOUT] Logging out...');
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[LOGOUT] Error:', error.message);
+        setAuthError(error.message);
+      }
+    } catch (err: any) {
+      console.error('[LOGOUT] Unexpected error:', err.message || err);
+      setAuthError('Unexpected error during logout.');
+    } finally {
+      setUser(null);
+      setIsAuthenticated(false);
     }
-    setUser(null);
-    setIsAuthenticated(false);
   };
 
   const register = async (email: string, password: string): Promise<boolean> => {

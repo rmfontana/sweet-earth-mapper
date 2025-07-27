@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -20,6 +20,9 @@ const Login = () => {
   const { login, authError, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const location = useLocation();
+  const from = location.state?.from?.pathname || '/map';
 
   // Clear form error on input change
   const clearErrors = () => {
@@ -78,7 +81,7 @@ const Login = () => {
         description: "You've been successfully logged in.",
       });
       setAttemptCount(0);
-      navigate('/map');
+      navigate(from, { replace: true });
     } else {
       setAttemptCount(prev => prev + 1);
       // Show authError from context if available, fallback to generic

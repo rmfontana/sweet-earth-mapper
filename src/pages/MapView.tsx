@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import Header from '../components/Layout/Header';
 import InteractiveMap from '../components/Map/InteractiveMap';
