@@ -28,8 +28,7 @@ const VerifyEmailNotice = () => {
 
           <CardContent className="space-y-4">
             <p className="text-center text-sm text-gray-500">
-              Didn’t receive the email? Check your spam folder or{' '}
-              <Link to="/resend-confirmation" className="font-medium text-green-600 hover:text-green-500">resend confirmation</Link>.
+              Didn’t receive the email? Check your spam folder.
             </p>
 
             <Button asChild className="w-full bg-green-600 hover:bg-green-700">

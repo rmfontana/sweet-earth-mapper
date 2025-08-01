@@ -134,7 +134,7 @@ const Login = () => {
                     value={email}
                     onChange={handleEmailChange}
                     className="pl-10"
-                    placeholder="john@farm.com"
+                    placeholder="Enter your email address"
                     maxLength={100}
                   />
                 </div>

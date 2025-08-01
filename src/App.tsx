@@ -33,6 +33,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/verify-email" element={<VerifyEmailNotice />} />
             <Route path="*" element={<NotFound />} />
 
             {/* Protected routes wrapped with ProtectedRoute */}
@@ -73,14 +74,6 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <YourData />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/verify-email"
-              element={
-                <ProtectedRoute>
-                  <VerifyEmailNotice />
                 </ProtectedRoute>
               }
             />

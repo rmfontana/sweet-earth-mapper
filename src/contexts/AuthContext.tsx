@@ -98,27 +98,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loadSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
         console.log('[Auth] Auth state changed:', _event);
-        if (session?.user) {
-          const { id, email } = session.user;
-          const profile = await fetchUserProfile(id);
-          if (profile) {
-            profile.email = email;
-            setUser(profile);
-            setIsAuthenticated(true);
-            setAuthError(null);
+    
+        async function handleSession() {
+          if (session?.user) {
+            const { id, email } = session.user;
+            const profile = await fetchUserProfile(id);
+            if (profile) {
+              profile.email = email;
+              setUser(profile);
+              setIsAuthenticated(true);
+              setAuthError(null);
+            } else {
+              setUser(null);
+              setIsAuthenticated(false);
+              setAuthError('User profile not found.');
+            }
           } else {
             setUser(null);
             setIsAuthenticated(false);
-            setAuthError('User profile not found.');
           }
-        } else {
+        }
+    
+        // Call async function but don’t await here
+        handleSession().catch((error) => {
+          console.error('[Auth] Error handling session:', error);
           setUser(null);
           setIsAuthenticated(false);
-        }
+          setAuthError('Error fetching user profile.');
+        });
       }
     );
+    
 
     return () => subscription.unsubscribe();
   }, []);
@@ -179,6 +191,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/map`,
+  },
     });
 
     if (error) {

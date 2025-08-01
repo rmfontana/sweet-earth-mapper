@@ -139,7 +139,7 @@ const Register = () => {
                     value={formData.email}
                     onChange={handleInputChange}
                     className={`pl-10 ${formErrors.email ? 'border-red-300' : ''}`}
-                    placeholder="your@email.com"
+                    placeholder="Enter your email address"
                   />
                 </div>
                 {formErrors.email && (
