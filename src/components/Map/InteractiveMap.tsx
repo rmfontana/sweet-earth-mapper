@@ -9,8 +9,6 @@ import { Button } from '../ui/button';
 import { MapPin, Calendar, User, CheckCircle, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
-
 interface InteractiveMapProps {
   filters?: {
     cropTypes: string[];
@@ -23,6 +21,17 @@ interface InteractiveMapProps {
   userLocation?: { lat: number; lng: number } | null;
 }
 
+async function getMapboxToken() {
+  try {
+    const response = await fetch('https://wbkzczcqlorsewoofwqe.supabase.co/functions/v1/mapbox-token');
+    const data = await response.json();
+    return data.token;
+  } catch (error) {
+    console.error('Failed to fetch Mapbox token:', error);
+    return null;
+  }
+}
+
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -30,14 +39,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
   const [filteredData, setFilteredData] = useState<BrixDataPoint[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
 
-  // Fetch data
   useEffect(() => {
     fetchFormattedSubmissions()
       .then(setAllData)
       .catch(() => setAllData([]));
   }, []);
 
-  // Filter logic
   useEffect(() => {
     if (!filters) {
       setFilteredData(allData);
@@ -63,7 +70,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
     setFilteredData(result);
   }, [filters, allData, userLocation]);
 
-  // Distance calc
   const getDistanceInMiles = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 3959;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -81,101 +87,112 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
     return '#22c55e';
   };
 
-  // Map init
   useEffect(() => {
-    if (!mapContainer.current || mapRef.current) return;
+    async function initializeMap() {
+      if (!mapContainer.current || mapRef.current) return;
 
-    const map = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: userLocation ? [userLocation.lng, userLocation.lat] : [-74.0242, 40.6941],
-      zoom: 10,
-    });
+      const token = await getMapboxToken();
+      if (!token) {
+        console.error('Failed to retrieve Mapbox token');
+        return;
+      }
 
-    mapRef.current = map;
+      mapboxgl.accessToken = token;
 
-    map.on('load', () => {
-      map.addSource('points', {
-        type: 'geojson',
-        data: toGeoJSON(filteredData),
-        cluster: true,
-        clusterMaxZoom: 14,
-        clusterRadius: 50,
+      const map = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: userLocation ? [userLocation.lng, userLocation.lat] : [-74.0242, 40.6941],
+        zoom: 10,
       });
 
-      map.addLayer({
-        id: 'clusters',
-        type: 'circle',
-        source: 'points',
-        filter: ['has', 'point_count'],
-        paint: {
-          'circle-color': '#6366f1',
-          'circle-radius': ['step', ['get', 'point_count'], 15, 10, 20, 50, 25],
-        },
-      });
+      mapRef.current = map;
 
-      map.addLayer({
-        id: 'cluster-count',
-        type: 'symbol',
-        source: 'points',
-        filter: ['has', 'point_count'],
-        layout: {
-          'text-field': '{point_count_abbreviated}',
-          'text-font': ['Open Sans Bold'],
-          'text-size': 12,
-        },
-      });
+      map.on('load', () => {
+        map.addSource('points', {
+          type: 'geojson',
+          data: toGeoJSON(filteredData),
+          cluster: true,
+          clusterMaxZoom: 14,
+          clusterRadius: 50,
+        });
 
-      map.addLayer({
-        id: 'unclustered-point',
-        type: 'circle',
-        source: 'points',
-        filter: ['!', ['has', 'point_count']],
-        paint: {
-          'circle-color': ['get', 'color'],
-          'circle-radius': 8,
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#fff',
-        },
-      });
+        map.addLayer({
+          id: 'clusters',
+          type: 'circle',
+          source: 'points',
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': '#6366f1',
+            'circle-radius': ['step', ['get', 'point_count'], 15, 10, 20, 50, 25],
+          },
+        });
 
-      // Click on cluster to zoom
-      map.on('click', 'clusters', (e) => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-        const clusterId = features[0].properties?.cluster_id;
-        const source = map.getSource('points') as mapboxgl.GeoJSONSource;
+        map.addLayer({
+          id: 'cluster-count',
+          type: 'symbol',
+          source: 'points',
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': '{point_count_abbreviated}',
+            'text-font': ['Open Sans Bold'],
+            'text-size': 12,
+          },
+        });
 
-        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-          if (err || !features[0].geometry) return;
-          map.easeTo({
-            center: (features[0].geometry as any).coordinates,
-            zoom,
+        map.addLayer({
+          id: 'unclustered-point',
+          type: 'circle',
+          source: 'points',
+          filter: ['!', ['has', 'point_count']],
+          paint: {
+            'circle-color': ['get', 'color'],
+            'circle-radius': 8,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#fff',
+          },
+        });
+
+        map.on('click', 'clusters', (e) => {
+          const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+          const clusterId = features[0].properties?.cluster_id;
+          const source = map.getSource('points') as mapboxgl.GeoJSONSource;
+
+          source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+            if (err || !features[0].geometry) return;
+            map.easeTo({
+              center: (features[0].geometry as any).coordinates,
+              zoom,
+            });
           });
+        });
+
+        map.on('click', 'unclustered-point', (e) => {
+          const feature = e.features?.[0];
+          const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
+          if (point) setSelectedPoint(point);
+        });
+
+        map.on('mouseenter', 'clusters', () => {
+          map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', 'clusters', () => {
+          map.getCanvas().style.cursor = '';
         });
       });
 
-      // Click on point
-      map.on('click', 'unclustered-point', (e) => {
-        const feature = e.features?.[0];
-        const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
-        if (point) setSelectedPoint(point);
-      });
+      // Cleanup function
+      return () => {
+        map.remove();
+        mapRef.current = null;
+      };
+    }
 
-      map.on('mouseenter', 'clusters', () => {
-        map.getCanvas().style.cursor = 'pointer';
-      });
-      map.on('mouseleave', 'clusters', () => {
-        map.getCanvas().style.cursor = '';
-      });
-    });
+    initializeMap();
 
-    return () => {
-      map.remove();
-      mapRef.current = null;
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredData, userLocation]);
 
-  // GeoJSON conversion
   const toGeoJSON = (data: BrixDataPoint[]): GeoJSON.FeatureCollection => ({
     type: 'FeatureCollection',
     features: data.map((point) => ({
@@ -197,7 +214,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
 
-      {/* Popup */}
       {selectedPoint && (
         <div className="absolute inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <Card className="w-full max-w-md bg-white">
