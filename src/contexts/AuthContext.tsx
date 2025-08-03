@@ -180,8 +180,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const register = async (email: string, password: string): Promise<boolean> => {
     setAuthError(null);
 
-    const supabaseUrl  = await getSupabaseUrl();
-    const emailRedirectTo = `${supabaseUrl}/login`;
+    const supabaseUrl = getSupabaseUrl();
+    const emailRedirectTo = `${window.location.origin}/login`;
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -252,6 +252,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) {
+    console.error('useAuth was called outside of AuthProvider');
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return context;
 };
