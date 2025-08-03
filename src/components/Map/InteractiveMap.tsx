@@ -27,14 +27,14 @@ async function getMapboxToken() {
     const supabaseUrl = getSupabaseUrl();
     const publishKey = getPublishableKey(); 
     const response = await fetch(`${supabaseUrl}/functions/v1/mapbox-token`, {
-      method: 'POST',
+      method: 'GET',
       headers: {
         Authorization: `Bearer ${publishKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ name: 'Fetch' }),
     });
-    
+
     const data = await response.json();
     return data.token;
   } catch (error) {
