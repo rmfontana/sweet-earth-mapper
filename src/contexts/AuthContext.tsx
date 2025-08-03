@@ -67,40 +67,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isAdmin = user?.role === 'admin';
 
-  useEffect(() => {
-    loadSession(); // Initial load
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('[Auth] Auth state changed:', _event);
-      handleSessionChange(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const loadSession = async () => {
-    try {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error('[Auth] Error getting session:', error.message);
-        setAuthError(error.message);
-        return;
-      }
-
-      await handleSessionChange(session);
-    } catch (err: any) {
-      console.error('[Auth] Unexpected error loading session:', err.message || err);
-      setAuthError('Unexpected error loading session.');
-    }
-  };
-
-  const handleSessionChange = async (session: any) => {
+  // Async handler for session changes - called without await inside onAuthStateChange
+  const handleSessionChangeAsync = async (session: any) => {
     if (session?.user) {
       try {
         const { id, email } = session.user;
@@ -126,6 +94,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsAuthenticated(false);
     }
   };
+
+  // Initial session load (awaiting is fine here)
+  const loadSession = async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error('[Auth] Error getting session:', error.message);
+        setAuthError(error.message);
+        return;
+      }
+
+      await handleSessionChangeAsync(session);
+    } catch (err: any) {
+      console.error('[Auth] Unexpected error loading session:', err.message || err);
+      setAuthError('Unexpected error loading session.');
+    }
+  };
+
+  useEffect(() => {
+    loadSession(); // Initial load
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      // No await here — fire and forget async call to avoid deadlocks
+      handleSessionChangeAsync(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setAuthError(null);
@@ -181,30 +178,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const register = async (email: string, password: string): Promise<boolean> => {
     setAuthError(null);
-  
-    const supabaseUrl =
-      import.meta.env.SUPABASE_URL || 'http://localhost:8080';
-  
+
+    // Use environment variable for supabase URL, fallback only for local dev
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const emailRedirectTo = supabaseUrl
+      ? `${supabaseUrl}/login`
+      : 'http://localhost:3000/login'; // dev fallback
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${supabaseUrl}/login`,
+          emailRedirectTo,
         },
       });
-  
+
       if (error) {
         console.error('[REGISTER] Error:', error.message);
         setAuthError(error.message);
         return false;
       }
-  
+
       if (!data.user && !data.session) {
         setAuthError('Account created, but you must verify your email.');
         return false;
       }
-  
+
       return true;
     } catch (err: any) {
       console.error('[REGISTER] Unexpected error:', err.message || err);
