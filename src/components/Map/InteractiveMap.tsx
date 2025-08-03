@@ -111,7 +111,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
 
       const map = new mapboxgl.Map({
         container: mapContainer.current,
-        style: 'mapbox://styles/mapbox/streets-v12',
+        style: 'mapbox://styles/mapbox/satellite-v9',
         center: userLocation ? [userLocation.lng, userLocation.lat] : [-74.0242, 40.6941],
         zoom: 10,
       });
