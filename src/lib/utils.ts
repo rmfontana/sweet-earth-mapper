@@ -13,7 +13,7 @@ export async function getSupabaseUrl(): Promise<string> {
   }
 
   try {
-    const response = await fetch("/functions/v1/supabase-url");
+    const response = await fetch("/functions/v1/get-supabase-url");
 
     if (!response.ok) {
       throw new Error(`Failed with status ${response.status}`);
