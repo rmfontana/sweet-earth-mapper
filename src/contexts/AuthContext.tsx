@@ -181,9 +181,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Use environment variable for supabase URL, fallback only for local dev
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const emailRedirectTo = supabaseUrl
-      ? `${supabaseUrl}/login`
-      : 'http://localhost:3000/login'; // dev fallback
+    const emailRedirectTo = `${supabaseUrl}/login`;
 
     try {
       const { data, error } = await supabase.auth.signUp({

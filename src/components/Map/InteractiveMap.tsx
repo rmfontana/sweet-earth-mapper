@@ -21,7 +21,7 @@ interface InteractiveMapProps {
   userLocation?: { lat: number; lng: number } | null;
 }
 
-const supabaseUrl = import.meta.env.SUPABASE_URL || 'http://localhost:8080';
+const supabaseUrl = import.meta.env.SUPABASE_URL;
 
 async function getMapboxToken() {
   try {
