@@ -183,7 +183,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setAuthError(null);
   
     const supabaseUrl =
-      process.env.SUPABASE_URL || 'http://localhost:8080';
+      import.meta.env.SUPABASE_URL || 'http://localhost:8080';
   
     try {
       const { data, error } = await supabase.auth.signUp({
