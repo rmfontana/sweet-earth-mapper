@@ -8,7 +8,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { MapPin, Calendar, User, CheckCircle, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getSupabaseUrl } from "@/lib/utils.ts";
+import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
 
 interface InteractiveMapProps {
   filters?: {
@@ -24,8 +24,17 @@ interface InteractiveMapProps {
 
 async function getMapboxToken() {
   try {
-    const supabaseUrl = await getSupabaseUrl();
-    const response = await fetch(`${supabaseUrl}/functions/v1/mapbox-token`);
+    const supabaseUrl = getSupabaseUrl();
+    const publishKey = getPublishableKey(); 
+    const response = await fetch(`${supabaseUrl}/functions/v1/mapbox-token`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${publishKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: 'Fetch' }),
+    });
+    
     const data = await response.json();
     return data.token;
   } catch (error) {
