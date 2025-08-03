@@ -9,6 +9,7 @@ import { Button } from '../ui/button';
 import { MapPin, Calendar, User, CheckCircle, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
+import type { Feature, Polygon } from 'geojson';
 
 interface InteractiveMapProps {
   filters?: {
@@ -97,10 +98,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
     return '#22c55e';
   };
 
+  // Initialize Mapbox map once
   useEffect(() => {
-    async function initializeMap() {
-      if (!mapContainer.current || mapRef.current) return;
+    if (!mapContainer.current || mapRef.current) return;
 
+    async function initializeMap() {
       const token = await getMapboxToken();
       if (!token) {
         console.error('Failed to retrieve Mapbox token');
@@ -110,7 +112,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       mapboxgl.accessToken = token;
 
       const map = new mapboxgl.Map({
-        container: mapContainer.current,
+        container: mapContainer.current!,
         style: 'mapbox://styles/mapbox/satellite-v9',
         center: userLocation ? [userLocation.lng, userLocation.lat] : [-74.0242, 40.6941],
         zoom: 10,
@@ -190,18 +192,115 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
           map.getCanvas().style.cursor = '';
         });
       });
-
-      // Cleanup function
-      return () => {
-        map.remove();
-        mapRef.current = null;
-      };
     }
 
     initializeMap();
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredData, userLocation]);
+    // Cleanup on unmount
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update map source data on filteredData changes
+  useEffect(() => {
+    if (mapRef.current && mapRef.current.isStyleLoaded()) {
+      const source = mapRef.current.getSource('points') as mapboxgl.GeoJSONSource | undefined;
+      if (source) {
+        source.setData(toGeoJSON(filteredData));
+      }
+    }
+  }, [filteredData]);
+
+  // Pan & zoom to userLocation when it changes
+  useEffect(() => {
+    if (mapRef.current && userLocation) {
+      mapRef.current.easeTo({
+        center: [userLocation.lng, userLocation.lat],
+        zoom: 14, // Adjust zoom as needed
+        duration: 1000,
+      });
+    }
+  }, [userLocation]);
+
+  // Add or update 1-mile radius circle around userLocation
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+
+    if (userLocation) {
+      const center: [number, number] = [userLocation.lng, userLocation.lat];
+      const radiusMeters = 1609; // 1 mile in meters
+
+      const circleGeoJSON = createCircleGeoJSON(center, radiusMeters);
+
+      if (map.getSource('user-radius')) {
+        (map.getSource('user-radius') as mapboxgl.GeoJSONSource).setData(circleGeoJSON);
+      } else {
+        map.addSource('user-radius', {
+          type: 'geojson',
+          data: circleGeoJSON,
+        });
+
+        map.addLayer({
+          id: 'user-radius-fill',
+          type: 'fill',
+          source: 'user-radius',
+          paint: {
+            'fill-color': '#3b82f6',
+            'fill-opacity': 0.2,
+          },
+        });
+
+        map.addLayer({
+          id: 'user-radius-outline',
+          type: 'line',
+          source: 'user-radius',
+          paint: {
+            'line-color': '#2563eb',
+            'line-width': 2,
+          },
+        });
+      }
+    } else {
+      // Remove radius if no user location
+      if (map.getLayer('user-radius-fill')) map.removeLayer('user-radius-fill');
+      if (map.getLayer('user-radius-outline')) map.removeLayer('user-radius-outline');
+      if (map.getSource('user-radius')) map.removeSource('user-radius');
+    }
+
+    function createCircleGeoJSON(center: [number, number], radiusInMeters: number): Feature<Polygon> {
+      const points = 64;
+      const coords: [number, number][] = [];
+      const earthRadius = 6371000; // meters
+      const lat = center[1] * (Math.PI / 180);
+      const lng = center[0] * (Math.PI / 180);
+      const d = radiusInMeters / earthRadius;
+
+      for (let i = 0; i < points; i++) {
+        const bearing = (i * 360) / points * (Math.PI / 180);
+        const latRadians = Math.asin(Math.sin(lat) * Math.cos(d) + Math.cos(lat) * Math.sin(d) * Math.cos(bearing));
+        const lngRadians = lng + Math.atan2(
+          Math.sin(bearing) * Math.sin(d) * Math.cos(lat),
+          Math.cos(d) - Math.sin(lat) * Math.sin(latRadians)
+        );
+        coords.push([lngRadians * (180 / Math.PI), latRadians * (180 / Math.PI)]);
+      }
+      coords.push(coords[0]);
+
+      return {
+        type: 'Feature' as const,
+        geometry: {
+          type: 'Polygon' as const,
+          coordinates: [coords],
+        },
+        properties: {},
+      };
+    }
+  }, [userLocation]);
 
   const toGeoJSON = (data: BrixDataPoint[]): GeoJSON.FeatureCollection => ({
     type: 'FeatureCollection',
