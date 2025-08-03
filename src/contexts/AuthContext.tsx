@@ -180,8 +180,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const register = async (email: string, password: string): Promise<boolean> => {
     setAuthError(null);
 
-    const supabaseUrl = getSupabaseUrl();
-    const emailRedirectTo = `${window.location.origin}/login`;
+    const supabaseUrl  = getSupabaseUrl();
+    const emailRedirectTo = `${supabaseUrl}/login`;
 
     try {
       const { data, error } = await supabase.auth.signUp({
