@@ -32,7 +32,6 @@ async function getMapboxToken() {
         Authorization: `Bearer ${publishKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ name: 'Fetch' }),
     });
 
     const data = await response.json();
