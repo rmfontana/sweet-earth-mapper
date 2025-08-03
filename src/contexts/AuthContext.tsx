@@ -20,6 +20,7 @@ interface UserProfile {
 interface AuthContextType {
   user: UserProfile | null;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   authError: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -35,8 +36,6 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
       console.error('[fetchUserProfile] No userId provided');
       return null;
     }
-
-    console.log('[fetchUserProfile] Looking up user with ID:', userId);
 
     const { data, error } = await supabase
       .from('users')
@@ -54,7 +53,6 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
       return null;
     }
 
-    console.log('[fetchUserProfile] Fetched user:', data);
     return data;
   } catch (err: any) {
     console.error('[fetchUserProfile] Unexpected error:', err.message || err);
@@ -67,9 +65,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  const isAdmin = user?.role === 'admin';
+
   useEffect(() => {
-    async function loadSession() {
-      console.log('[Auth] Checking session...');
+    loadSession(); // Initial load
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('[Auth] Auth state changed:', _event);
+      handleSessionChange(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const loadSession = async () => {
+    try {
       const {
         data: { session },
         error,
@@ -81,95 +93,78 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      if (session?.user) {
+      await handleSessionChange(session);
+    } catch (err: any) {
+      console.error('[Auth] Unexpected error loading session:', err.message || err);
+      setAuthError('Unexpected error loading session.');
+    }
+  };
+
+  const handleSessionChange = async (session: any) => {
+    if (session?.user) {
+      try {
         const { id, email } = session.user;
         const profile = await fetchUserProfile(id);
         if (profile) {
           profile.email = email;
           setUser(profile);
           setIsAuthenticated(true);
+          setAuthError(null);
         } else {
-          console.warn('[Auth] No profile found for session user.');
-          setAuthError('Profile not found.');
-        }
-      }
-    }
-
-    loadSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        console.log('[Auth] Auth state changed:', _event);
-    
-        async function handleSession() {
-          if (session?.user) {
-            const { id, email } = session.user;
-            const profile = await fetchUserProfile(id);
-            if (profile) {
-              profile.email = email;
-              setUser(profile);
-              setIsAuthenticated(true);
-              setAuthError(null);
-            } else {
-              setUser(null);
-              setIsAuthenticated(false);
-              setAuthError('User profile not found.');
-            }
-          } else {
-            setUser(null);
-            setIsAuthenticated(false);
-          }
-        }
-    
-        // Call async function but don’t await here
-        handleSession().catch((error) => {
-          console.error('[Auth] Error handling session:', error);
           setUser(null);
           setIsAuthenticated(false);
-          setAuthError('Error fetching user profile.');
-        });
+          setAuthError('User profile not found.');
+        }
+      } catch (err: any) {
+        console.error('[Auth] Error fetching profile:', err.message || err);
+        setUser(null);
+        setIsAuthenticated(false);
+        setAuthError('Error fetching user profile.');
       }
-    );
-    
-
-    return () => subscription.unsubscribe();
-  }, []);
+    } else {
+      setUser(null);
+      setIsAuthenticated(false);
+    }
+  };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setAuthError(null);
-    console.log('[LOGIN] Logging in with', email);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      console.error('[LOGIN] Error:', error.message);
-      setAuthError(error.message);
-      return false;
-    }
-
-    if (data.user) {
-      const profile = await fetchUserProfile(data.user.id);
-      if (profile) {
-        profile.email = data.user.email;
-        setUser(profile);
-        setIsAuthenticated(true);
-        return true;
-      } else {
-        setAuthError('User profile not found after login.');
+      if (error) {
+        console.error('[LOGIN] Error:', error.message);
+        setAuthError(error.message);
         return false;
       }
-    }
 
-    setAuthError('Login failed. No user returned.');
-    return false;
+      if (data.user) {
+        const profile = await fetchUserProfile(data.user.id);
+        if (profile) {
+          profile.email = data.user.email;
+          setUser(profile);
+          setIsAuthenticated(true);
+          return true;
+        } else {
+          setAuthError('User profile not found after login.');
+          return false;
+        }
+      }
+
+      setAuthError('Login failed. No user returned.');
+      return false;
+    } catch (err: any) {
+      console.error('[LOGIN] Unexpected error:', err.message || err);
+      setAuthError('Unexpected error during login.');
+      return false;
+    }
   };
 
   const logout = async (): Promise<void> => {
     try {
-      console.log('[LOGOUT] Logging out...');
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('[LOGOUT] Error:', error.message);
@@ -186,25 +181,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const register = async (email: string, password: string): Promise<boolean> => {
     setAuthError(null);
-    console.log('[REGISTER] Creating account for', email);
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (error) {
-      console.error('[REGISTER] Error:', error.message);
-      setAuthError(error.message);
+  
+    const supabaseUrl =
+      process.env.SUPABASE_URL || 'http://localhost:8080';
+  
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${supabaseUrl}/login`,
+        },
+      });
+  
+      if (error) {
+        console.error('[REGISTER] Error:', error.message);
+        setAuthError(error.message);
+        return false;
+      }
+  
+      if (!data.user && !data.session) {
+        setAuthError('Account created, but you must verify your email.');
+        return false;
+      }
+  
+      return true;
+    } catch (err: any) {
+      console.error('[REGISTER] Unexpected error:', err.message || err);
+      setAuthError('Unexpected error during registration.');
       return false;
     }
-
-    if (!data.user && !data.session) {
-      setAuthError('Account created, but you must verify your email.');
-      return false;
-    }
-
-    return true;
   };
 
   const updateUsername = async (newUsername: string): Promise<boolean> => {
@@ -233,6 +239,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       value={{
         user,
         isAuthenticated,
+        isAdmin,
         authError,
         login,
         logout,

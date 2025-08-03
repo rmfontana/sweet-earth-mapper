@@ -11,11 +11,13 @@ export default function ForgotPassword() {
   const handleReset = async () => {
     setMessage('');
     setError('');
-
+  
+    const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:8080';
+  
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'http://localhost:8080/reset-password', // Change this for production
+      redirectTo: `${supabaseUrl}/reset-password`,
     });
-
+    
     if (error) {
       setError(error.message);
     } else {

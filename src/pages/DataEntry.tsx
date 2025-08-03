@@ -15,7 +15,7 @@ import { useToast } from '../hooks/use-toast';
 import { fetchCropTypes } from '../lib/fetchCropTypes';
 
 const DataEntry = () => {
-  const { user } = useAuth();
+  const { isAdmin, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -36,8 +36,6 @@ const DataEntry = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [cropTypes, setCropTypes] = useState<string[]>([]);
 
-  const isAdmin = user?.role === 'admin';
-
 
   // AUTH REDIRECT
   useEffect(() => {
@@ -51,7 +49,13 @@ const DataEntry = () => {
     });
   }, [toast]);
 
-  const sanitizeInput = (input: string) => input.trim().replace(/[<>]/g, '');
+  const sanitizeInput = (input: string): string =>
+    input
+      .trim()
+      .replace(/[\u0000-\u001F\u007F<>`"'\\]/g, '') // Removes control chars & XSS
+      .replace(/(javascript:|data:)/gi, '') // Neutralize URI scheme injection
+      .replace(/\s{2,}/g, ' '); // Collapse excessive whitespace
+  
 
   const validateFile = (file: File): boolean => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
@@ -110,12 +114,20 @@ const DataEntry = () => {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.cropType) newErrors.cropType = 'Crop type is required';
-    if (!formData.variety.trim()) newErrors.variety = 'Variety is required';
-    if (formData.brixLevel[0] < 0 || formData.brixLevel[0] > 30) newErrors.brixLevel = 'BRIX must be between 0-30';
-    if (!formData.location.trim()) newErrors.location = 'Location is required';
+  
+    // Sanitize and validate text fields
+    const cropType = sanitizeInput(formData.cropType);
+    const variety = sanitizeInput(formData.variety);
+    const location = sanitizeInput(formData.location);
+    const notes = sanitizeInput(formData.notes);
+  
+    if (!cropType) newErrors.cropType = 'Crop type is required';
+    if (!variety) newErrors.variety = 'Variety is required';
+    if (formData.brixLevel[0] < 0 || formData.brixLevel[0] > 30) newErrors.brixLevel = 'BRIX must be between 0–30';
+    if (!location) newErrors.location = 'Location is required';
     if (new Date(formData.measurementDate) > new Date()) newErrors.measurementDate = 'Date cannot be in the future';
-    if (formData.notes.length > 500) newErrors.notes = 'Notes too long (max 500 characters)';
+    if (notes.length > 500) newErrors.notes = 'Notes too long (max 500 characters)';
+  
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };

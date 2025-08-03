@@ -21,9 +21,11 @@ interface InteractiveMapProps {
   userLocation?: { lat: number; lng: number } | null;
 }
 
+const supabaseUrl = process.env.SUPABASE_URL || 'http://localhost:8080';
+
 async function getMapboxToken() {
   try {
-    const response = await fetch('https://wbkzczcqlorsewoofwqe.supabase.co/functions/v1/mapbox-token');
+    const response = await fetch(`${supabaseUrl}/functions/v1/mapbox-token`);
     const data = await response.json();
     return data.token;
   } catch (error) {

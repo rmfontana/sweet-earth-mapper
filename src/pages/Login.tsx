@@ -29,15 +29,28 @@ const Login = () => {
     setFormError('');
   };
 
-  const sanitizeInput = (input: string): string => input.trim().replace(/[<>]/g, '');
+  const sanitizeInput = (input: string): string => {
+    // Remove control chars + common injection vectors
+    return input.trim().replace(/[\u0000-\u001F\u007F<>`"'\\]/g, '');
+  };
+
+  const isValidEmail = (email: string): boolean => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEmail(sanitizeInput(e.target.value));
+    const input = sanitizeInput(e.target.value);
+    setEmail(input);
     clearErrors();
+  
+    if (input && !isValidEmail(input)) {
+      setFormError('Please enter a valid email address.');
+    }
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPassword(sanitizeInput(e.target.value));
+    // Don't aggressively sanitize passwords — just trim them
+    setPassword(e.target.value.trim());
     clearErrors();
   };
 
@@ -46,8 +59,7 @@ const Login = () => {
       setFormError('Please fill in all fields');
       return false;
     }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!isValidEmail(email)) {
       setFormError('Please enter a valid email address');
       return false;
     }
