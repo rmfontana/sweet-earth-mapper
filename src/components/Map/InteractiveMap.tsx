@@ -8,6 +8,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { MapPin, Calendar, User, CheckCircle, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { getSupabaseUrl } from "src/lib/utils.ts";
 
 interface InteractiveMapProps {
   filters?: {
@@ -21,10 +22,9 @@ interface InteractiveMapProps {
   userLocation?: { lat: number; lng: number } | null;
 }
 
-const supabaseUrl = import.meta.env.SUPABASE_URL;
-
 async function getMapboxToken() {
   try {
+    const supabaseUrl = await getSupabaseUrl();
     const response = await fetch(`${supabaseUrl}/functions/v1/mapbox-token`);
     const data = await response.json();
     return data.token;

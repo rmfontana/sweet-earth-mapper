@@ -6,6 +6,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { supabase } from '../integrations/supabase/client';
+import { getSupabaseUrl } from "src/lib/utils.ts";
 
 interface UserProfile {
   id: string;
@@ -179,8 +180,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const register = async (email: string, password: string): Promise<boolean> => {
     setAuthError(null);
 
-    // Use environment variable for supabase URL, fallback only for local dev
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseUrl  = await getSupabaseUrl();
     const emailRedirectTo = `${supabaseUrl}/login`;
 
     try {

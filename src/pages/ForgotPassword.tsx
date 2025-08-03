@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../integrations/supabase/client';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
+import { getSupabaseUrl } from "src/lib/utils.ts";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -12,7 +13,7 @@ export default function ForgotPassword() {
     setMessage('');
     setError('');
   
-    const supabaseUrl = import.meta.env.SUPABASE_URL;
+    const supabaseUrl = await getSupabaseUrl();
   
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${supabaseUrl}/reset-password`,
