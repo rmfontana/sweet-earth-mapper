@@ -8,7 +8,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { MapPin, Calendar, User, CheckCircle, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getSupabaseUrl } from "src/lib/utils.ts";
+import { getSupabaseUrl } from "@/lib/utils.ts";
 
 interface InteractiveMapProps {
   filters?: {

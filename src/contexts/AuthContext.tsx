@@ -6,7 +6,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { supabase } from '../integrations/supabase/client';
-import { getSupabaseUrl } from "src/lib/utils.ts";
+import { getSupabaseUrl } from "@/lib/utils.ts";
 
 interface UserProfile {
   id: string;

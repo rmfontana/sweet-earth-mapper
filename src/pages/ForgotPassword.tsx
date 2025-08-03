@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../integrations/supabase/client';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
-import { getSupabaseUrl } from "src/lib/utils.ts";
+import { getSupabaseUrl } from "@/lib/utils.ts";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
