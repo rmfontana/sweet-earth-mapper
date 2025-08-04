@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Slider } from '../components/ui/slider';
 import { MapPin, Calendar, Camera, Upload, Loader2, X } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
+import { supabase } from '../integrations/supabase/client';
 
 import { fetchCropTypes } from '../lib/fetchCropTypes';
 
@@ -20,15 +21,17 @@ const DataEntry = () => {
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
-    cropType: '',
-    variety: '',
-    brixLevel: [12],
+    cropType: '',       // used to fetch crop_id
+    variety: '',        // maps to label
+    brixLevel: [12],    // maps to brix_value
     latitude: 0,
     longitude: 0,
-    location: '',
+    location: '',       // user-readable, optional
     measurementDate: new Date().toISOString().split('T')[0],
-    notes: '',
-    images: [] as File[]
+    notes: '',          // optional
+    images: [] as File[],
+    brand: '',          // NEW
+    store: '',          // NEW
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -135,25 +138,48 @@ const DataEntry = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return toast({ title: 'Fix errors in form.', variant: 'destructive' });
-
+  
     setIsLoading(true);
     try {
-      const submissionData = {
-        ...formData,
-        variety: sanitizeInput(formData.variety),
-        location: sanitizeInput(formData.location),
-        notes: sanitizeInput(formData.notes),
-        submittedBy: user?.display_name,
-        submittedAt: new Date().toISOString(),
-        verified: false
-      };
-      console.log('Submitting:', submissionData);
-      await new Promise(res => setTimeout(res, 2000));
+      // 1. Fetch crop ID
+      const { data: cropData, error: cropErr } = await supabase
+        .from('crops')
+        .select('id')
+        .eq('name', sanitizeInput(formData.cropType))
+        .single();
+  
+      if (cropErr || !cropData) throw new Error('Crop not found');
+  
+      // 2. Create location
+      const { data: locationData, error: locErr } = await supabase
+        .from('locations')
+        .insert({
+          latitude: formData.latitude,
+          longitude: formData.longitude,
+          name: sanitizeInput(formData.location)
+        })
+        .select()
+        .single();
+  
+      if (locErr || !locationData) throw new Error('Location insert failed');
+  
+      // 3. Insert submission
+      const { error: submitErr } = await supabase.from('submissions').insert({
+        crop_id: cropData.id,
+        location_id: locationData.id,
+        label: sanitizeInput(formData.variety),
+        brix_value: formData.brixLevel[0],
+        user_id: user?.id,
+        timestamp: new Date(formData.measurementDate).toISOString()
+      });
+  
+      if (submitErr) throw new Error('Submission failed');
+  
       toast({ title: 'Data submitted successfully' });
-      setFormData({ ...formData, cropType: '', variety: '', brixLevel: [12], latitude: 0, longitude: 0, location: '', measurementDate: new Date().toISOString().split('T')[0], notes: '', images: [] });
       navigate('/your-data');
-    } catch {
-      toast({ title: 'Submission failed', variant: 'destructive' });
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: err.message || 'Something went wrong', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }

@@ -1,7 +1,7 @@
+// fetchSubmissions.ts
 import { supabase } from '../integrations/supabase/client';
 import { QueryData } from '@supabase/supabase-js';
 
-// Build your query
 const query = supabase.from('submissions').select(`
   id,
   timestamp,
@@ -14,18 +14,21 @@ const query = supabase.from('submissions').select(`
     name,
     latitude,
     longitude,
-    place_id,
-    geom
+    place_id
   ),
   crop:crop_id (
     id,
     name,
-    max_brix,
-    min_brix
+    poor_brix,
+    average_brix,
+    good_brix,
+    excellent_brix,
+    category
   ),
   store:store_id (
     id,
-    name
+    name,
+    location_id
   ),
   brand:brand_id (
     id,
@@ -33,94 +36,35 @@ const query = supabase.from('submissions').select(`
   ),
   user:users!user_id (
     id,
-    display_name,
-    role,
-    points,
-    submission_count,
-    last_submission
+    display_name
   ),
   verifier:users!verified_by (
     id,
-    display_name,
-    role,
-    points,
-    submission_count,
-    last_submission
+    display_name
   )
 `).order('timestamp', { ascending: false });
 
-// Dynamically infer the type from the query itself
 type SubmissionsWithJoins = QueryData<typeof query>;
 
 export async function fetchFormattedSubmissions() {
-    const { data, error } = await supabase
-      .from('submissions')
-      .select(`
-        id,
-        timestamp,
-        brix_value,
-        verified,
-        verified_at,
-        label,
-        location:location_id (
-          id,
-          name,
-          latitude,
-          longitude,
-          place_id,
-          geom
-        ),
-        crop:crop_id (
-          id,
-          name,
-          max_brix,
-          min_brix
-        ),
-        store:store_id (
-          id,
-          name
-        ),
-        brand:brand_id (
-          id,
-          name
-        ),
-        user:users!user_id (
-          id,
-          display_name,
-          role,
-          points,
-          submission_count,
-          last_submission
-        ),
-        verifier:users!verified_by (
-          id,
-          display_name,
-          role,
-          points,
-          submission_count,
-          last_submission
-        )
-      `)
-      .order('timestamp', { ascending: false });
-    
-    if (error) throw error;
-  
-    return data.map(item => ({
-      id: item.id,
-      brixLevel: item.brix_value,
-      verified: item.verified,
-      verifiedAt: item.verified_at,
-      label: item.label ?? '',
-      cropType: item.crop?.name ?? 'Unknown',
-      latitude: item.location?.latitude,
-      longitude: item.location?.longitude,
-      storeName: item.store?.name ?? '',
-      brandName: item.brand?.name ?? '',
-      submittedBy: item.user?.display_name ?? 'Anonymous',
-      verifiedBy: item.verifier?.display_name ?? 'Unknown',
-      submittedAt: item.timestamp,
-      images: []  // extend later
-    }));
-  }
-  
-  
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data as SubmissionsWithJoins).map(item => ({
+    id: item.id,
+    brixLevel: item.brix_value,
+    verified: item.verified,
+    verifiedAt: item.verified_at,
+    label: item.label ?? '',
+    cropType: item.crop?.name ?? 'Unknown',
+    category: item.crop?.category ?? '',
+    latitude: item.location?.latitude,
+    longitude: item.location?.longitude,
+    storeName: item.store?.name ?? '',
+    brandName: item.brand?.name ?? '',
+    submittedBy: item.user?.display_name ?? 'Anonymous',
+    verifiedBy: item.verifier?.display_name ?? '',
+    submittedAt: item.timestamp,
+    images: []
+  }));
+}
