@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Layout/Header';
@@ -7,13 +7,56 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { Slider } from '../components/ui/slider';
-import { MapPin, Calendar, Camera, Upload, Loader2, X } from 'lucide-react';
+import {
+  MapPin,
+  Calendar,
+  Camera,
+  Upload,
+  Loader2,
+  X,
+  Search,
+} from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 import { supabase } from '../integrations/supabase/client';
 
 import { fetchCropTypes } from '../lib/fetchCropTypes';
+import { fetchBrands } from '../lib/fetchBrands';
+import { fetchStores } from '../lib/fetchStores';
+import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
+
+async function getMapboxToken() {
+  try {
+    const supabaseUrl = getSupabaseUrl();
+    const publishKey = getPublishableKey();
+    const response = await fetch(`${supabaseUrl}/functions/v1/mapbox-token`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${publishKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+    return data.token;
+  } catch (error) {
+    console.error('Failed to fetch Mapbox token:', error);
+    return null;
+  }
+}
+
+interface LocationFeature {
+  id: string;
+  place_name: string;
+  center: [number, number]; // [longitude, latitude]
+}
 
 const DataEntry = () => {
   const { user } = useAuth();
@@ -21,46 +64,67 @@ const DataEntry = () => {
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
-    cropType: '',       // used to fetch crop_id
-    variety: '',        // maps to label
-    brixLevel: [12],    // maps to brix_value
+    cropType: '',
+    variety: '',
+    brixLevel: [12],
     latitude: 0,
     longitude: 0,
-    location: '',       // user-readable, optional
+    location: '',
     measurementDate: new Date().toISOString().split('T')[0],
-    notes: '',          // optional
+    notes: '',
     images: [] as File[],
-    brand: '',          // NEW
-    store: '',          // NEW
+    brand: '',
+    store: '',
   });
 
   const [isLoading, setIsLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
   const [cropTypes, setCropTypes] = useState<string[]>([]);
+  const [brands, setBrands] = useState<string[]>([]);
+  const [stores, setStores] = useState<string[]>([]);
 
+  const [mapboxToken, setMapboxToken] = useState<string | null>(null);
+  const [locationSuggestions, setLocationSuggestions] = useState<LocationFeature[]>([]);
 
-  // AUTH REDIRECT
+  // Redirect if not authorized
   useEffect(() => {
     if (!user || (user.role !== 'contributor' && user.role !== 'admin')) {
       navigate('/');
     }
   }, [user, navigate]);
 
-  // FETCH CROP TYPES
+  // Fetch Crop Types, Brands, Stores, and Mapbox token on mount
   useEffect(() => {
-    fetchCropTypes().then(setCropTypes).catch(() => {
-      toast({ title: 'Error loading crop types', variant: 'destructive' });
-    });
+    fetchCropTypes()
+      .then(setCropTypes)
+      .catch(() => toast({ title: 'Error loading crop types', variant: 'destructive' }));
+
+    fetchBrands()
+      .then(setBrands)
+      .catch(() => toast({ title: 'Error loading brands', variant: 'destructive' }));
+
+    fetchStores()
+      .then(setStores)
+      .catch(() => toast({ title: 'Error loading stores', variant: 'destructive' }));
+
+    (async () => {
+      const token = await getMapboxToken();
+      if (!token) {
+        toast({ title: 'Could not load Mapbox token', variant: 'destructive' });
+      }
+      setMapboxToken(token);
+    })();
   }, [toast]);
 
+  // Sanitize inputs to prevent XSS and invalid chars
   const sanitizeInput = (input: string): string =>
     input
       .trim()
-      .replace(/[\u0000-\u001F\u007F<>`"'\\]/g, '') // Removes control chars & XSS
-      .replace(/(javascript:|data:)/gi, '') // Neutralize URI scheme injection
-      .replace(/\s{2,}/g, ' '); // Collapse excessive whitespace
-  
+      .replace(/[\u0000-\u001F\u007F<>`"'\\]/g, '')
+      .replace(/(javascript:|data:)/gi, '')
+      .replace(/\s{2,}/g, ' ');
 
   const validateFile = (file: File): boolean => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
@@ -74,33 +138,6 @@ const DataEntry = () => {
       return false;
     }
     return true;
-  };
-
-  const handleLocationCapture = () => {
-    if (!navigator.geolocation) {
-      setErrors(prev => ({ ...prev, location: 'Geolocation is not supported by this browser' }));
-      return;
-    }
-    setLocationLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const { latitude, longitude } = coords;
-        const location = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-        setFormData(prev => ({ ...prev, latitude, longitude, location }));
-        toast({ title: 'Location captured', description: location });
-        setLocationLoading(false);
-      },
-      (error) => {
-        const messages = {
-          1: 'Location access denied.',
-          2: 'Location unavailable.',
-          3: 'Location request timed out.'
-        };
-        setErrors(prev => ({ ...prev, location: messages[error.code] ?? 'Failed to retrieve location.' }));
-        setLocationLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,66 +154,205 @@ const DataEntry = () => {
     setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }));
   };
 
+  // Autocomplete location suggestions from Mapbox API
+  useEffect(() => {
+    if (!mapboxToken) return;
+    if (formData.location.trim().length < 3) {
+      setLocationSuggestions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function fetchLocations() {
+      try {
+        const res = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+            formData.location
+          )}.json?access_token=${mapboxToken}&autocomplete=true&limit=5`,
+          { signal: controller.signal }
+        );
+        const data = await res.json();
+        if (data.features) setLocationSuggestions(data.features);
+      } catch (e) {
+        if ((e as any).name !== 'AbortError') {
+          toast({ title: 'Error fetching location suggestions', variant: 'destructive' });
+        }
+      }
+    }
+
+    fetchLocations();
+
+    return () => controller.abort();
+  }, [formData.location, mapboxToken, toast]);
+
+  const selectLocationSuggestion = (feature: LocationFeature) => {
+    setFormData(p => ({
+      ...p,
+      location: feature.place_name,
+      longitude: feature.center[0],
+      latitude: feature.center[1],
+    }));
+    setLocationSuggestions([]);
+  };
+
+  // Reverse geocode user location on capture button
+  const handleLocationCapture = () => {
+    if (!mapboxToken) {
+      setErrors(prev => ({ ...prev, location: 'Mapbox token not loaded yet' }));
+      return;
+    }
+    if (!navigator.geolocation) {
+      setErrors(prev => ({ ...prev, location: 'Geolocation not supported' }));
+      return;
+    }
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        const { latitude, longitude } = coords;
+        try {
+          const res = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}`
+          );
+          const data = await res.json();
+          const placeName = data.features?.[0]?.place_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          setFormData(p => ({ ...p, latitude, longitude, location: placeName }));
+          toast({ title: 'Location captured', description: placeName });
+        } catch {
+          setFormData(p => ({
+            ...p,
+            latitude,
+            longitude,
+            location: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+          }));
+          toast({ title: 'Location captured', description: 'Coordinates used' });
+        } finally {
+          setLocationLoading(false);
+        }
+      },
+      (err) => {
+        const messages: Record<number, string> = {
+          1: 'Location access denied.',
+          2: 'Location unavailable.',
+          3: 'Location request timed out.',
+        };
+        setErrors(prev => ({ ...prev, location: messages[err.code] || 'Failed to retrieve location.' }));
+        setLocationLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
+
+  // Validate all fields
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-  
-    // Sanitize and validate text fields
+
     const cropType = sanitizeInput(formData.cropType);
     const variety = sanitizeInput(formData.variety);
     const location = sanitizeInput(formData.location);
     const notes = sanitizeInput(formData.notes);
-  
-    if (!cropType) newErrors.cropType = 'Crop type is required';
+    const brand = sanitizeInput(formData.brand);
+    const store = sanitizeInput(formData.store);
+
+    if (!cropType) newErrors.cropType = 'Please select or enter a crop type';
     if (!variety) newErrors.variety = 'Variety is required';
-    if (formData.brixLevel[0] < 0 || formData.brixLevel[0] > 30) newErrors.brixLevel = 'BRIX must be between 0–30';
+    if (formData.brixLevel[0] < 0 || formData.brixLevel[0] > 100)
+      newErrors.brixLevel = 'BRIX must be between 0–100';
     if (!location) newErrors.location = 'Location is required';
-    if (new Date(formData.measurementDate) > new Date()) newErrors.measurementDate = 'Date cannot be in the future';
+    if (new Date(formData.measurementDate) > new Date())
+      newErrors.measurementDate = 'Date cannot be in the future';
     if (notes.length > 500) newErrors.notes = 'Notes too long (max 500 characters)';
-  
+    if (brand && !brands.includes(brand)) newErrors.brand = 'Brand not recognized';
+    if (store && !stores.includes(store)) newErrors.store = 'Store not recognized';
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  // Submit form: create or get crop, brand, store, location, then insert submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm()) return toast({ title: 'Fix errors in form.', variant: 'destructive' });
-  
+    if (!validateForm()) {
+      toast({ title: 'Fix errors in form.', variant: 'destructive' });
+      return;
+    }
+
     setIsLoading(true);
+
     try {
-      // 1. Fetch crop ID
-      const { data: cropData, error: cropErr } = await supabase
+      // Crop
+      const cropName = sanitizeInput(formData.cropType);
+      let { data: cropData, error: cropErr } = await supabase
         .from('crops')
         .select('id')
-        .eq('name', sanitizeInput(formData.cropType))
+        .eq('name', cropName)
         .single();
-  
-      if (cropErr || !cropData) throw new Error('Crop not found');
-  
-      // 2. Create location
+
+      if (!cropData) {
+        // Optionally create crop if not found? Or error out? Here we error.
+        throw new Error('Crop not found in database.');
+      }
+      if (cropErr) throw cropErr;
+
+      // Brand (optional)
+      let brandId: string | null = null;
+      if (formData.brand) {
+        const brandName = sanitizeInput(formData.brand);
+        let { data: brandData, error: brandErr } = await supabase
+          .from('brands')
+          .select('id')
+          .eq('name', brandName)
+          .single();
+
+        if (brandErr || !brandData) {
+          throw new Error('Brand not found');
+        }
+        brandId = brandData.id;
+      }
+
+      // Store (optional)
+      let storeId: string | null = null;
+      if (formData.store) {
+        const storeName = sanitizeInput(formData.store);
+        let { data: storeData, error: storeErr } = await supabase
+          .from('stores')
+          .select('id')
+          .eq('name', storeName)
+          .single();
+
+        if (storeErr || !storeData) {
+          throw new Error('Store not found');
+        }
+        storeId = storeData.id;
+      }
+
+      // Location
       const { data: locationData, error: locErr } = await supabase
         .from('locations')
         .insert({
           latitude: formData.latitude,
           longitude: formData.longitude,
-          name: sanitizeInput(formData.location)
+          name: sanitizeInput(formData.location),
         })
         .select()
         .single();
-  
+
       if (locErr || !locationData) throw new Error('Location insert failed');
-  
-      // 3. Insert submission
+
+      // Insert submission
       const { error: submitErr } = await supabase.from('submissions').insert({
         crop_id: cropData.id,
         location_id: locationData.id,
+        store_id: storeId,
+        brand_id: brandId,
         label: sanitizeInput(formData.variety),
         brix_value: formData.brixLevel[0],
         user_id: user?.id,
-        timestamp: new Date(formData.measurementDate).toISOString()
+        timestamp: new Date(formData.measurementDate).toISOString(),
       });
-  
-      if (submitErr) throw new Error('Submission failed');
-  
+
+      if (submitErr) throw submitErr;
+
       toast({ title: 'Data submitted successfully' });
       navigate('/your-data');
     } catch (err: any) {
@@ -194,99 +370,182 @@ const DataEntry = () => {
       <Header />
       <main className="max-w-4xl mx-auto p-8">
         <h1 className="text-3xl font-bold mb-2">Submit BRIX Measurement</h1>
-        <p className="text-gray-600 mb-6">Record your bionutrient density measurement from refractometer readings</p>
+        <p className="text-gray-600 mb-6">
+          Record your bionutrient density measurement from refractometer readings
+        </p>
         <Card>
-          <CardHeader><CardTitle className="flex items-center space-x-2"><Upload className="w-5 h-5" />New Measurement Entry</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Upload className="w-5 h-5" />
+              <span>New Measurement Entry</span>
+            </CardTitle>
+          </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Crop Type */}
+            <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
+              {/* Crop Type with combobox style input (dropdown + filter + manual input) */}
               <div>
-                <Label>Crop Type</Label>
-                <Select onValueChange={(v) => setFormData(p => ({ ...p, cropType: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select crop" /></SelectTrigger>
-                  <SelectContent>
-                    {cropTypes.map(crop => <SelectItem key={crop} value={crop}>{crop}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="cropType">Fruit / Vegetable Type</Label>
+                <input
+                  id="cropType"
+                  list="crop-types"
+                  className="w-full border border-gray-300 rounded-md p-2"
+                  placeholder="Type or select crop type"
+                  value={formData.cropType}
+                  onChange={e => setFormData(p => ({ ...p, cropType: e.target.value }))}
+                  autoComplete="off"
+                />
+                <datalist id="crop-types">
+                  {cropTypes.map(crop => (
+                    <option key={crop} value={crop} />
+                  ))}
+                </datalist>
                 {errors.cropType && <p className="text-red-600 text-sm">{errors.cropType}</p>}
               </div>
 
               {/* Variety */}
               <div>
-                <Label>Variety</Label>
-                <Input value={formData.variety} onChange={e => setFormData(p => ({ ...p, variety: e.target.value }))} />
+                <Label htmlFor="variety">Variety</Label>
+                <Input
+                  id="variety"
+                  value={formData.variety}
+                  onChange={e => setFormData(p => ({ ...p, variety: e.target.value }))}
+                  autoComplete="off"
+                />
                 {errors.variety && <p className="text-red-600 text-sm">{errors.variety}</p>}
+              </div>
+
+              {/* Brand */}
+              <div>
+                <Label htmlFor="brand">Brand</Label>
+                <input
+                  id="brand"
+                  list="brand-list"
+                  className="w-full border border-gray-300 rounded-md p-2"
+                  placeholder="Type or select brand"
+                  value={formData.brand}
+                  onChange={e => setFormData(p => ({ ...p, brand: e.target.value }))}
+                  autoComplete="off"
+                />
+                <datalist id="brand-list">
+                  {brands.map(brand => (
+                    <option key={brand} value={brand} />
+                  ))}
+                </datalist>
+                {errors.brand && <p className="text-red-600 text-sm">{errors.brand}</p>}
+              </div>
+
+              {/* Store */}
+              <div>
+                <Label htmlFor="store">Store</Label>
+                <input
+                  id="store"
+                  list="store-list"
+                  className="w-full border border-gray-300 rounded-md p-2"
+                  placeholder="Type or select store"
+                  value={formData.store}
+                  onChange={e => setFormData(p => ({ ...p, store: e.target.value }))}
+                  autoComplete="off"
+                />
+                <datalist id="store-list">
+                  {stores.map(store => (
+                    <option key={store} value={store} />
+                  ))}
+                </datalist>
+                {errors.store && <p className="text-red-600 text-sm">{errors.store}</p>}
               </div>
 
               {/* BRIX Level */}
               <div>
-                <Label>BRIX Level</Label>
-                <Slider defaultValue={formData.brixLevel} max={30} step={0.5} onValueChange={(v) => setFormData(p => ({ ...p, brixLevel: v }))} />
+                <Label htmlFor="brixLevel">BRIX Level</Label>
+                <Slider
+                  defaultValue={formData.brixLevel}
+                  max={100}
+                  step={0.5}
+                  onValueChange={v => setFormData(p => ({ ...p, brixLevel: v }))}
+                />
                 <p className="text-sm text-gray-500">Selected BRIX: {formData.brixLevel[0]}</p>
                 {errors.brixLevel && <p className="text-red-600 text-sm">{errors.brixLevel}</p>}
               </div>
 
-              {/* Location */}
-              <div>
-                <Label>Location</Label>
-                <div className="relative">
-                  <Input value={formData.location} onChange={e => setFormData(p => ({ ...p, location: e.target.value }))} />
-                  <Button type="button" variant="secondary" size="sm" className="absolute right-1 top-1 rounded-md" onClick={handleLocationCapture} disabled={locationLoading}>
-                    {locationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
-                  </Button>
-                </div>
-                {errors.location && <p className="text-red-600 text-sm">{errors.location}</p>}
-              </div>
-
-              {/* Date */}
-              <div>
-                <Label>Date</Label>
-                <div className="relative">
-                  <Input type="date" value={formData.measurementDate} onChange={(e) => setFormData(p => ({ ...p, measurementDate: e.target.value }))} />
-                  <Calendar className="w-5 h-5 absolute right-2 top-2 text-gray-500" />
-                </div>
-                {errors.measurementDate && <p className="text-red-600 text-sm">{errors.measurementDate}</p>}
-              </div>
-
-              {/* Notes */}
-              <div>
-                <Label>Notes</Label>
-                <Textarea value={formData.notes} onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))} />
-                {errors.notes && <p className="text-red-600 text-sm">{errors.notes}</p>}
-              </div>
-
-              {/* Images */}
-              <div>
-                <Label>Images</Label>
-                <Input type="file" multiple accept="image/jpeg, image/png, image/webp" onChange={handleImageUpload} className="hidden" id="images" />
-                <Button asChild variant="secondary"><label htmlFor="images" className="cursor-pointer flex space-x-2"><Camera className="w-4 h-4" /><span>Upload</span></label></Button>
-                <p className="text-sm text-gray-500">{formData.images.length}/3 images</p>
-                {errors.images && <p className="text-red-600 text-sm">{errors.images}</p>}
-                {formData.images.length > 0 && (
-                  <div className="grid grid-cols-3 gap-4 mt-4">
-                    {formData.images.map((img, i) => (
-                      <div key={i} className="relative">
-                        <img src={URL.createObjectURL(img)} alt={`img-${i}`} className="w-full h-32 object-cover rounded-md" />
-                        <Button variant="ghost" size="icon" className="absolute top-1 right-1 bg-white/70" onClick={() => removeImage(i)}><X className="w-4 h-4" /></Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Buttons */}
-              <div className="flex space-x-4">
-                <Button type="button" variant="outline" onClick={() => navigate('/your-data')} className="flex-1">Cancel</Button>
-                <Button type="submit" disabled={isLoading} className="flex-1 bg-green-600 hover:bg-green-700">
-                  {isLoading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Submitting...</> : 'Submit'}
+              {/* Location with autocomplete */}
+              <div className="relative">
+                <Label htmlFor="location">Location</Label>
+                <input
+                  id="location"
+                  className="w-full border border-gray-300 rounded-md p-2"
+                  placeholder="Start typing location..."
+                  value={formData.location}
+                  onChange={e => setFormData(p => ({ ...p, location: e.target.value }))}
+                  autoComplete="off"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="absolute right-1 top-1 rounded-md"
+                  onClick={handleLocationCapture}
+                  disabled={locationLoading}
+                >
+                  {locationLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <MapPin className="w-4 h-4" />
+                  )}
                 </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </main>
-    </div>
-  );
+                {errors.location && <p className="text-red-600 text-sm">{errors.location}</p>}
+                {locationSuggestions.length > 0 && (
+              <ul className="absolute z-50 w-full bg-white border border-gray-300 rounded-md mt-1 shadow-md max-h-48 overflow-y-auto">
+                {locationSuggestions.map(feature => (
+                  <li
+                    key={feature.id}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                    onClick={() => selectLocationSuggestion(feature)}
+                  >
+                    {feature.place_name}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Date */}
+          <div>
+            <Label htmlFor="measurementDate">Measurement Date</Label>
+            <Input
+              type="date"
+              id="measurementDate"
+              value={formData.measurementDate}
+              onChange={e => setFormData(p => ({ ...p, measurementDate: e.target.value }))}
+            />
+            {errors.measurementDate && (
+              <p className="text-red-600 text-sm">{errors.measurementDate}</p>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div>
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              value={formData.notes}
+              onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
+              rows={3}
+            />
+            {errors.notes && <p className="text-red-600 text-sm">{errors.notes}</p>}
+          </div>
+
+          {/* Submit */}
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Upload className="mr-2" />}
+            Submit Measurement
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  </main>
+</div>
+
+);
 };
 
 export default DataEntry;
