@@ -54,20 +54,19 @@ const DataEntry = () => {
 
   const [formData, setFormData] = useState({
     cropType: '',
-    variety: '',           // was missing, add it explicitly
+    variety: '',
     brixLevel: [12],
     latitude: 0,
     longitude: 0,
     location: '',
-    measurementDate: new Date().toISOString().split('T')[0], // match validation and submit
+    measurementDate: new Date().toISOString().split('T')[0],
     purchaseDate: '',
-    outlierNotes: '',      // if you use this separately
-    notes: '',             // used in validation and form
+    outlierNotes: '',    // keep this, remove notes
     brand: '',
     store: '',
     farmLocation: '',
     contributorName: '',
-    time: '',              // matches form input for harvest time
+    time: '',
     images: [] as File[],
   });
 
@@ -244,7 +243,7 @@ const DataEntry = () => {
     const cropType = sanitizeInput(formData.cropType);
     const variety = sanitizeInput(formData.variety);
     const location = sanitizeInput(formData.location);
-    const notes = sanitizeInput(formData.notes);
+    const outlierNotes = sanitizeInput(formData.outlierNotes);
     const brand = sanitizeInput(formData.brand);
     const store = sanitizeInput(formData.store);
 
@@ -255,7 +254,7 @@ const DataEntry = () => {
     if (!location) newErrors.location = 'Location is required';
     if (new Date(formData.measurementDate) > new Date())
       newErrors.measurementDate = 'Date cannot be in the future';
-    if (notes.length > 500) newErrors.notes = 'Notes too long (max 500 characters)';
+    if (outlierNotes.length > 500) newErrors.outlierNotes = 'Notes too long (max 500 characters)';
     if (brand && !brands.includes(brand)) newErrors.brand = 'Brand not recognized';
     if (store && !stores.includes(store)) newErrors.store = 'Store not recognized';
 
@@ -365,10 +364,15 @@ const DataEntry = () => {
         location_id: locationData.id,
         store_id: storeId,
         brand_id: brandId,
-        label: variety,
+        crop_variety: variety,                       
         brix_value: formData.brixLevel[0],
         user_id: user?.id,
-        timestamp: new Date(formData.measurementDate).toISOString(),
+        assessment_date: new Date(formData.measurementDate).toISOString(),  
+        purchase_date: formData.purchaseDate || null,
+        farm_location: formData.farmLocation || null,
+        contributor_name: formData.contributorName || null,
+        harvest_time: formData.time || null,
+        outlier_notes: formData.outlierNotes || null,  
       });
   
       if (submitErr) throw submitErr;
@@ -384,7 +388,7 @@ const DataEntry = () => {
   };
   if (!user || (user.role !== 'contributor' && user.role !== 'admin')) return null;
 
-  return (
+    return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="max-w-4xl mx-auto p-8">
@@ -611,16 +615,16 @@ const DataEntry = () => {
 
               {/* Notes */}
               <div>
-                <Label htmlFor="notes">Notes (optional)</Label>
+                <Label htmlFor="outlierNotes">Notes (optional)</Label>
                 <Textarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
+                  id="outlierNotes"
+                  value={formData.outlierNotes}
+                  onChange={e => setFormData(p => ({ ...p, outlierNotes: e.target.value }))}
                   rows={3}
                   maxLength={500}
-                  className={errors.notes ? 'border-red-500' : ''}
+                  className={errors.outlierNotes ? 'border-red-500' : ''}
                 />
-                {errors.notes && <p className="text-red-600 text-sm mt-1">{errors.notes}</p>}
+                {errors.outlierNotes && <p className="text-red-600 text-sm mt-1">{errors.outlierNotes}</p>}
               </div>
 
               {/* Images Upload */}
