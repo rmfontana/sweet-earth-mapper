@@ -528,6 +528,12 @@ const DataEntry = () => {
           const filePath = `${userId}/${insertedSubmission.id}/${timestamp}_${i}.${ext}`;
     
           try {
+            console.log('=== DEBUGGING UPLOAD ===');
+            console.log('User ID:', userId);
+            console.log('File path:', filePath);
+            console.log('Expected pattern:', `${userId}/%`);
+            console.log('Does path match pattern?', filePath.startsWith(`${userId}/`));
+
             console.log('Uploading to private bucket:', {
               fileName: file.name,
               filePath: filePath,
@@ -535,6 +541,11 @@ const DataEntry = () => {
               fileType: file.type,
               userId: userId
             });
+
+            // Check current user authentication
+            const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+            console.log('Auth user ID:', currentUser?.id);
+            console.log('User IDs match:', currentUser?.id === userId);
       
             // Upload the file to private bucket
             const { data: uploadData, error: uploadErr } = await supabase.storage
