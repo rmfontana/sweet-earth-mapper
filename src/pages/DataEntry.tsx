@@ -446,32 +446,51 @@ const DataEntry = () => {
         throw new Error('Invalid coordinates');
       }
 
-      // Check if location already exists
-      let { data: locationData, error: findLocationErr } = await supabase
-      .from('locations')
-      .select('*')
-      .eq('latitude', latitude)
-      .eq('longitude', longitude)
-      .single();
-
-      if (!locationData) {
-        const { data: insertedLocation, error: insertErr } = await supabase
+      // Use range-based search for floating point coordinates instead of exact equality
+      let locationData;
+      try {
+        // First try to find existing location within a small radius (about 10 meters)
+        const tolerance = 0.0001; // approximately 10 meters
+        const { data: existingLocations, error: findLocationErr } = await supabase
           .from('locations')
-          .insert({
-            name: locationName || null,
-            latitude,
-            longitude,
-            place_id: null,
-          })
-          .select()
-          .single();
-      
-        if (insertErr || !insertedLocation) {
-          console.error('Supabase insert error:', insertErr);
-          throw new Error('Location insert failed');
+          .select('*')
+          .gte('latitude', latitude - tolerance)
+          .lte('latitude', latitude + tolerance)
+          .gte('longitude', longitude - tolerance)
+          .lte('longitude', longitude + tolerance)
+          .limit(1);
+
+        if (findLocationErr) {
+          console.error('Location search error:', findLocationErr);
+          throw new Error('Failed to search for existing location');
         }
-      
-        locationData = insertedLocation;
+
+        if (existingLocations && existingLocations.length > 0) {
+          // Use existing location
+          locationData = existingLocations[0];
+        } else {
+          // Create new location
+          const { data: insertedLocation, error: insertErr } = await supabase
+            .from('locations')
+            .insert({
+              name: locationName || null,
+              latitude,
+              longitude,
+              place_id: null,
+            })
+            .select()
+            .single();
+
+          if (insertErr || !insertedLocation) {
+            console.error('Supabase location insert error:', insertErr);
+            throw new Error(`Location insert failed: ${insertErr?.message || 'Unknown error'}`);
+          }
+
+          locationData = insertedLocation;
+        }
+      } catch (error) {
+        console.error('Location handling error:', error);
+        throw new Error(`Error handling location: ${error.message}`);
       }
       
       // --- Insert submission ---
@@ -503,43 +522,91 @@ const DataEntry = () => {
       
         for (let i = 0; i < formData.images.length; i++) {
           const file = formData.images[i];
-          const ext = file.name?.split('.').pop() || 'jpg'; // Default fallback
-          const filePath = `${userId}/${insertedSubmission.id}/${Date.now()}_${i}.${ext}`;
+          const ext = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
+          const timestamp = Date.now();
+          // IMPORTANT: File path must start with user ID for RLS policy to work
+          const filePath = `${userId}/${insertedSubmission.id}/${timestamp}_${i}.${ext}`;
     
-          const { error: uploadErr } = await supabase.storage
-            .from('submission-images-bucket') 
-            .upload(filePath, file, {
-              contentType: file.type,
-              upsert: false,
+          try {
+            console.log('Uploading to private bucket:', {
+              fileName: file.name,
+              filePath: filePath,
+              fileSize: file.size,
+              fileType: file.type,
+              userId: userId
             });
-          
-          if (uploadErr) {
-            console.error('Upload failed for image', file.name, uploadErr);
-            throw uploadErr;
+      
+            // Upload the file to private bucket
+            const { data: uploadData, error: uploadErr } = await supabase.storage
+              .from('submission-images-bucket')
+              .upload(filePath, file, {
+                contentType: file.type,
+                upsert: false,
+              });
+      
+              if (uploadErr) {
+                console.error('Upload failed:', {
+                  error: uploadErr,
+                  message: uploadErr.message,
+                  filePath: filePath
+                });
+                throw uploadErr;
+              }
+      
+            console.log('Upload successful:', uploadData);
+      
+            // For private bucket, we MUST use signed URLs (not public URLs)
+            const { data: signedUrlData, error: urlError } = await supabase.storage
+              .from('submission-images-bucket')
+              .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 year expiry
+      
+            if (urlError || !signedUrlData?.signedUrl) {
+              console.error('Failed to create signed URL:', {
+                error: urlError,
+                filePath: filePath
+              });
+              throw new Error(`Failed to create signed URL for ${file.name}: ${urlError?.message}`);
+            }
+      
+            console.log('Generated signed URL for:', file.name);
+            uploadedImageUrls.push(signedUrlData.signedUrl);
+      
+          } catch (error: any) {
+            console.error(`Upload failed for image ${file.name}:`, error);
+            
+            // Provide more specific error messages based on error content
+            if (error.message?.includes('row-level security') || error.message?.includes('Unauthorized')) {
+              throw new Error(`Permission denied: Cannot upload ${file.name}. Check if file path follows required structure.`);
+            } else if (error.message?.includes('size') || error.message?.includes('413')) {
+              throw new Error(`File too large: ${file.name} exceeds size limit.`);
+            } else if (error.message?.includes('mime') || error.message?.includes('type')) {
+              throw new Error(`Invalid file type: ${file.name} is not an allowed file type.`);
+            } else {
+              throw new Error(`Failed to upload ${file.name}: ${error.message || JSON.stringify(error)}`);
+            }
           }
-          
-          const { data: urlData, error: urlError } = await supabase.storage
-            .from('submission-images-bucket')
-            .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 year expiry
-          
-          if (urlError || !urlData?.signedUrl) {
-            console.error('Failed to create signed URL:', urlError);
-            throw new Error('Failed to create signed URL:');
-          }
-          
-          uploadedImageUrls.push(urlData.signedUrl);
         }
 
-      const imageInsertPayload = uploadedImageUrls.map((url) => ({
-        submission_id: insertedSubmission.id,
-        image_url: url,
-      }));
+        // Insert image records into submission_images table
+        if (uploadedImageUrls.length > 0) {
+          const imageInsertPayload = uploadedImageUrls.map((url) => ({
+            submission_id: insertedSubmission.id,
+            image_url: url,
+          }));
 
-      const { error: imageInsertErr } = await supabase
-        .from('submission_images')
-        .insert(imageInsertPayload);
+          console.log('Inserting image records:', imageInsertPayload.length, 'images');
 
-      if (imageInsertErr) throw imageInsertErr;
+          const { error: imageInsertErr } = await supabase
+            .from('submission_images')
+            .insert(imageInsertPayload);
+
+          if (imageInsertErr) {
+            console.error('Image record insert error:', imageInsertErr);
+            throw new Error(`Failed to save image records: ${imageInsertErr.message}`);
+          }
+
+          console.log('Successfully saved image records');
+        }
     }
   
       toast({ title: 'Data submitted successfully' });
