@@ -457,13 +457,16 @@ const DataEntry = () => {
             throw uploadErr;
           }
           
-          const { data: urlData } = supabase.storage
+          const { data: urlData, error: urlError } = await supabase.storage
             .from('submission-images-bucket')
-            .getPublicUrl(filePath);
+            .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 year expiry
           
-          if (!urlData?.publicUrl) throw new Error('Failed to get public URL');
+          if (urlError || !urlData?.signedUrl) {
+            console.error('Failed to create signed URL:', urlError);
+            throw new Error('Failed to create signed URL:');
+          }
           
-          uploadedImageUrls.push(urlData.publicUrl);
+          uploadedImageUrls.push(urlData.signedUrl);
         }
 
       const imageInsertPayload = uploadedImageUrls.map((url) => ({

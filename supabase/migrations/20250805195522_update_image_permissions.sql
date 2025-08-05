@@ -65,13 +65,16 @@ USING (
 CREATE POLICY "authenticated_insert_submission_images"
 ON storage.objects
 FOR INSERT
+TO authenticated
 WITH CHECK (
   bucket_id = (SELECT id FROM storage.buckets WHERE name = 'submission-images-bucket')
+  AND auth.uid() IS NOT NULL
 );
 
 CREATE POLICY "users_read_submission_images"
 ON storage.objects
 FOR SELECT
+TO authenticated
 USING (
   bucket_id = (SELECT id FROM storage.buckets WHERE name = 'submission-images-bucket') AND 
   (owner_id::text = auth.uid()::text OR 
@@ -81,6 +84,7 @@ USING (
 CREATE POLICY "admin_delete_submission_images"
 ON storage.objects
 FOR DELETE
+TO authenticated
 USING (
   bucket_id = (SELECT id FROM storage.buckets WHERE name = 'submission-images-bucket') AND 
   EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
@@ -89,6 +93,7 @@ USING (
 CREATE POLICY "users_delete_own_submission_images"
 ON storage.objects
 FOR DELETE
+TO authenticated
 USING (
   bucket_id = (SELECT id FROM storage.buckets WHERE name = 'submission-images-bucket') AND 
   owner_id::text = auth.uid()::text
