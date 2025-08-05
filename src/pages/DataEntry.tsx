@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Layout/Header';
@@ -8,21 +8,10 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
-import { Slider } from '../components/ui/slider';
-import {
   MapPin,
-  Calendar,
-  Camera,
   Upload,
   Loader2,
   X,
-  Search,
 } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 import { supabase } from '../integrations/supabase/client';
@@ -30,7 +19,7 @@ import { supabase } from '../integrations/supabase/client';
 import { fetchCropTypes } from '../lib/fetchCropTypes';
 import { fetchBrands } from '../lib/fetchBrands';
 import { fetchStores } from '../lib/fetchStores';
-import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
+import { getSupabaseUrl, getPublishableKey } from '@/lib/utils.ts';
 
 async function getMapboxToken() {
   try {
@@ -65,16 +54,21 @@ const DataEntry = () => {
 
   const [formData, setFormData] = useState({
     cropType: '',
-    variety: '',
+    variety: '',           // was missing, add it explicitly
     brixLevel: [12],
     latitude: 0,
     longitude: 0,
     location: '',
-    measurementDate: new Date().toISOString().split('T')[0],
-    notes: '',
-    images: [] as File[],
+    measurementDate: new Date().toISOString().split('T')[0], // match validation and submit
+    purchaseDate: '',
+    outlierNotes: '',      // if you use this separately
+    notes: '',             // used in validation and form
     brand: '',
     store: '',
+    farmLocation: '',
+    contributorName: '',
+    time: '',              // matches form input for harvest time
+    images: [] as File[],
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -128,7 +122,7 @@ const DataEntry = () => {
 
   const validateFile = (file: File): boolean => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    const maxSize = 5 * 1024 * 1024;
+    const maxSize = 5 * 1024 * 1024; // 5MB
     if (!allowedTypes.includes(file.type)) {
       setErrors(prev => ({ ...prev, images: 'Only JPEG, PNG, and WebP images are allowed' }));
       return false;
@@ -269,90 +263,116 @@ const DataEntry = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Submit form: create or get crop, brand, store, location, then insert submission
+  // Submit form: create or get crop, brand, store, location, then insert submission + upload images
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) {
       toast({ title: 'Fix errors in form.', variant: 'destructive' });
       return;
     }
-
+  
     setIsLoading(true);
-
+  
     try {
-      // Crop
+      // Sanitize inputs once
       const cropName = sanitizeInput(formData.cropType);
+      const brandName = sanitizeInput(formData.brand);
+      const storeName = sanitizeInput(formData.store);
+      const variety = sanitizeInput(formData.variety);
+      const locationName = sanitizeInput(formData.location);
+  
+      // --- Crop: find or insert ---
       let { data: cropData, error: cropErr } = await supabase
         .from('crops')
         .select('id')
         .eq('name', cropName)
         .single();
-
-      if (!cropData) {
-        // Optionally create crop if not found? Or error out? Here we error.
-        throw new Error('Crop not found in database.');
+  
+      if (cropErr || !cropData) {
+        // Insert new crop type if not found
+        const { data: insertedCrop, error: insertCropErr } = await supabase
+          .from('crops')
+          .insert({ name: cropName })
+          .select('id')
+          .single();
+  
+        if (insertCropErr || !insertedCrop) throw new Error('Failed to create new crop type');
+        cropData = insertedCrop;
       }
-      if (cropErr) throw cropErr;
-
-      // Brand (optional)
+  
+      // --- Brand: find or insert (optional) ---
       let brandId: string | null = null;
-      if (formData.brand) {
-        const brandName = sanitizeInput(formData.brand);
+      if (brandName) {
         let { data: brandData, error: brandErr } = await supabase
           .from('brands')
           .select('id')
           .eq('name', brandName)
           .single();
-
+  
         if (brandErr || !brandData) {
-          throw new Error('Brand not found');
+          // Insert new brand
+          const { data: insertedBrand, error: insertBrandErr } = await supabase
+            .from('brands')
+            .insert({ name: brandName })
+            .select('id')
+            .single();
+  
+          if (insertBrandErr || !insertedBrand) throw new Error('Failed to create new brand');
+          brandData = insertedBrand;
         }
         brandId = brandData.id;
       }
-
-      // Store (optional)
+  
+      // --- Store: find or insert (optional) ---
       let storeId: string | null = null;
-      if (formData.store) {
-        const storeName = sanitizeInput(formData.store);
+      if (storeName) {
         let { data: storeData, error: storeErr } = await supabase
           .from('stores')
           .select('id')
           .eq('name', storeName)
           .single();
-
+  
         if (storeErr || !storeData) {
-          throw new Error('Store not found');
+          // Insert new store
+          const { data: insertedStore, error: insertStoreErr } = await supabase
+            .from('stores')
+            .insert({ name: storeName })
+            .select('id')
+            .single();
+  
+          if (insertStoreErr || !insertedStore) throw new Error('Failed to create new store');
+          storeData = insertedStore;
         }
         storeId = storeData.id;
       }
-
-      // Location
+  
+      // --- Location ---
       const { data: locationData, error: locErr } = await supabase
         .from('locations')
         .insert({
           latitude: formData.latitude,
           longitude: formData.longitude,
-          name: sanitizeInput(formData.location),
+          name: locationName,
         })
         .select()
         .single();
-
+  
       if (locErr || !locationData) throw new Error('Location insert failed');
-
-      // Insert submission
+  
+      // --- Insert submission ---
       const { error: submitErr } = await supabase.from('submissions').insert({
         crop_id: cropData.id,
         location_id: locationData.id,
         store_id: storeId,
         brand_id: brandId,
-        label: sanitizeInput(formData.variety),
+        label: variety,
         brix_value: formData.brixLevel[0],
         user_id: user?.id,
         timestamp: new Date(formData.measurementDate).toISOString(),
       });
-
+  
       if (submitErr) throw submitErr;
-
+  
       toast({ title: 'Data submitted successfully' });
       navigate('/your-data');
     } catch (err: any) {
@@ -362,7 +382,6 @@ const DataEntry = () => {
       setIsLoading(false);
     }
   };
-
   if (!user || (user.role !== 'contributor' && user.role !== 'admin')) return null;
 
   return (
@@ -382,9 +401,9 @@ const DataEntry = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
-              {/* Crop Type with combobox style input (dropdown + filter + manual input) */}
+              {/* Crop Type */}
               <div>
-                <Label htmlFor="cropType">Fruit / Vegetable Type</Label>
+                <Label htmlFor="cropType">Crop Type</Label>
                 <input
                   id="cropType"
                   list="crop-types"
@@ -457,95 +476,186 @@ const DataEntry = () => {
               {/* BRIX Level */}
               <div>
                 <Label htmlFor="brixLevel">BRIX Level</Label>
-                <Slider
-                  defaultValue={formData.brixLevel}
+                <input
+                  type="range"
+                  min={0}
                   max={100}
                   step={0.5}
-                  onValueChange={v => setFormData(p => ({ ...p, brixLevel: v }))}
+                  value={formData.brixLevel[0]}
+                  onChange={e =>
+                    setFormData(p => ({ ...p, brixLevel: [parseFloat(e.target.value)] }))
+                  }
+                  id="brixLevel"
                 />
                 <p className="text-sm text-gray-500">Selected BRIX: {formData.brixLevel[0]}</p>
                 {errors.brixLevel && <p className="text-red-600 text-sm">{errors.brixLevel}</p>}
               </div>
 
-              {/* Location with autocomplete */}
-              <div className="relative">
+              {/* Location with autocomplete and geolocation */}
+              <div>
                 <Label htmlFor="location">Location</Label>
                 <input
                   id="location"
-                  className="w-full border border-gray-300 rounded-md p-2"
-                  placeholder="Start typing location..."
+                  type="text"
                   value={formData.location}
                   onChange={e => setFormData(p => ({ ...p, location: e.target.value }))}
+                  placeholder="Start typing location..."
                   autoComplete="off"
+                  className="w-full border border-gray-300 rounded-md p-2"
                 />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="absolute right-1 top-1 rounded-md"
-                  onClick={handleLocationCapture}
-                  disabled={locationLoading}
-                >
-                  {locationLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <MapPin className="w-4 h-4" />
-                  )}
-                </Button>
                 {errors.location && <p className="text-red-600 text-sm">{errors.location}</p>}
                 {locationSuggestions.length > 0 && (
-              <ul className="absolute z-50 w-full bg-white border border-gray-300 rounded-md mt-1 shadow-md max-h-48 overflow-y-auto">
-                {locationSuggestions.map(feature => (
-                  <li
-                    key={feature.id}
-                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                    onClick={() => selectLocationSuggestion(feature)}
-                  >
-                    {feature.place_name}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                  <ul className="border border-gray-300 rounded-md max-h-40 overflow-auto mt-1 bg-white z-10 absolute">
+                    {locationSuggestions.map(suggestion => (
+                      <li
+                        key={suggestion.id}
+                        className="p-2 cursor-pointer hover:bg-gray-100"
+                        onClick={() => selectLocationSuggestion(suggestion)}
+                      >
+                        {suggestion.place_name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <button
+                  type="button"
+                  onClick={handleLocationCapture}
+                  disabled={locationLoading}
+                  className="mt-2 inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md"
+                >
+                  {locationLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Getting location...</span>
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="w-4 h-4" />
+                      <span>Use current location</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
-          {/* Date */}
-          <div>
-            <Label htmlFor="measurementDate">Measurement Date</Label>
-            <Input
-              type="date"
-              id="measurementDate"
-              value={formData.measurementDate}
-              onChange={e => setFormData(p => ({ ...p, measurementDate: e.target.value }))}
-            />
-            {errors.measurementDate && (
-              <p className="text-red-600 text-sm">{errors.measurementDate}</p>
-            )}
-          </div>
+              {/* Measurement Date */}
+              <div>
+                <Label htmlFor="measurementDate">Measurement Date</Label>
+                <Input
+                  type="date"
+                  id="measurementDate"
+                  value={formData.measurementDate}
+                  onChange={e => setFormData(p => ({ ...p, measurementDate: e.target.value }))}
+                  max={new Date().toISOString().split('T')[0]}
+                />
+                {errors.measurementDate && (
+                  <p className="text-red-600 text-sm">{errors.measurementDate}</p>
+                )}
+              </div>
 
-          {/* Notes */}
-          <div>
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
-              rows={3}
-            />
-            {errors.notes && <p className="text-red-600 text-sm">{errors.notes}</p>}
-          </div>
+              {/* Purchase Date */}
+              <div>
+                <Label htmlFor="purchaseDate">Purchase Date (optional)</Label>
+                <Input
+                  type="date"
+                  id="purchaseDate"
+                  value={formData.purchaseDate}
+                  onChange={e => setFormData(p => ({ ...p, purchaseDate: e.target.value }))}
+                  max={new Date().toISOString().split('T')[0]}
+                />
+              </div>
 
-          {/* Submit */}
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Upload className="mr-2" />}
-            Submit Measurement
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
-  </main>
-</div>
+              {/* Farm Location */}
+              <div>
+                <Label htmlFor="farmLocation">Farm Location (optional)</Label>
+                <Input
+                  id="farmLocation"
+                  value={formData.farmLocation}
+                  onChange={e => setFormData(p => ({ ...p, farmLocation: e.target.value }))}
+                  autoComplete="off"
+                />
+              </div>
 
-);
+              {/* Contributor Name */}
+              <div>
+                <Label htmlFor="contributorName">Contributor Name (optional)</Label>
+                <Input
+                  id="contributorName"
+                  value={formData.contributorName}
+                  onChange={e => setFormData(p => ({ ...p, contributorName: e.target.value }))}
+                  autoComplete="off"
+                />
+              </div>
+
+              {/* Harvest Time */}
+              <div>
+                <Label htmlFor="time">Harvest Time (optional)</Label>
+                <Input
+                  type="time"
+                  id="time"
+                  value={formData.time}
+                  onChange={e => setFormData(p => ({ ...p, time: e.target.value }))}
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <Label htmlFor="notes">Notes (optional)</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
+                  rows={3}
+                  maxLength={500}
+                />
+                {errors.notes && <p className="text-red-600 text-sm">{errors.notes}</p>}
+              </div>
+
+              {/* Images Upload */}
+              <div>
+                <Label htmlFor="images">Upload Images (max 3)</Label>
+                <input
+                  type="file"
+                  id="images"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  onChange={handleImageUpload}
+                  disabled={formData.images.length >= 3}
+                  className="mb-2"
+                />
+                {errors.images && <p className="text-red-600 text-sm">{errors.images}</p>}
+                <div className="flex space-x-4 mt-2">
+                  {formData.images.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="relative w-20 h-20 border rounded overflow-hidden flex-shrink-0"
+                    >
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={`preview-${idx}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(idx)}
+                        className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-1"
+                        aria-label="Remove image"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? 'Submitting...' : 'Submit'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </main>
+    </div>
+  );
 };
 
 export default DataEntry;
