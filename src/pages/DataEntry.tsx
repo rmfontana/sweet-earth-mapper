@@ -85,6 +85,8 @@ const DataEntry = () => {
   const [showBrandDropdown, setShowBrandDropdown] = useState(false);
   const [showStoreDropdown, setShowStoreDropdown] = useState(false);
 
+  const MAX_NAME_LENGTH = 150;
+
   // Redirect if not authorized
   useEffect(() => {
     if (!user || (user.role !== 'contributor' && user.role !== 'admin')) {
@@ -187,7 +189,7 @@ const DataEntry = () => {
         const res = await fetch(
           `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
             formData.location
-          )}.json?access_token=${mapboxToken}&autocomplete=true&limit=5`,
+          )}.json?access_token=${mapboxToken}&autocomplete=true&limit=5&types=poi,address,place`,
           { signal: controller.signal }
         );
         const data = await res.json();
@@ -302,8 +304,8 @@ const DataEntry = () => {
       const brandName = sanitizeInput(formData.brand);
       const storeName = sanitizeInput(formData.store);
       const variety = sanitizeInput(formData.variety);
-      const locationName = sanitizeInput(formData.location);
-  
+      const locationName = sanitizeInput(formData.location).slice(0, MAX_NAME_LENGTH);
+
       // --- Crop: find or insert ---
       let { data: cropData, error: cropErr } = await supabase
         .from('crops')
@@ -372,19 +374,45 @@ const DataEntry = () => {
         storeId = storeData.id;
       }
   
+      const fixPrecision = (num: number): number =>
+        parseFloat(num.toFixed(6)); // max 6 decimal digits for `numeric(9,6)`
+      
       // --- Location ---
-      const { data: locationData, error: locErr } = await supabase
-        .from('locations')
-        .insert({
-          latitude: formData.latitude,
-          longitude: formData.longitude,
-          name: locationName,
-        })
-        .select()
-        .single();
-  
-      if (locErr || !locationData) throw new Error('Location insert failed');
-  
+      const latitude = fixPrecision(formData.latitude);
+      const longitude = fixPrecision(formData.longitude);
+
+      if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
+        throw new Error('Invalid coordinates');
+      }
+
+      // Check if location already exists
+      let { data: locationData, error: findLocationErr } = await supabase
+      .from('locations')
+      .select('*')
+      .eq('latitude', latitude)
+      .eq('longitude', longitude)
+      .single();
+
+      if (!locationData) {
+        const { data: insertedLocation, error: insertErr } = await supabase
+          .from('locations')
+          .insert({
+            name: locationName || null,
+            latitude,
+            longitude,
+            place_id: null,
+          })
+          .select()
+          .single();
+      
+        if (insertErr || !insertedLocation) {
+          console.error('Supabase insert error:', insertErr);
+          throw new Error('Location insert failed');
+        }
+      
+        locationData = insertedLocation;
+      }
+      
       // --- Insert submission ---
       const { error: submitErr } = await supabase.from('submissions').insert({
         crop_id: cropData.id,
