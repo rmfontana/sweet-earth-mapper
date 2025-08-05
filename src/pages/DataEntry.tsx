@@ -517,95 +517,114 @@ const DataEntry = () => {
       const userId = user?.id;
       if (!userId) throw new Error('User not authenticated');
 
+      // === COMPREHENSIVE AUTH DEBUGGING ===
+      console.log('=== AUTHENTICATION CHECK ===');
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      console.log('Session exists:', !!session);
+      console.log('Session user ID:', session?.user?.id);
+      console.log('Form user ID:', userId);
+      console.log('User IDs match:', session?.user?.id === userId);
+      console.log('Session error:', sessionError);
+
+      // Check if user exists in users table
+      const { data: userRecord, error: userError } = await supabase
+        .from('users')
+        .select('id, role')
+        .eq('id', userId)
+        .single();
+      console.log('User record exists:', !!userRecord);
+      console.log('User record error:', userError);
+
       if (formData.images.length > 0) {
+        console.log('=== STARTING IMAGE UPLOAD ===');
+        console.log('Number of images to upload:', formData.images.length);
+        
         const uploadedImageUrls: string[] = [];
-      
+
         for (let i = 0; i < formData.images.length; i++) {
           const file = formData.images[i];
           const ext = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
           const timestamp = Date.now();
-          // IMPORTANT: File path must start with user ID for RLS policy to work
           const filePath = `${userId}/${insertedSubmission.id}/${timestamp}_${i}.${ext}`;
-    
+
+          console.log(`=== UPLOADING IMAGE ${i + 1}/${formData.images.length} ===`);
+          console.log('File name:', file.name);
+          console.log('File size:', file.size);
+          console.log('File type:', file.type);
+          console.log('Upload path:', filePath);
+          console.log('Path starts with user ID:', filePath.startsWith(`${userId}/`));
+
           try {
-            console.log('=== DEBUGGING UPLOAD ===');
-            console.log('User ID:', userId);
-            console.log('File path:', filePath);
-            console.log('Expected pattern:', `${userId}/%`);
-            console.log('Does path match pattern?', filePath.startsWith(`${userId}/`));
+            // Test bucket access first
+            console.log('Testing bucket access...');
+            const { data: bucketTest, error: bucketError } = await supabase.storage
+              .from('submission-images-bucket')
+              .list('', { limit: 1 });
+            
+            console.log('Bucket access test result:', bucketError ? 'FAILED' : 'SUCCESS');
+            if (bucketError) {
+              console.log('Bucket error:', bucketError);
+            }
 
-            console.log('Uploading to private bucket:', {
-              fileName: file.name,
-              filePath: filePath,
-              fileSize: file.size,
-              fileType: file.type,
-              userId: userId
-            });
-
-            // Check current user authentication
-            const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-            console.log('Auth user ID:', currentUser?.id);
-            console.log('User IDs match:', currentUser?.id === userId);
-      
-            // Upload the file to private bucket
-            const { data: uploadData, error: uploadErr } = await supabase.storage
+            // Attempt upload with maximum detail logging
+            console.log('Attempting upload...');
+            const uploadResult = await supabase.storage
               .from('submission-images-bucket')
               .upload(filePath, file, {
                 contentType: file.type,
                 upsert: false,
               });
-      
-              if (uploadErr) {
-                console.error('Upload failed:', {
-                  error: uploadErr,
-                  message: uploadErr.message,
-                  filePath: filePath
-                });
-                throw uploadErr;
+
+            console.log('Upload result:', uploadResult);
+            
+            if (uploadResult.error) {
+              console.log('=== UPLOAD ERROR DETAILS ===');
+              console.log('Error message:', uploadResult.error.message);
+              console.log('Error name:', uploadResult.error.name);
+              console.log('Full error object:', JSON.stringify(uploadResult.error, null, 2));
+              
+              // Specific error handling
+              if (uploadResult.error.message?.includes('row-level security') || 
+                  uploadResult.error.message?.includes('Unauthorized') ||
+                  uploadResult.error.message?.includes('403')) {
+                throw new Error(`RLS Policy Error: Cannot upload ${file.name}. Auth issue detected.`);
               }
-      
-            console.log('Upload successful:', uploadData);
-      
-            // For private bucket, we MUST use signed URLs (not public URLs)
+              throw uploadResult.error;
+            }
+
+            console.log('Upload successful for:', file.name);
+            
+            // Create signed URL
             const { data: signedUrlData, error: urlError } = await supabase.storage
               .from('submission-images-bucket')
-              .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 year expiry
-      
+              .createSignedUrl(filePath, 60 * 60 * 24 * 365);
+
             if (urlError || !signedUrlData?.signedUrl) {
-              console.error('Failed to create signed URL:', {
-                error: urlError,
-                filePath: filePath
-              });
-              throw new Error(`Failed to create signed URL for ${file.name}: ${urlError?.message}`);
+              console.error('Signed URL error:', urlError);
+              throw new Error(`Failed to create signed URL for ${file.name}`);
             }
-      
-            console.log('Generated signed URL for:', file.name);
+
             uploadedImageUrls.push(signedUrlData.signedUrl);
-      
+            console.log(`Successfully processed image ${i + 1}/${formData.images.length}`);
+
           } catch (error: any) {
-            console.error(`Upload failed for image ${file.name}:`, error);
+            console.log('=== CATCH BLOCK ERROR ===');
+            console.log('Error type:', typeof error);
+            console.log('Error message:', error.message);
+            console.log('Error stack:', error.stack);
+            console.log('Full error:', JSON.stringify(error, null, 2));
             
-            // Provide more specific error messages based on error content
-            if (error.message?.includes('row-level security') || error.message?.includes('Unauthorized')) {
-              throw new Error(`Permission denied: Cannot upload ${file.name}. Check if file path follows required structure.`);
-            } else if (error.message?.includes('size') || error.message?.includes('413')) {
-              throw new Error(`File too large: ${file.name} exceeds size limit.`);
-            } else if (error.message?.includes('mime') || error.message?.includes('type')) {
-              throw new Error(`Invalid file type: ${file.name} is not an allowed file type.`);
-            } else {
-              throw new Error(`Failed to upload ${file.name}: ${error.message || JSON.stringify(error)}`);
-            }
+            throw new Error(`Upload failed for ${file.name}: ${error.message}`);
           }
         }
 
-        // Insert image records into submission_images table
+        // Continue with image record insertion...
         if (uploadedImageUrls.length > 0) {
+          console.log('=== INSERTING IMAGE RECORDS ===');
           const imageInsertPayload = uploadedImageUrls.map((url) => ({
             submission_id: insertedSubmission.id,
             image_url: url,
           }));
-
-          console.log('Inserting image records:', imageInsertPayload.length, 'images');
 
           const { error: imageInsertErr } = await supabase
             .from('submission_images')
@@ -616,9 +635,9 @@ const DataEntry = () => {
             throw new Error(`Failed to save image records: ${imageInsertErr.message}`);
           }
 
-          console.log('Successfully saved image records');
+          console.log('Successfully saved all image records');
         }
-    }
+      }
   
       toast({ title: 'Data submitted successfully' });
       navigate('/your-data');
