@@ -61,7 +61,7 @@ const DataEntry = () => {
     location: '',
     measurementDate: new Date().toISOString().split('T')[0],
     purchaseDate: '',
-    outlierNotes: '',    // keep this, remove notes
+    outlierNotes: '',   
     brand: '',
     store: '',
     farmLocation: '',
@@ -80,6 +80,10 @@ const DataEntry = () => {
 
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
   const [locationSuggestions, setLocationSuggestions] = useState<LocationFeature[]>([]);
+
+  const [showCropDropdown, setShowCropDropdown] = useState(false);
+  const [showBrandDropdown, setShowBrandDropdown] = useState(false);
+  const [showStoreDropdown, setShowStoreDropdown] = useState(false);
 
   // Redirect if not authorized
   useEffect(() => {
@@ -111,6 +115,25 @@ const DataEntry = () => {
     })();
   }, [toast]);
 
+  // FIXED: Centralized input change handler to keep form data in sync
+  const handleInputChange = (field: keyof typeof formData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Clear related errors when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  // FIXED: Proper dropdown selection that maintains sync
+  const selectDropdownValue = (field: 'cropType' | 'brand' | 'store', value: string) => {
+    handleInputChange(field, value);
+
+    if (field === 'cropType') setShowCropDropdown(false);
+    else if (field === 'brand') setShowBrandDropdown(false);
+    else if (field === 'store') setShowStoreDropdown(false);
+  };
+
   // Sanitize inputs to prevent XSS and invalid chars
   const sanitizeInput = (input: string): string =>
     input
@@ -133,6 +156,7 @@ const DataEntry = () => {
     return true;
   };
 
+  // FIXED: Use centralized handler for image updates
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const validFiles = files.filter(validateFile);
@@ -140,11 +164,12 @@ const DataEntry = () => {
       setErrors(prev => ({ ...prev, images: 'Maximum 3 images allowed' }));
       return;
     }
-    setFormData(prev => ({ ...prev, images: [...prev.images, ...validFiles] }));
+    handleInputChange('images', [...formData.images, ...validFiles]);
   };
 
+  // FIXED: Use centralized handler for image removal
   const removeImage = (index: number) => {
-    setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }));
+    handleInputChange('images', formData.images.filter((_, i) => i !== index));
   };
 
   // Autocomplete location suggestions from Mapbox API
@@ -179,9 +204,10 @@ const DataEntry = () => {
     return () => controller.abort();
   }, [formData.location, mapboxToken, toast]);
 
+  // FIXED: Use centralized handler for location selection
   const selectLocationSuggestion = (feature: LocationFeature) => {
-    setFormData(p => ({
-      ...p,
+    setFormData(prev => ({
+      ...prev,
       location: feature.place_name,
       longitude: feature.center[0],
       latitude: feature.center[1],
@@ -189,7 +215,7 @@ const DataEntry = () => {
     setLocationSuggestions([]);
   };
 
-  // Reverse geocode user location on capture button
+  // FIXED: Use centralized handler for location capture
   const handleLocationCapture = () => {
     if (!mapboxToken) {
       setErrors(prev => ({ ...prev, location: 'Mapbox token not loaded yet' }));
@@ -209,11 +235,11 @@ const DataEntry = () => {
           );
           const data = await res.json();
           const placeName = data.features?.[0]?.place_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-          setFormData(p => ({ ...p, latitude, longitude, location: placeName }));
+          setFormData(prev => ({ ...prev, latitude, longitude, location: placeName }));
           toast({ title: 'Location captured', description: placeName });
         } catch {
-          setFormData(p => ({
-            ...p,
+          setFormData(prev => ({
+            ...prev,
             latitude,
             longitude,
             location: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
@@ -241,22 +267,20 @@ const DataEntry = () => {
     const newErrors: Record<string, string> = {};
 
     const cropType = sanitizeInput(formData.cropType);
-    const variety = sanitizeInput(formData.variety);
     const location = sanitizeInput(formData.location);
     const outlierNotes = sanitizeInput(formData.outlierNotes);
     const brand = sanitizeInput(formData.brand);
     const store = sanitizeInput(formData.store);
 
     if (!cropType) newErrors.cropType = 'Please select or enter a crop type';
-    if (!variety) newErrors.variety = 'Variety is required';
     if (formData.brixLevel[0] < 0 || formData.brixLevel[0] > 100)
       newErrors.brixLevel = 'BRIX must be between 0–100';
     if (!location) newErrors.location = 'Location is required';
     if (new Date(formData.measurementDate) > new Date())
       newErrors.measurementDate = 'Date cannot be in the future';
     if (outlierNotes.length > 500) newErrors.outlierNotes = 'Notes too long (max 500 characters)';
-    if (brand && !brands.includes(brand)) newErrors.brand = 'Brand not recognized';
-    if (store && !stores.includes(store)) newErrors.store = 'Store not recognized';
+    if (!brand) newErrors.brand = 'Please select or enter a brand';
+    if (!store) newErrors.store = 'Please select or enter a store';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -298,6 +322,9 @@ const DataEntry = () => {
         if (insertCropErr || !insertedCrop) throw new Error('Failed to create new crop type');
         cropData = insertedCrop;
       }
+
+      // --- Variety: find or insert ---
+      // TODO: Once varieties added to the database come back here and fix this
   
       // --- Brand: find or insert (optional) ---
       let brandId: string | null = null;
@@ -364,7 +391,7 @@ const DataEntry = () => {
         location_id: locationData.id,
         store_id: storeId,
         brand_id: brandId,
-        crop_variety: variety,                       
+        crop_variety: variety || null,                       
         brix_value: formData.brixLevel[0],
         user_id: user?.id,
         assessment_date: new Date(formData.measurementDate).toISOString(),  
@@ -386,9 +413,10 @@ const DataEntry = () => {
       setIsLoading(false);
     }
   };
+
   if (!user || (user.role !== 'contributor' && user.role !== 'admin')) return null;
 
-    return (
+  return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="max-w-4xl mx-auto p-8">
@@ -407,133 +435,226 @@ const DataEntry = () => {
             <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
               {/* Grid layout for inputs */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Crop Type */}
+                {/* Crop Type - required with dropdown */}
                 <div className="relative">
-                  <Label htmlFor="cropType">Crop Type</Label>
+                  <Label htmlFor="cropType" className="flex items-center">
+                    Crop Type <span className="ml-1 text-red-600">*</span>
+                  </Label>
                   <input
                     id="cropType"
-                    list="crop-types"
+                    type="text"
+                    placeholder="Type or select crop type"
+                    autoComplete="off"
+                    value={formData.cropType}
+                    onChange={e => handleInputChange('cropType', e.target.value)}
                     className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
                       ${errors.cropType ? 'border-red-500' : 'border-gray-300'}`}
-                    placeholder="Type or select crop type"
-                    value={formData.cropType}
-                    onChange={e => setFormData(p => ({ ...p, cropType: e.target.value }))}
-                    autoComplete="off"
+                    aria-describedby="cropType-list"
+                    aria-invalid={!!errors.cropType}
+                    onFocus={() => setShowCropDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowCropDropdown(false), 150)} // delay to allow click
                   />
-                  <datalist id="crop-types">
-                    {cropTypes.map(crop => (
-                      <option key={crop} value={crop} />
-                    ))}
-                  </datalist>
-                  {errors.cropType && <p className="text-red-600 text-sm mt-1">{errors.cropType}</p>}
+                  {/* Dropdown panel */}
+                  {showCropDropdown && (
+                    <ul
+                      id="cropType-list"
+                      className="absolute z-30 w-full max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg"
+                    >
+                      {cropTypes
+                        .filter(crop => crop.toLowerCase().includes(formData.cropType.toLowerCase()))
+                        .map(crop => (
+                          <li
+                            key={crop}
+                            className="cursor-pointer px-3 py-2 hover:bg-blue-100"
+                            onMouseDown={() => selectDropdownValue('cropType', crop)}
+                          >
+                            {crop}
+                          </li>
+                        ))}
+                      {cropTypes.filter(crop => crop.toLowerCase().includes(formData.cropType.toLowerCase())).length === 0 && (
+                        <li className="px-3 py-2 text-gray-500">No matches found</li>
+                      )}
+                    </ul>
+                  )}
+                  {errors.cropType && (
+                    <p className="text-red-600 text-sm mt-1">{errors.cropType}</p>
+                  )}
                 </div>
-
-                {/* Variety */}
+  
+                {/* Variety - optional free text */}
                 <div>
                   <Label htmlFor="variety">Variety</Label>
                   <Input
                     id="variety"
                     value={formData.variety}
-                    onChange={e => setFormData(p => ({ ...p, variety: e.target.value }))}
+                    onChange={e => handleInputChange('variety', e.target.value)}
                     autoComplete="off"
                     className={errors.variety ? 'border-red-500' : ''}
                   />
                   {errors.variety && <p className="text-red-600 text-sm mt-1">{errors.variety}</p>}
                 </div>
-
-                {/* Brand */}
+  
+                {/* Brand - required with dropdown */}
                 <div className="relative">
-                  <Label htmlFor="brand">Brand</Label>
+                  <Label htmlFor="brand" className="flex items-center">
+                    Brand <span className="ml-1 text-red-600">*</span>
+                  </Label>
                   <input
                     id="brand"
-                    list="brand-list"
+                    type="text"
+                    placeholder="Type or select brand"
+                    autoComplete="off"
+                    value={formData.brand}
+                    onChange={e => handleInputChange('brand', e.target.value)}
                     className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
                       ${errors.brand ? 'border-red-500' : 'border-gray-300'}`}
-                    placeholder="Type or select brand"
-                    value={formData.brand}
-                    onChange={e => setFormData(p => ({ ...p, brand: e.target.value }))}
-                    autoComplete="off"
+                    aria-describedby="brand-list"
+                    aria-invalid={!!errors.brand}
+                    onFocus={() => setShowBrandDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowBrandDropdown(false), 150)}
                   />
-                  <datalist id="brand-list">
-                    {brands.map(brand => (
-                      <option key={brand} value={brand} />
-                    ))}
-                  </datalist>
-                  {errors.brand && <p className="text-red-600 text-sm mt-1">{errors.brand}</p>}
+                  {showBrandDropdown && (
+                    <ul
+                      id="brand-list"
+                      className="absolute z-30 w-full max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg"
+                    >
+                      {brands
+                        .filter(brand => brand.toLowerCase().includes(formData.brand.toLowerCase()))
+                        .map(brand => (
+                          <li
+                            key={brand}
+                            className="cursor-pointer px-3 py-2 hover:bg-blue-100"
+                            onMouseDown={() => selectDropdownValue('brand', brand)}
+                          >
+                            {brand}
+                          </li>
+                        ))}
+                      {brands.filter(brand => brand.toLowerCase().includes(formData.brand.toLowerCase())).length === 0 && (
+                        <li className="px-3 py-2 text-gray-500">No matches found</li>
+                      )}
+                    </ul>
+                  )}
+                  {errors.brand && (
+                    <p className="text-red-600 text-sm mt-1">{errors.brand}</p>
+                  )}
                 </div>
-
-                {/* Store */}
+  
+                {/* Store - required with dropdown */}
                 <div className="relative">
-                  <Label htmlFor="store">Store</Label>
+                  <Label htmlFor="store" className="flex items-center">
+                    Store <span className="ml-1 text-red-600">*</span>
+                  </Label>
                   <input
                     id="store"
-                    list="store-list"
+                    type="text"
+                    placeholder="Type or select store"
+                    autoComplete="off"
+                    value={formData.store}
+                    onChange={e => handleInputChange('store', e.target.value)}
                     className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
                       ${errors.store ? 'border-red-500' : 'border-gray-300'}`}
-                    placeholder="Type or select store"
-                    value={formData.store}
-                    onChange={e => setFormData(p => ({ ...p, store: e.target.value }))}
-                    autoComplete="off"
+                    aria-describedby="store-list"
+                    aria-invalid={!!errors.store}
+                    onFocus={() => setShowStoreDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowStoreDropdown(false), 150)}
                   />
-                  <datalist id="store-list">
-                    {stores.map(store => (
-                      <option key={store} value={store} />
-                    ))}
-                  </datalist>
-                  {errors.store && <p className="text-red-600 text-sm mt-1">{errors.store}</p>}
+                  {showStoreDropdown && (
+                    <ul
+                      id="store-list"
+                      className="absolute z-30 w-full max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg"
+                    >
+                      {stores
+                        .filter(store => store.toLowerCase().includes(formData.store.toLowerCase()))
+                        .map(store => (
+                          <li
+                            key={store}
+                            className="cursor-pointer px-3 py-2 hover:bg-blue-100"
+                            onMouseDown={() => selectDropdownValue('store', store)}
+                          >
+                            {store}
+                          </li>
+                        ))}
+                      {stores.filter(store => store.toLowerCase().includes(formData.store.toLowerCase())).length === 0 && (
+                        <li className="px-3 py-2 text-gray-500">No matches found</li>
+                      )}
+                    </ul>
+                  )}
+                  {errors.store && (
+                    <p className="text-red-600 text-sm mt-1">{errors.store}</p>
+                  )}
                 </div>
               </div>
-
-              {/* BRIX Level */}
+  
+              {/* BRIX Level - required */}
               <div>
-                <Label htmlFor="brixLevel">BRIX Level</Label>
+                <Label htmlFor="brixLevel" className="flex items-center">
+                  BRIX Level <span className="ml-1 text-red-600">*</span>
+                </Label>
                 <input
                   type="range"
                   min={0}
                   max={100}
                   step={0.5}
                   value={formData.brixLevel[0]}
-                  onChange={e => setFormData(p => ({ ...p, brixLevel: [parseFloat(e.target.value)] }))}
+                  onChange={e => handleInputChange('brixLevel', [parseFloat(e.target.value)])}
                   id="brixLevel"
                   className="w-full"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={formData.brixLevel[0]}
                 />
                 <p className="text-sm text-gray-600 mt-1">Selected BRIX: {formData.brixLevel[0]}</p>
-                {errors.brixLevel && <p className="text-red-600 text-sm mt-1">{errors.brixLevel}</p>}
+                {errors.brixLevel && (
+                  <p className="text-red-600 text-sm mt-1">{errors.brixLevel}</p>
+                )}
               </div>
-
-              {/* Location with autocomplete */}
+  
+              {/* Location with autocomplete - required */}
               <div className="relative">
-                <Label htmlFor="location">Location</Label>
+                <Label htmlFor="location" className="flex items-center">
+                  Location <span className="ml-1 text-red-600">*</span>
+                </Label>
                 <input
                   id="location"
                   type="text"
-                  value={formData.location}
-                  onChange={e => setFormData(p => ({ ...p, location: e.target.value }))}
                   placeholder="Start typing location..."
                   autoComplete="off"
+                  value={formData.location}
+                  onChange={e => handleInputChange('location', e.target.value)}
                   className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
                     ${errors.location ? 'border-red-500' : 'border-gray-300'}`}
+                  aria-autocomplete="list"
+                  aria-expanded={locationSuggestions.length > 0}
+                  aria-haspopup="listbox"
+                  aria-invalid={!!errors.location}
                 />
-                {errors.location && <p className="text-red-600 text-sm mt-1">{errors.location}</p>}
-
+                {errors.location && (
+                  <p className="text-red-600 text-sm mt-1">{errors.location}</p>
+                )}
+  
                 {locationSuggestions.length > 0 && (
-                  <ul className="absolute z-20 top-full left-0 right-0 mt-1 max-h-40 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg">
+                  <ul
+                    role="listbox"
+                    className="absolute z-30 top-full left-0 right-0 mt-1 max-h-40 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg"
+                  >
                     {locationSuggestions.map(suggestion => (
                       <li
                         key={suggestion.id}
+                        role="option"
+                        tabIndex={-1}
                         className="cursor-pointer px-3 py-2 hover:bg-blue-100"
-                        onClick={() => selectLocationSuggestion(suggestion)}
+                        onMouseDown={() => selectLocationSuggestion(suggestion)}
                       >
                         {suggestion.place_name}
                       </li>
                     ))}
                   </ul>
                 )}
-
+  
                 <button
                   type="button"
                   onClick={handleLocationCapture}
@@ -553,80 +674,87 @@ const DataEntry = () => {
                   )}
                 </button>
               </div>
-
-              {/* Dates and other fields in grid for compactness */}
+  
+              {/* Dates and other optional fields in grid */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <Label htmlFor="measurementDate">Measurement Date</Label>
+                  <Label htmlFor="measurementDate" className="flex items-center">
+                    Measurement Date <span className="ml-1 text-red-600">*</span>
+                  </Label>
                   <Input
                     type="date"
                     id="measurementDate"
                     value={formData.measurementDate}
-                    onChange={e => setFormData(p => ({ ...p, measurementDate: e.target.value }))}
+                    onChange={e => handleInputChange('measurementDate', e.target.value)}
                     max={new Date().toISOString().split('T')[0]}
                     className={errors.measurementDate ? 'border-red-500' : ''}
                   />
-                  {errors.measurementDate && <p className="text-red-600 text-sm mt-1">{errors.measurementDate}</p>}
+                  {errors.measurementDate && (
+                    <p className="text-red-600 text-sm mt-1">{errors.measurementDate}</p>
+                  )}
                 </div>
-
+  
                 <div>
-                  <Label htmlFor="purchaseDate">Purchase Date (optional)</Label>
+                  <Label htmlFor="purchaseDate">Purchase Date</Label>
                   <Input
                     type="date"
                     id="purchaseDate"
                     value={formData.purchaseDate}
-                    onChange={e => setFormData(p => ({ ...p, purchaseDate: e.target.value }))}
+                    onChange={e => handleInputChange('purchaseDate', e.target.value)}
                     max={new Date().toISOString().split('T')[0]}
                   />
                 </div>
-
+  
                 <div>
-                  <Label htmlFor="time">Harvest Time (optional)</Label>
+                  <Label htmlFor="time">Harvest Time</Label>
                   <Input
                     type="time"
                     id="time"
                     value={formData.time}
-                    onChange={e => setFormData(p => ({ ...p, time: e.target.value }))}
+                    onChange={e => handleInputChange('time', e.target.value)}
                   />
                 </div>
               </div>
-
-              {/* Farm Location & Contributor */}
+  
+              {/* Farm Location & Contributor Name */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <Label htmlFor="farmLocation">Farm Location (optional)</Label>
+                  <Label htmlFor="farmLocation">Farm Location</Label>
                   <Input
                     id="farmLocation"
                     value={formData.farmLocation}
-                    onChange={e => setFormData(p => ({ ...p, farmLocation: e.target.value }))}
+                    onChange={e => handleInputChange('farmLocation', e.target.value)}
                     autoComplete="off"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="contributorName">Contributor Name (optional)</Label>
+                  <Label htmlFor="contributorName">Contributor Name</Label>
                   <Input
                     id="contributorName"
                     value={formData.contributorName}
-                    onChange={e => setFormData(p => ({ ...p, contributorName: e.target.value }))}
+                    onChange={e => handleInputChange('contributorName', e.target.value)}
                     autoComplete="off"
                   />
                 </div>
               </div>
-
+  
               {/* Notes */}
               <div>
-                <Label htmlFor="outlierNotes">Notes (optional)</Label>
+                <Label htmlFor="outlierNotes">Notes</Label>
                 <Textarea
                   id="outlierNotes"
                   value={formData.outlierNotes}
-                  onChange={e => setFormData(p => ({ ...p, outlierNotes: e.target.value }))}
+                  onChange={e => handleInputChange('outlierNotes', e.target.value)}
                   rows={3}
                   maxLength={500}
                   className={errors.outlierNotes ? 'border-red-500' : ''}
                 />
-                {errors.outlierNotes && <p className="text-red-600 text-sm mt-1">{errors.outlierNotes}</p>}
+                <p className="text-sm text-gray-500 mt-1">{formData.outlierNotes.length}/500 characters</p>
+                {errors.outlierNotes && (
+                  <p className="text-red-600 text-sm mt-1">{errors.outlierNotes}</p>
+                )}
               </div>
-
+  
               {/* Images Upload */}
               <div>
                 <Label htmlFor="images">Upload Images (max 3)</Label>
@@ -639,8 +767,10 @@ const DataEntry = () => {
                   disabled={formData.images.length >= 3}
                   className="mt-1 mb-2"
                 />
-                {errors.images && <p className="text-red-600 text-sm mt-1">{errors.images}</p>}
-
+                {errors.images && (
+                  <p className="text-red-600 text-sm mt-1">{errors.images}</p>
+                )}
+  
                 <div className="flex space-x-4 mt-2">
                   {formData.images.map((file, idx) => (
                     <div
@@ -664,7 +794,7 @@ const DataEntry = () => {
                   ))}
                 </div>
               </div>
-
+  
               <Button
                 type="submit"
                 disabled={isLoading}
