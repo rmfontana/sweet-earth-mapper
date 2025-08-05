@@ -434,46 +434,49 @@ const DataEntry = () => {
   
       if (submitErr || !insertedSubmission) throw submitErr;
 
+      const userId = user?.id;
+      if (!userId) throw new Error('User not authenticated');
+
       if (formData.images.length > 0) {
         const uploadedImageUrls: string[] = [];
       
         for (let i = 0; i < formData.images.length; i++) {
           const file = formData.images[i];
           const ext = file.name?.split('.').pop() || 'jpg'; // Default fallback
-          const filePath = `${insertedSubmission.id}/${Date.now()}_${i}.${ext}`;
-      
+          const filePath = `${userId}/${insertedSubmission.id}/${Date.now()}_${i}.${ext}`;
+    
           const { error: uploadErr } = await supabase.storage
             .from('submission-images-bucket') 
             .upload(filePath, file, {
               contentType: file.type,
               upsert: false,
             });
-      
+          
           if (uploadErr) {
             console.error('Upload failed for image', file.name, uploadErr);
             throw uploadErr;
           }
-      
+          
           const { data: urlData } = supabase.storage
             .from('submission-images-bucket')
             .getPublicUrl(filePath);
-      
+          
           if (!urlData?.publicUrl) throw new Error('Failed to get public URL');
-      
+          
           uploadedImageUrls.push(urlData.publicUrl);
         }
-      
-        const imageInsertPayload = uploadedImageUrls.map((url) => ({
-          submission_id: insertedSubmission.id,
-          image_url: url,
-        }));
-      
-        const { error: imageInsertErr } = await supabase
-          .from('submission_images')
-          .insert(imageInsertPayload);
-      
-        if (imageInsertErr) throw imageInsertErr;
-      }
+
+      const imageInsertPayload = uploadedImageUrls.map((url) => ({
+        submission_id: insertedSubmission.id,
+        image_url: url,
+      }));
+
+      const { error: imageInsertErr } = await supabase
+        .from('submission_images')
+        .insert(imageInsertPayload);
+
+      if (imageInsertErr) throw imageInsertErr;
+    }
   
       toast({ title: 'Data submitted successfully' });
       navigate('/your-data');
