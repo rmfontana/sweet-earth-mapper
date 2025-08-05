@@ -414,7 +414,7 @@ const DataEntry = () => {
       }
       
       // --- Insert submission ---
-      const { error: submitErr } = await supabase.from('submissions').insert({
+      const { data: insertedSubmission, error: submitErr } = await supabase.from('submissions').insert({
         crop_id: cropData.id,
         location_id: locationData.id,
         store_id: storeId,
@@ -428,9 +428,52 @@ const DataEntry = () => {
         contributor_name: formData.contributorName || null,
         harvest_time: formData.time || null,
         outlier_notes: formData.outlierNotes || null,  
-      });
+      })
+      .select('id')
+      .single();
   
-      if (submitErr) throw submitErr;
+      if (submitErr || !insertedSubmission) throw submitErr;
+
+      if (formData.images.length > 0) {
+        const uploadedImageUrls: string[] = [];
+      
+        for (let i = 0; i < formData.images.length; i++) {
+          const file = formData.images[i];
+          const ext = file.name?.split('.').pop() || 'jpg'; // Default fallback
+          const filePath = `${insertedSubmission.id}/${Date.now()}_${i}.${ext}`;
+      
+          const { error: uploadErr } = await supabase.storage
+            .from('submission-images-bucket') 
+            .upload(filePath, file, {
+              contentType: file.type,
+              upsert: false,
+            });
+      
+          if (uploadErr) {
+            console.error('Upload failed for image', file.name, uploadErr);
+            throw uploadErr;
+          }
+      
+          const { data: urlData } = supabase.storage
+            .from('submission-images-bucket')
+            .getPublicUrl(filePath);
+      
+          if (!urlData?.publicUrl) throw new Error('Failed to get public URL');
+      
+          uploadedImageUrls.push(urlData.publicUrl);
+        }
+      
+        const imageInsertPayload = uploadedImageUrls.map((url) => ({
+          submission_id: insertedSubmission.id,
+          image_url: url,
+        }));
+      
+        const { error: imageInsertErr } = await supabase
+          .from('submission_images')
+          .insert(imageInsertPayload);
+      
+        if (imageInsertErr) throw imageInsertErr;
+      }
   
       toast({ title: 'Data submitted successfully' });
       navigate('/your-data');

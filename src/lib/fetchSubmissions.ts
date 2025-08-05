@@ -4,11 +4,11 @@ import { QueryData } from '@supabase/supabase-js';
 
 const query = supabase.from('submissions').select(`
   id,
-  timestamp,
+  assessment_date,
   brix_value,
   verified,
   verified_at,
-  label,
+  crop_variety,
   location:location_id (
     id,
     name,
@@ -41,8 +41,12 @@ const query = supabase.from('submissions').select(`
   verifier:users!verified_by (
     id,
     display_name
+  ),
+  submission_images:submission_images (
+    id,
+    image_url
   )
-`).order('timestamp', { ascending: false });
+`).order('assessment_date', { ascending: false });
 
 type SubmissionsWithJoins = QueryData<typeof query>;
 
@@ -55,7 +59,7 @@ export async function fetchFormattedSubmissions() {
     brixLevel: item.brix_value,
     verified: item.verified,
     verifiedAt: item.verified_at,
-    label: item.label ?? '',
+    label: item.crop_variety ?? '',
     cropType: item.crop?.name ?? 'Unknown',
     category: item.crop?.category ?? '',
     latitude: item.location?.latitude,
@@ -64,7 +68,7 @@ export async function fetchFormattedSubmissions() {
     brandName: item.brand?.name ?? '',
     submittedBy: item.user?.display_name ?? 'Anonymous',
     verifiedBy: item.verifier?.display_name ?? '',
-    submittedAt: item.timestamp,
-    images: []
+    submittedAt: item.assessment_date,
+    images: item.submission_images?.map(img => img.image_url) ?? []
   }));
 }
