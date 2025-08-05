@@ -330,50 +330,111 @@ const DataEntry = () => {
   
       // --- Brand: find or insert (optional) ---
       let brandId: string | null = null;
-      if (brandName) {
-        let { data: brandData, error: brandErr } = await supabase
-          .from('brands')
-          .select('id')
-          .eq('name', brandName)
-          .single();
-  
-        if (brandErr || !brandData) {
-          // Insert new brand
-          const { data: insertedBrand, error: insertBrandErr } = await supabase
+      if (brandName.trim()) {
+        try {
+          // First, try to find existing brand with better error handling
+          const { data: brandData, error: brandErr } = await supabase
             .from('brands')
-            .insert({ name: brandName })
             .select('id')
-            .single();
-  
-          if (insertBrandErr || !insertedBrand) throw new Error('Failed to create new brand');
-          brandData = insertedBrand;
+            .ilike('name', brandName.trim()) // Use ilike for case-insensitive search
+            .limit(1)
+            .maybeSingle(); // Use maybeSingle() instead of single() to avoid errors when no match
+
+          if (brandData) {
+            // Found existing brand
+            brandId = brandData.id;
+          } else {
+            // Try to insert new brand
+            const { data: insertedBrand, error: insertBrandErr } = await supabase
+              .from('brands')
+              .insert({ name: brandName.trim() })
+              .select('id')
+              .single();
+
+            if (insertBrandErr) {
+              console.error('Brand insert error:', insertBrandErr);
+              
+              // Check if it's a duplicate key error (brand might have been created by another user)
+              if (insertBrandErr.code === '23505') {
+                // Try to find the brand again
+                const { data: retryBrandData } = await supabase
+                  .from('brands')
+                  .select('id')
+                  .ilike('name', brandName.trim())
+                  .limit(1)
+                  .single();
+                
+                if (retryBrandData) {
+                  brandId = retryBrandData.id;
+                } else {
+                  throw new Error(`Brand "${brandName}" could not be created or found`);
+                }
+              } else {
+                throw new Error(`Failed to create brand "${brandName}": ${insertBrandErr.message}`);
+              }
+            } else if (insertedBrand) {
+              brandId = insertedBrand.id;
+            }
+          }
+        } catch (error) {
+          console.error('Brand handling error:', error);
+          throw new Error(`Error handling brand "${brandName}": ${error.message}`);
         }
-        brandId = brandData.id;
       }
   
-      // --- Store: find or insert (optional) ---
+      // --- Store: find or insert ---
       let storeId: string | null = null;
-      if (storeName) {
-        let { data: storeData, error: storeErr } = await supabase
-          .from('stores')
-          .select('id')
-          .eq('name', storeName)
-          .single();
-  
-        if (storeErr || !storeData) {
-          // Insert new store
-          const { data: insertedStore, error: insertStoreErr } = await supabase
+      if (storeName.trim()) {
+        try {
+          // First, try to find existing store
+          const { data: storeData, error: storeErr } = await supabase
             .from('stores')
-            .insert({ name: storeName })
             .select('id')
-            .single();
-  
-          if (insertStoreErr || !insertedStore) throw new Error('Failed to create new store');
-          storeData = insertedStore;
+            .ilike('name', storeName.trim()) // Use ilike for case-insensitive search
+            .limit(1)
+            .maybeSingle(); // Use maybeSingle() instead of single()
+
+          if (storeData) {
+            // Found existing store
+            storeId = storeData.id;
+          } else {
+            // Try to insert new store
+            const { data: insertedStore, error: insertStoreErr } = await supabase
+              .from('stores')
+              .insert({ name: storeName.trim() })
+              .select('id')
+              .single();
+
+            if (insertStoreErr) {
+              console.error('Store insert error:', insertStoreErr);
+              
+              // Check if it's a duplicate key error
+              if (insertStoreErr.code === '23505') {
+                // Try to find the store again
+                const { data: retryStoreData } = await supabase
+                  .from('stores')
+                  .select('id')
+                  .ilike('name', storeName.trim())
+                  .limit(1)
+                  .single();
+                
+                if (retryStoreData) {
+                  storeId = retryStoreData.id;
+                } else {
+                  throw new Error(`Store "${storeName}" could not be created or found`);
+                }
+              } else {
+                throw new Error(`Failed to create store "${storeName}": ${insertStoreErr.message}`);
+              }
+            } else if (insertedStore) {
+              storeId = insertedStore.id;
+            }
+          }
+        } catch (error) {
+          console.error('Store handling error:', error);
+          throw new Error(`Error handling store "${storeName}": ${error.message}`);
         }
-        storeId = storeData.id;
       }
-  
       const fixPrecision = (num: number): number =>
         parseFloat(num.toFixed(6)); // max 6 decimal digits for `numeric(9,6)`
       
