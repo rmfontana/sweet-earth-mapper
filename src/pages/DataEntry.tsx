@@ -388,89 +388,99 @@ const DataEntry = () => {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="max-w-4xl mx-auto p-8">
-        <h1 className="text-3xl font-bold mb-2">Submit BRIX Measurement</h1>
-        <p className="text-gray-600 mb-6">
+        <h1 className="text-3xl font-extrabold mb-3 text-gray-900">Submit BRIX Measurement</h1>
+        <p className="text-gray-600 mb-8">
           Record your bionutrient density measurement from refractometer readings
         </p>
-        <Card>
+        <Card className="shadow-md">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Upload className="w-5 h-5" />
+            <CardTitle className="flex items-center space-x-2 text-lg font-semibold">
+              <Upload className="w-5 h-5 text-blue-600" />
               <span>New Measurement Entry</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
-              {/* Crop Type */}
-              <div>
-                <Label htmlFor="cropType">Crop Type</Label>
-                <input
-                  id="cropType"
-                  list="crop-types"
-                  className="w-full border border-gray-300 rounded-md p-2"
-                  placeholder="Type or select crop type"
-                  value={formData.cropType}
-                  onChange={e => setFormData(p => ({ ...p, cropType: e.target.value }))}
-                  autoComplete="off"
-                />
-                <datalist id="crop-types">
-                  {cropTypes.map(crop => (
-                    <option key={crop} value={crop} />
-                  ))}
-                </datalist>
-                {errors.cropType && <p className="text-red-600 text-sm">{errors.cropType}</p>}
-              </div>
+              {/* Grid layout for inputs */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Crop Type */}
+                <div className="relative">
+                  <Label htmlFor="cropType">Crop Type</Label>
+                  <input
+                    id="cropType"
+                    list="crop-types"
+                    className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
+                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+                      ${errors.cropType ? 'border-red-500' : 'border-gray-300'}`}
+                    placeholder="Type or select crop type"
+                    value={formData.cropType}
+                    onChange={e => setFormData(p => ({ ...p, cropType: e.target.value }))}
+                    autoComplete="off"
+                  />
+                  <datalist id="crop-types">
+                    {cropTypes.map(crop => (
+                      <option key={crop} value={crop} />
+                    ))}
+                  </datalist>
+                  {errors.cropType && <p className="text-red-600 text-sm mt-1">{errors.cropType}</p>}
+                </div>
 
-              {/* Variety */}
-              <div>
-                <Label htmlFor="variety">Variety</Label>
-                <Input
-                  id="variety"
-                  value={formData.variety}
-                  onChange={e => setFormData(p => ({ ...p, variety: e.target.value }))}
-                  autoComplete="off"
-                />
-                {errors.variety && <p className="text-red-600 text-sm">{errors.variety}</p>}
-              </div>
+                {/* Variety */}
+                <div>
+                  <Label htmlFor="variety">Variety</Label>
+                  <Input
+                    id="variety"
+                    value={formData.variety}
+                    onChange={e => setFormData(p => ({ ...p, variety: e.target.value }))}
+                    autoComplete="off"
+                    className={errors.variety ? 'border-red-500' : ''}
+                  />
+                  {errors.variety && <p className="text-red-600 text-sm mt-1">{errors.variety}</p>}
+                </div>
 
-              {/* Brand */}
-              <div>
-                <Label htmlFor="brand">Brand</Label>
-                <input
-                  id="brand"
-                  list="brand-list"
-                  className="w-full border border-gray-300 rounded-md p-2"
-                  placeholder="Type or select brand"
-                  value={formData.brand}
-                  onChange={e => setFormData(p => ({ ...p, brand: e.target.value }))}
-                  autoComplete="off"
-                />
-                <datalist id="brand-list">
-                  {brands.map(brand => (
-                    <option key={brand} value={brand} />
-                  ))}
-                </datalist>
-                {errors.brand && <p className="text-red-600 text-sm">{errors.brand}</p>}
-              </div>
+                {/* Brand */}
+                <div className="relative">
+                  <Label htmlFor="brand">Brand</Label>
+                  <input
+                    id="brand"
+                    list="brand-list"
+                    className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
+                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+                      ${errors.brand ? 'border-red-500' : 'border-gray-300'}`}
+                    placeholder="Type or select brand"
+                    value={formData.brand}
+                    onChange={e => setFormData(p => ({ ...p, brand: e.target.value }))}
+                    autoComplete="off"
+                  />
+                  <datalist id="brand-list">
+                    {brands.map(brand => (
+                      <option key={brand} value={brand} />
+                    ))}
+                  </datalist>
+                  {errors.brand && <p className="text-red-600 text-sm mt-1">{errors.brand}</p>}
+                </div>
 
-              {/* Store */}
-              <div>
-                <Label htmlFor="store">Store</Label>
-                <input
-                  id="store"
-                  list="store-list"
-                  className="w-full border border-gray-300 rounded-md p-2"
-                  placeholder="Type or select store"
-                  value={formData.store}
-                  onChange={e => setFormData(p => ({ ...p, store: e.target.value }))}
-                  autoComplete="off"
-                />
-                <datalist id="store-list">
-                  {stores.map(store => (
-                    <option key={store} value={store} />
-                  ))}
-                </datalist>
-                {errors.store && <p className="text-red-600 text-sm">{errors.store}</p>}
+                {/* Store */}
+                <div className="relative">
+                  <Label htmlFor="store">Store</Label>
+                  <input
+                    id="store"
+                    list="store-list"
+                    className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
+                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+                      ${errors.store ? 'border-red-500' : 'border-gray-300'}`}
+                    placeholder="Type or select store"
+                    value={formData.store}
+                    onChange={e => setFormData(p => ({ ...p, store: e.target.value }))}
+                    autoComplete="off"
+                  />
+                  <datalist id="store-list">
+                    {stores.map(store => (
+                      <option key={store} value={store} />
+                    ))}
+                  </datalist>
+                  {errors.store && <p className="text-red-600 text-sm mt-1">{errors.store}</p>}
+                </div>
               </div>
 
               {/* BRIX Level */}
@@ -482,17 +492,16 @@ const DataEntry = () => {
                   max={100}
                   step={0.5}
                   value={formData.brixLevel[0]}
-                  onChange={e =>
-                    setFormData(p => ({ ...p, brixLevel: [parseFloat(e.target.value)] }))
-                  }
+                  onChange={e => setFormData(p => ({ ...p, brixLevel: [parseFloat(e.target.value)] }))}
                   id="brixLevel"
+                  className="w-full"
                 />
-                <p className="text-sm text-gray-500">Selected BRIX: {formData.brixLevel[0]}</p>
-                {errors.brixLevel && <p className="text-red-600 text-sm">{errors.brixLevel}</p>}
+                <p className="text-sm text-gray-600 mt-1">Selected BRIX: {formData.brixLevel[0]}</p>
+                {errors.brixLevel && <p className="text-red-600 text-sm mt-1">{errors.brixLevel}</p>}
               </div>
 
-              {/* Location with autocomplete and geolocation */}
-              <div>
+              {/* Location with autocomplete */}
+              <div className="relative">
                 <Label htmlFor="location">Location</Label>
                 <input
                   id="location"
@@ -501,15 +510,18 @@ const DataEntry = () => {
                   onChange={e => setFormData(p => ({ ...p, location: e.target.value }))}
                   placeholder="Start typing location..."
                   autoComplete="off"
-                  className="w-full border border-gray-300 rounded-md p-2"
+                  className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
+                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+                    ${errors.location ? 'border-red-500' : 'border-gray-300'}`}
                 />
-                {errors.location && <p className="text-red-600 text-sm">{errors.location}</p>}
+                {errors.location && <p className="text-red-600 text-sm mt-1">{errors.location}</p>}
+
                 {locationSuggestions.length > 0 && (
-                  <ul className="border border-gray-300 rounded-md max-h-40 overflow-auto mt-1 bg-white z-10 absolute">
+                  <ul className="absolute z-20 top-full left-0 right-0 mt-1 max-h-40 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg">
                     {locationSuggestions.map(suggestion => (
                       <li
                         key={suggestion.id}
-                        className="p-2 cursor-pointer hover:bg-gray-100"
+                        className="cursor-pointer px-3 py-2 hover:bg-blue-100"
                         onClick={() => selectLocationSuggestion(suggestion)}
                       >
                         {suggestion.place_name}
@@ -517,11 +529,12 @@ const DataEntry = () => {
                     ))}
                   </ul>
                 )}
+
                 <button
                   type="button"
                   onClick={handleLocationCapture}
                   disabled={locationLoading}
-                  className="mt-2 inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md"
+                  className="mt-3 inline-flex items-center space-x-2 rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
                 >
                   {locationLoading ? (
                     <>
@@ -537,64 +550,63 @@ const DataEntry = () => {
                 </button>
               </div>
 
-              {/* Measurement Date */}
-              <div>
-                <Label htmlFor="measurementDate">Measurement Date</Label>
-                <Input
-                  type="date"
-                  id="measurementDate"
-                  value={formData.measurementDate}
-                  onChange={e => setFormData(p => ({ ...p, measurementDate: e.target.value }))}
-                  max={new Date().toISOString().split('T')[0]}
-                />
-                {errors.measurementDate && (
-                  <p className="text-red-600 text-sm">{errors.measurementDate}</p>
-                )}
+              {/* Dates and other fields in grid for compactness */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <Label htmlFor="measurementDate">Measurement Date</Label>
+                  <Input
+                    type="date"
+                    id="measurementDate"
+                    value={formData.measurementDate}
+                    onChange={e => setFormData(p => ({ ...p, measurementDate: e.target.value }))}
+                    max={new Date().toISOString().split('T')[0]}
+                    className={errors.measurementDate ? 'border-red-500' : ''}
+                  />
+                  {errors.measurementDate && <p className="text-red-600 text-sm mt-1">{errors.measurementDate}</p>}
+                </div>
+
+                <div>
+                  <Label htmlFor="purchaseDate">Purchase Date (optional)</Label>
+                  <Input
+                    type="date"
+                    id="purchaseDate"
+                    value={formData.purchaseDate}
+                    onChange={e => setFormData(p => ({ ...p, purchaseDate: e.target.value }))}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="time">Harvest Time (optional)</Label>
+                  <Input
+                    type="time"
+                    id="time"
+                    value={formData.time}
+                    onChange={e => setFormData(p => ({ ...p, time: e.target.value }))}
+                  />
+                </div>
               </div>
 
-              {/* Purchase Date */}
-              <div>
-                <Label htmlFor="purchaseDate">Purchase Date (optional)</Label>
-                <Input
-                  type="date"
-                  id="purchaseDate"
-                  value={formData.purchaseDate}
-                  onChange={e => setFormData(p => ({ ...p, purchaseDate: e.target.value }))}
-                  max={new Date().toISOString().split('T')[0]}
-                />
-              </div>
-
-              {/* Farm Location */}
-              <div>
-                <Label htmlFor="farmLocation">Farm Location (optional)</Label>
-                <Input
-                  id="farmLocation"
-                  value={formData.farmLocation}
-                  onChange={e => setFormData(p => ({ ...p, farmLocation: e.target.value }))}
-                  autoComplete="off"
-                />
-              </div>
-
-              {/* Contributor Name */}
-              <div>
-                <Label htmlFor="contributorName">Contributor Name (optional)</Label>
-                <Input
-                  id="contributorName"
-                  value={formData.contributorName}
-                  onChange={e => setFormData(p => ({ ...p, contributorName: e.target.value }))}
-                  autoComplete="off"
-                />
-              </div>
-
-              {/* Harvest Time */}
-              <div>
-                <Label htmlFor="time">Harvest Time (optional)</Label>
-                <Input
-                  type="time"
-                  id="time"
-                  value={formData.time}
-                  onChange={e => setFormData(p => ({ ...p, time: e.target.value }))}
-                />
+              {/* Farm Location & Contributor */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <Label htmlFor="farmLocation">Farm Location (optional)</Label>
+                  <Input
+                    id="farmLocation"
+                    value={formData.farmLocation}
+                    onChange={e => setFormData(p => ({ ...p, farmLocation: e.target.value }))}
+                    autoComplete="off"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="contributorName">Contributor Name (optional)</Label>
+                  <Input
+                    id="contributorName"
+                    value={formData.contributorName}
+                    onChange={e => setFormData(p => ({ ...p, contributorName: e.target.value }))}
+                    autoComplete="off"
+                  />
+                </div>
               </div>
 
               {/* Notes */}
@@ -606,8 +618,9 @@ const DataEntry = () => {
                   onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
                   rows={3}
                   maxLength={500}
+                  className={errors.notes ? 'border-red-500' : ''}
                 />
-                {errors.notes && <p className="text-red-600 text-sm">{errors.notes}</p>}
+                {errors.notes && <p className="text-red-600 text-sm mt-1">{errors.notes}</p>}
               </div>
 
               {/* Images Upload */}
@@ -620,14 +633,15 @@ const DataEntry = () => {
                   multiple
                   onChange={handleImageUpload}
                   disabled={formData.images.length >= 3}
-                  className="mb-2"
+                  className="mt-1 mb-2"
                 />
-                {errors.images && <p className="text-red-600 text-sm">{errors.images}</p>}
+                {errors.images && <p className="text-red-600 text-sm mt-1">{errors.images}</p>}
+
                 <div className="flex space-x-4 mt-2">
                   {formData.images.map((file, idx) => (
                     <div
                       key={idx}
-                      className="relative w-20 h-20 border rounded overflow-hidden flex-shrink-0"
+                      className="relative w-24 h-24 border border-gray-300 rounded overflow-hidden flex-shrink-0"
                     >
                       <img
                         src={URL.createObjectURL(file)}
@@ -637,7 +651,7 @@ const DataEntry = () => {
                       <button
                         type="button"
                         onClick={() => removeImage(idx)}
-                        className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-1"
+                        className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-red-400"
                         aria-label="Remove image"
                       >
                         <X size={16} />
@@ -647,7 +661,11 @@ const DataEntry = () => {
                 </div>
               </div>
 
-              <Button type="submit" disabled={isLoading}>
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 text-lg font-semibold tracking-wide rounded-md bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              >
                 {isLoading ? 'Submitting...' : 'Submit'}
               </Button>
             </form>
