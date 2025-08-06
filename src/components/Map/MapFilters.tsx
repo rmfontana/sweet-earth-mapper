@@ -223,49 +223,82 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
           </Popover>
         </div>
 
-        {/* BRIX Range */}
         <div>
           <Label className="text-sm font-medium mb-2 block">BRIX Range</Label>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="min-brix" className="text-xs">Min</Label>
-              <Input
-                id="min-brix"
-                type="number"
-                value={filters.brixRange[0]}
-                onChange={(e) =>
-                  updateFilters('brixRange', [
-                    parseInt(e.target.value) || 0,
-                    filters.brixRange[1],
-                  ])
-                }
-                className="text-sm"
+
+          {/* Min Slider + Number */}
+          <div className="flex items-center space-x-4 mb-4">
+            <div className="flex-1">
+              <input
+                type="range"
                 min={0}
                 max={30}
-                aria-valuemin={0}
-                aria-valuemax={30}
-                aria-label="Minimum BRIX value"
+                step={0.5}
+                value={filters.brixRange[0]}
+                onChange={(e) => {
+                  const val = Math.min(Number(e.target.value), filters.brixRange[1]);
+                  updateFilters('brixRange', [val, filters.brixRange[1]]);
+                }}
+                id="min-brix-slider"
+                className="w-full h-3 bg-gradient-to-r from-blue-200 to-indigo-300 rounded-lg appearance-none cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(filters.brixRange[0] / 30) * 100}%, #e2e8f0 ${(filters.brixRange[0] / 30) * 100}%, #e2e8f0 100%)`
+                }}
               />
             </div>
-            <div>
-              <Label htmlFor="max-brix" className="text-xs">Max</Label>
-              <Input
-                id="max-brix"
+            <div className="flex items-center space-x-2">
+              <input
                 type="number"
-                value={filters.brixRange[1]}
-                onChange={(e) =>
-                  updateFilters('brixRange', [
-                    filters.brixRange[0],
-                    parseInt(e.target.value) || 30,
-                  ])
-                }
-                className="text-sm"
                 min={0}
                 max={30}
-                aria-valuemin={0}
-                aria-valuemax={30}
-                aria-label="Maximum BRIX value"
+                step={0.5}
+                value={filters.brixRange[0]}
+                onChange={(e) => {
+                  let val = Math.min(Number(e.target.value), filters.brixRange[1]);
+                  if (isNaN(val)) val = 0;
+                  updateFilters('brixRange', [val, filters.brixRange[1]]);
+                }}
+                className="w-20 px-3 py-2 border-2 border-gray-200 rounded-lg text-center font-semibold focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
+              <span className="text-sm font-medium text-gray-600">°Bx</span>
+            </div>
+          </div>
+
+          {/* Max Slider + Number */}
+          <div className="flex items-center space-x-4">
+            <div className="flex-1">
+              <input
+                type="range"
+                min={filters.brixRange[0]}
+                max={30}
+                step={0.5}
+                value={filters.brixRange[1]}
+                onChange={(e) => {
+                  const val = Math.max(Number(e.target.value), filters.brixRange[0]);
+                  updateFilters('brixRange', [filters.brixRange[0], val]);
+                }}
+                id="max-brix-slider"
+                className="w-full h-3 bg-gradient-to-r from-blue-200 to-indigo-300 rounded-lg appearance-none cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(filters.brixRange[1] / 30) * 100}%, #e2e8f0 ${(filters.brixRange[1] / 30) * 100}%, #e2e8f0 100%)`
+                }}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="number"
+                min={filters.brixRange[0]}
+                max={30}
+                step={0.5}
+                value={filters.brixRange[1]}
+                onChange={(e) => {
+                  let val = Math.max(Number(e.target.value), filters.brixRange[0]);
+                  if (isNaN(val)) val = 30;
+                  updateFilters('brixRange', [filters.brixRange[0], val]);
+                }}
+                className="w-20 px-3 py-2 border-2 border-gray-200 rounded-lg text-center font-semibold focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+              <span className="text-sm font-medium text-gray-600">°Bx</span>
             </div>
           </div>
         </div>
