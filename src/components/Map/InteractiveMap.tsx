@@ -51,18 +51,34 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
 
   useEffect(() => {
+    console.log('Fetching submissions...');
     fetchFormattedSubmissions()
-      .then(setAllData)
-      .catch(() => setAllData([]));
+      .then((data) => {
+        console.log('Successfully fetched submissions:', data.length);
+        setAllData(data);
+      })
+      .catch((error) => {
+        console.error('Error fetching submissions:', error);
+        setAllData([]);
+      });
   }, []);
 
   useEffect(() => {
     if (!filters) {
+      console.log('No filters applied, showing all data:', allData.length);
       setFilteredData(allData);
       return;
     }
 
+    console.log('Applying filters to', allData.length, 'submissions');
     const result = allData.filter((point) => {
+      // Ensure coordinates are valid (additional safety check)
+      if (!point.latitude || !point.longitude || 
+          isNaN(point.latitude) || isNaN(point.longitude)) {
+        console.warn('Filtering out point with invalid coordinates:', point.id);
+        return false;
+      }
+
       if (filters.cropTypes.length && !filters.cropTypes.includes(point.cropType)) return false;
       if (point.brixLevel < filters.brixRange[0] || point.brixLevel > filters.brixRange[1]) return false;
       if (filters.dateRange[0] && new Date(point.submittedAt) < new Date(filters.dateRange[0])) return false;
@@ -78,6 +94,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       return true;
     });
 
+    console.log('Filtered results:', result.length, 'submissions');
     setFilteredData(result);
   }, [filters, allData, userLocation]);
 
@@ -103,6 +120,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
     if (!mapContainer.current || mapRef.current) return;
 
     async function initializeMap() {
+      console.log('Initializing Mapbox map...');
       const token = await getMapboxToken();
       if (!token) {
         console.error('Failed to retrieve Mapbox token');
@@ -121,6 +139,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       mapRef.current = map;
 
       map.on('load', () => {
+        console.log('Map loaded, adding initial data source...');
         map.addSource('points', {
           type: 'geojson',
           data: toGeoJSON(filteredData),
@@ -208,9 +227,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
   // Update map source data on filteredData changes
   useEffect(() => {
     if (mapRef.current && mapRef.current.isStyleLoaded()) {
+      console.log('Updating map with', filteredData.length, 'data points');
       const source = mapRef.current.getSource('points') as mapboxgl.GeoJSONSource | undefined;
       if (source) {
-        source.setData(toGeoJSON(filteredData));
+        const geoJsonData = toGeoJSON(filteredData);
+        console.log('Generated GeoJSON with', geoJsonData.features.length, 'features');
+        source.setData(geoJsonData);
       }
     }
   }, [filteredData]);
@@ -302,22 +324,39 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
     }
   }, [userLocation]);
 
-  const toGeoJSON = (data: BrixDataPoint[]): GeoJSON.FeatureCollection => ({
-    type: 'FeatureCollection',
-    features: data.map((point) => ({
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [point.longitude, point.latitude],
-      },
-      properties: {
-        id: point.id,
-        brix: point.brixLevel,
-        color: getBrixColor(point.brixLevel),
-        raw: JSON.stringify(point),
-      },
-    })),
-  });
+  const toGeoJSON = (data: BrixDataPoint[]): GeoJSON.FeatureCollection => {
+    console.log('Converting', data.length, 'data points to GeoJSON');
+    
+    const features = data.map((point) => {
+      // Double-check coordinates are valid
+      if (!point.latitude || !point.longitude || 
+          isNaN(point.latitude) || isNaN(point.longitude)) {
+        console.warn('Skipping point with invalid coordinates:', point);
+        return null;
+      }
+
+      return {
+        type: 'Feature' as const,
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [point.longitude, point.latitude],
+        },
+        properties: {
+          id: point.id,
+          brix: point.brixLevel,
+          color: getBrixColor(point.brixLevel),
+          raw: JSON.stringify(point),
+        },
+      };
+    }).filter(Boolean); // Remove null values
+
+    console.log('Generated', features.length, 'valid GeoJSON features');
+    
+    return {
+      type: 'FeatureCollection',
+      features: features as any[],
+    };
+  };
 
   return (
     <div className="relative w-full h-full">
