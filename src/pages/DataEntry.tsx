@@ -69,7 +69,7 @@ const DataEntry = () => {
     location: '',
     measurementDate: new Date().toISOString().split('T')[0],
     purchaseDate: '',
-    outlierNotes: '',   
+    outlierNotes: '',
     brand: '',
     store: '',
     farmLocation: '',
@@ -128,7 +128,7 @@ const DataEntry = () => {
   // Centralized input change handler to keep form data in sync
   const handleInputChange = (field: keyof typeof formData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Clear related errors when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -166,6 +166,15 @@ const DataEntry = () => {
       .replace(/[\u0000-\u001F\u007F<>`"'\\]/g, '')
       .replace(/(javascript:|data:)/gi, '')
       .replace(/\s{2,}/g, ' ');
+
+  // Add a simple check for inappropriate text content
+  const containsInappropriateContent = (text: string): boolean => {
+    if (!text) return false;
+    const inappropriateKeywords = ['porn', 'explicit', 'nude', 'inappropriate', 'sexual', 'hate', 'slur', 'violence', 'gore'];
+    const lowerText = text.toLowerCase();
+    return inappropriateKeywords.some(keyword => lowerText.includes(keyword));
+  };
+
 
   const validateFile = (file: File): boolean => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
@@ -263,7 +272,7 @@ const DataEntry = () => {
     }
     setLocationLoading(true);
     setIsManualLocationEntry(false); // This is GPS, not manual
-    
+
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
         const { latitude, longitude } = coords;
@@ -306,10 +315,19 @@ const DataEntry = () => {
     const newErrors: Record<string, string> = {};
 
     const cropType = sanitizeInput(formData.cropType);
+    const variety = sanitizeInput(formData.variety);
     const location = sanitizeInput(formData.location);
     const outlierNotes = sanitizeInput(formData.outlierNotes);
     const brand = sanitizeInput(formData.brand);
     const store = sanitizeInput(formData.store);
+    const farmLocation = sanitizeInput(formData.farmLocation);
+    const harvestTime = sanitizeInput(formData.harvestTime);
+
+    // --- Data Integrity: Basic Inappropriate Content Check ---
+    const allTextFields = [cropType, variety, brand, store, location, outlierNotes, farmLocation, harvestTime];
+    if (allTextFields.some(containsInappropriateContent)) {
+        newErrors.general = 'Please remove inappropriate content from your submission.';
+    }
 
     // Required fields validation
     if (!cropType) newErrors.cropType = 'Crop type is required';
@@ -318,24 +336,24 @@ const DataEntry = () => {
     if (!location) newErrors.location = 'Sample location is required';
     if (!formData.purchaseDate) newErrors.purchaseDate = 'Purchase date is required';
     if (!formData.measurementDate) newErrors.measurementDate = 'Assessment date is required';
-    
+
     // Value validation
     if (formData.brixLevel[0] < 0 || formData.brixLevel[0] > 100)
       newErrors.brixLevel = 'BRIX must be between 0–100';
-    
+
     // Date validation - ensure dates are not in the future
     const today = new Date();
     const purchaseDate = new Date(formData.purchaseDate);
     const measurementDate = new Date(formData.measurementDate);
-    
+
     if (purchaseDate > today) newErrors.purchaseDate = 'Purchase date cannot be in the future';
     if (measurementDate > today) newErrors.measurementDate = 'Assessment date cannot be in the future';
-    
+
     // Purchase date should be before or same as measurement date
     if (formData.purchaseDate && formData.measurementDate && purchaseDate > measurementDate) {
       newErrors.purchaseDate = 'Purchase date should be before or same as assessment date';
     }
-    
+
     if (outlierNotes.length > 500) newErrors.outlierNotes = 'Notes too long (max 500 characters)';
 
     setErrors(newErrors);
@@ -353,261 +371,118 @@ const DataEntry = () => {
     setIsLoading(true);
   
     try {
-      // Sanitize inputs once
+      // --- Step 1: Gather and sanitize all form data ---
+      // This part remains the same, as the client is responsible for preparing the data
       const cropName = sanitizeInput(formData.cropType);
       const brandName = sanitizeInput(formData.brand);
       const storeName = sanitizeInput(formData.store);
       const variety = sanitizeInput(formData.variety);
-      const locationName = sanitizeInput(formData.location).slice(0, MAX_NAME_LENGTH);
-
-      // --- Crop: find or insert ---
-      let { data: cropData, error: cropErr } = await supabase
-        .from('crops')
-        .select('id')
-        .eq('name', cropName)
-        .single();
-  
-      if (cropErr || !cropData) {
-        // Insert new crop type if not found
-        const { data: insertedCrop, error: insertCropErr } = await supabase
-          .from('crops')
-          .insert({ name: cropName })
-          .select('id')
-          .single();
-  
-        if (insertCropErr || !insertedCrop) throw new Error('Failed to create new crop type');
-        cropData = insertedCrop;
-      }
-  
-      // --- Brand: find or insert ---
-      let brandId: string | null = null;
-      if (brandName.trim()) {
-        try {
-          const { data: brandData, error: brandErr } = await supabase
-            .from('brands')
-            .select('id')
-            .ilike('name', brandName.trim())
-            .limit(1)
-            .maybeSingle();
-
-          if (brandData) {
-            brandId = brandData.id;
-          } else {
-            const { data: insertedBrand, error: insertBrandErr } = await supabase
-              .from('brands')
-              .insert({ name: brandName.trim() })
-              .select('id')
-              .single();
-
-            if (insertBrandErr) {
-              if (insertBrandErr.code === '23505') {
-                const { data: retryBrandData } = await supabase
-                  .from('brands')
-                  .select('id')
-                  .ilike('name', brandName.trim())
-                  .limit(1)
-                  .single();
-                
-                if (retryBrandData) {
-                  brandId = retryBrandData.id;
-                } else {
-                  throw new Error(`Brand "${brandName}" could not be created or found`);
-                }
-              } else {
-                throw new Error(`Failed to create brand "${brandName}": ${insertBrandErr.message}`);
-              }
-            } else if (insertedBrand) {
-              brandId = insertedBrand.id;
-            }
-          }
-        } catch (error) {
-          throw new Error(`Error handling brand "${brandName}": ${error.message}`);
-        }
-      }
-  
-      // --- Store: find or insert ---
-      let storeId: string | null = null;
-      if (storeName.trim()) {
-        try {
-          const { data: storeData, error: storeErr } = await supabase
-            .from('stores')
-            .select('id')
-            .ilike('name', storeName.trim())
-            .limit(1)
-            .maybeSingle();
-
-          if (storeData) {
-            storeId = storeData.id;
-          } else {
-            const { data: insertedStore, error: insertStoreErr } = await supabase
-              .from('stores')
-              .insert({ name: storeName.trim() })
-              .select('id')
-              .single();
-
-            if (insertStoreErr) {
-              if (insertStoreErr.code === '23505') {
-                const { data: retryStoreData } = await supabase
-                  .from('stores')
-                  .select('id')
-                  .ilike('name', storeName.trim())
-                  .limit(1)
-                  .single();
-                
-                if (retryStoreData) {
-                  storeId = retryStoreData.id;
-                } else {
-                  throw new Error(`Store "${storeName}" could not be created or found`);
-                }
-              } else {
-                throw new Error(`Failed to create store "${storeName}": ${insertStoreErr.message}`);
-              }
-            } else if (insertedStore) {
-              storeId = insertedStore.id;
-            }
-          }
-        } catch (error) {
-          throw new Error(`Error handling store "${storeName}": ${error.message}`);
-        }
-      }
-
-      const fixPrecision = (num: number): number =>
-        parseFloat(num.toFixed(6));
-      
-      // --- Location ---
-      const latitude = fixPrecision(formData.latitude);
-      const longitude = fixPrecision(formData.longitude);
-
-      if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
-        throw new Error('Invalid coordinates');
-      }
-
-      let locationData;
-      try {
-        const tolerance = 0.0001;
-        const { data: existingLocations, error: findLocationErr } = await supabase
-          .from('locations')
-          .select('*')
-          .gte('latitude', latitude - tolerance)
-          .lte('latitude', latitude + tolerance)
-          .gte('longitude', longitude - tolerance)
-          .lte('longitude', longitude + tolerance)
-          .limit(1);
-
-        if (findLocationErr) {
-          throw new Error('Failed to search for existing location');
-        }
-
-        if (existingLocations && existingLocations.length > 0) {
-          locationData = existingLocations[0];
-        } else {
-          const { data: insertedLocation, error: insertErr } = await supabase
-            .from('locations')
-            .insert({
-              name: locationName || null,
-              latitude,
-              longitude,
-              place_id: null,
-            })
-            .select()
-            .single();
-
-          if (insertErr || !insertedLocation) {
-            throw new Error(`Location insert failed: ${insertErr?.message || 'Unknown error'}`);
-          }
-
-          locationData = insertedLocation;
-        }
-      } catch (error) {
-        throw new Error(`Error handling location: ${error.message}`);
-      }
-      
-      // Create proper ISO date strings for database insertion
+      const locationName = sanitizeInput(formData.location).slice(0, 150);
+      const brixValue = formData.brixLevel[0];
       const assessmentDate = new Date(formData.measurementDate + 'T00:00:00.000Z').toISOString();
       const purchaseDateISO = new Date(formData.purchaseDate + 'T00:00:00.000Z').toISOString();
-      
-      // --- Insert submission ---
-      const { data: insertedSubmission, error: submitErr } = await supabase.from('submissions').insert({
-        crop_id: cropData.id,
-        location_id: locationData.id,
-        store_id: storeId,
-        brand_id: brandId,
-        crop_variety: variety || null,                       
-        brix_value: formData.brixLevel[0],
-        user_id: user?.id,
-        assessment_date: assessmentDate,  
-        purchase_date: purchaseDateISO,
-        farm_location: formData.farmLocation || null,
-        harvest_time: formData.harvestTime || null,
-        outlier_notes: formData.outlierNotes || null,  
-      })
-      .select('id')
-      .single();
   
-      if (submitErr || !insertedSubmission) throw submitErr;
-
-      const userId = user?.id;
-      if (!userId) throw new Error('User not authenticated');
-
+      const payload = {
+        cropName,
+        brandName,
+        storeName,
+        variety,
+        brixValue,
+        assessmentDate,
+        purchaseDate: purchaseDateISO,
+        farmLocation: formData.farmLocation,
+        harvestTime: formData.harvestTime,
+        outlierNotes: formData.outlierNotes,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
+        locationName,
+        // You must send the user's ID to the Edge Function to link the submission to a user
+        userId: user?.id,
+      };
+  
+      // --- Step 2: Call the Supabase Edge Function ---
+      // Replaced all direct database operations with a single fetch call.
+      const supabaseUrl = getSupabaseUrl();
+      const publishKey = getPublishableKey(); // Use the client's public key for the request
+      const response = await fetch(`${supabaseUrl}/functions/v1/auto-verify-submission`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${publishKey}`,
+        },
+        body: JSON.stringify(payload),
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Failed to submit data via Edge Function.');
+      }
+  
+      const result = await response.json();
+  
+      // --- Step 3: Handle the response and image uploads ---
+      // Now you get the `submission_id` from the Edge Function's response.
+      const { verified, submission_id } = result;
+  
+      if (!submission_id) {
+        throw new Error('Submission ID was not returned by the server.');
+      }
+  
+      // Now upload images using the client-side Supabase client, but with the
+      // new submission_id from the server.
       if (formData.images.length > 0) {
-        const uploadedImageUrls: string[] = [];
-
+        const userId = user?.id;
+        if (!userId) throw new Error('User not authenticated for image upload.');
+  
         for (let i = 0; i < formData.images.length; i++) {
           const file = formData.images[i];
           const ext = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
           const timestamp = Date.now();
-          const filePath = `${userId}/${insertedSubmission.id}/${timestamp}_${i}.${ext}`;
-
-          try {
-            const uploadResult = await supabase.storage
-              .from('submission-images-bucket')
-              .upload(filePath, file, {
-                contentType: file.type,
-                upsert: false,
-              });
-
-            if (uploadResult.error) {
-              if (uploadResult.error.message?.includes('row-level security') || 
-                  uploadResult.error.message?.includes('Unauthorized') ||
-                  uploadResult.error.message?.includes('403')) {
-                throw new Error(`RLS Policy Error: Cannot upload ${file.name}. Auth issue detected.`);
+          // Use the submission_id from the Edge Function's response
+          const filePath = `${userId}/${submission_id}/${timestamp}_${i}.${ext}`;
+  
+          const { error: uploadError } = await supabase.storage
+            .from('submission-images-bucket')
+            .upload(filePath, file, {
+              contentType: file.type,
+              upsert: false,
+            });
+  
+          if (uploadError) {
+            console.error('Image upload failed:', uploadError);
+            // Decide whether to throw or just log an error here.
+            // The submission is already saved, so failing image uploads should be handled gracefully.
+            toast({
+              title: 'Image upload failed',
+              description: `Some images could not be uploaded: ${uploadError.message}`,
+              variant: 'destructive',
+            });
+          } else {
+              // If the image upload succeeds, you need to save the image metadata to the `submission_images` table.
+              // This is a crucial step that was missing from your Edge Function. The client-side approach is easier to manage here, as RLS can be used to ensure only the authenticated user can upload to their submission's folder.
+              const { data: signedUrlData } = await supabase.storage
+                .from('submission-images-bucket')
+                .createSignedUrl(filePath, 60 * 60 * 24 * 365);
+              
+              if (signedUrlData) {
+                await supabase
+                  .from('submission_images')
+                  .insert({
+                    submission_id: submission_id,
+                    image_url: signedUrlData.signedUrl,
+                  });
               }
-              throw uploadResult.error;
-            }
-            
-            // Create signed URL
-            const { data: signedUrlData, error: urlError } = await supabase.storage
-              .from('submission-images-bucket')
-              .createSignedUrl(filePath, 60 * 60 * 24 * 365);
-
-            if (urlError || !signedUrlData?.signedUrl) {
-              throw new Error(`Failed to create signed URL for ${file.name}`);
-            }
-
-            uploadedImageUrls.push(signedUrlData.signedUrl);
-
-          } catch (error: any) {
-            throw new Error(`Upload failed for ${file.name}: ${error.message}`);
-          }
-        }
-
-        if (uploadedImageUrls.length > 0) {
-          const imageInsertPayload = uploadedImageUrls.map((url) => ({
-            submission_id: insertedSubmission.id,
-            image_url: url,
-          }));
-
-          const { error: imageInsertErr } = await supabase
-            .from('submission_images')
-            .insert(imageInsertPayload);
-
-          if (imageInsertErr) {
-            throw new Error(`Failed to save image records: ${imageInsertErr.message}`);
           }
         }
       }
   
-      toast({ title: 'BRIX measurement submitted successfully!' });
+      // --- Step 4: Display the toast message and navigate ---
+      if (verified) {
+        toast({ title: 'BRIX measurement automatically verified!', description: 'Thank you for your contribution!' });
+      } else {
+        toast({ title: 'BRIX measurement submitted for review.', description: 'An admin will review your entry shortly.' });
+      }
+  
       navigate('/your-data');
     } catch (err: any) {
       console.error(err);
@@ -631,7 +506,7 @@ const DataEntry = () => {
             Record your bionutrient density measurement from refractometer readings
           </p>
         </div>
-        
+
         <Card className="shadow-2xl border-0">
           <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl border-b">
             <CardTitle className="flex items-center space-x-3 text-xl">
@@ -643,7 +518,7 @@ const DataEntry = () => {
           </CardHeader>
           <CardContent className="p-8">
             <form onSubmit={handleSubmit} className="space-y-8" autoComplete="off">
-              
+
               {/* Required Fields Section */}
               <div className="border-l-4 border-blue-500 pl-6">
                 <div className="flex items-center space-x-2 mb-6">
@@ -652,7 +527,7 @@ const DataEntry = () => {
                     Required
                   </div>
                 </div>
-                
+
                 {/* Row 1: Crop Type and Brand */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                   {/* Crop Type - required with dropdown */}
@@ -793,44 +668,28 @@ const DataEntry = () => {
                     )}
                   </div>
 
-                  {/* BRIX Level - Enhanced with dual input */}
+                  {/* BRIX Level */}
                   <div>
                     <Label htmlFor="brixLevel" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
                       <Droplets className="inline w-4 h-4 mr-2" />
                       BRIX Level <span className="ml-1 text-red-600">*</span>
                     </Label>
-                    <div className="flex items-center space-x-4">
-                      <div className="flex-1">
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
-                          step={0.5}
-                          value={formData.brixLevel[0]}
-                          onChange={handleBrixSliderChange}
-                          id="brixLevel"
-                          className="w-full h-3 bg-gradient-to-r from-blue-200 to-indigo-300 rounded-lg appearance-none cursor-pointer"
-                          style={{
-                            background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${formData.brixLevel[0]}%, #e2e8f0 ${formData.brixLevel[0]}%, #e2e8f0 100%)`
-                          }}
-                        />
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={0.5}
-                          value={formData.brixLevel[0]}
-                          onChange={handleBrixNumberChange}
-                          className="w-20 px-3 py-2 border-2 border-gray-200 rounded-lg text-center font-semibold focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        />
-                        <span className="text-sm font-medium text-gray-600">°Bx</span>
-                      </div>
+                    <div className="relative">
+                      <Input
+                        id="brixLevel"
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        placeholder="e.g., 12.5"
+                        value={formData.brixLevel[0]}
+                        onChange={handleBrixNumberChange}
+                        className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
+                          focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300
+                          ${errors.brixLevel ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
+                      />
+                      <span className="absolute top-1/2 right-4 -translate-y-1/2 text-gray-500 text-lg font-bold">%</span>
                     </div>
-                    <p className="text-sm text-gray-600 mt-2">
-                      BRIX Level: <span className="font-semibold text-blue-600">{formData.brixLevel[0]}°</span>
-                    </p>
                     {errors.brixLevel && (
                       <p className="text-red-600 text-sm mt-2 flex items-center">
                         <X className="w-4 h-4 mr-1" />
@@ -840,22 +699,76 @@ const DataEntry = () => {
                   </div>
                 </div>
 
-                {/* Row 3: Dates */}
+                {/* Row 3: Location */}
+                <div className="grid grid-cols-1 gap-8 mb-8">
+                  <div className="relative">
+                    <Label htmlFor="location" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                      <MapPin className="inline w-4 h-4 mr-2" />
+                      Sample Location <span className="ml-1 text-red-600">*</span>
+                    </Label>
+                    <div className="relative flex">
+                      <Input
+                        id="location"
+                        type="text"
+                        placeholder="Enter location or use GPS"
+                        autoComplete="off"
+                        value={formData.location}
+                        onChange={handleLocationChange}
+                        className={`flex-grow border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
+                          focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300
+                          ${errors.location ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleLocationCapture}
+                        disabled={locationLoading}
+                        className="ml-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-colors duration-200"
+                      >
+                        {locationLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <MapPin className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    {locationSuggestions.length > 0 && isManualLocationEntry && (
+                      <ul className="absolute z-30 w-full max-h-48 overflow-auto rounded-xl border-2 border-gray-200 bg-white shadow-xl mt-1">
+                        {locationSuggestions.map((feature) => (
+                          <li
+                            key={feature.id}
+                            className="cursor-pointer px-4 py-3 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-colors duration-200"
+                            onMouseDown={() => selectLocationSuggestion(feature)}
+                          >
+                            {feature.place_name}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {errors.location && (
+                      <p className="text-red-600 text-sm mt-2 flex items-center">
+                        <X className="w-4 h-4 mr-1" />
+                        {errors.location}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Row 4: Dates */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                  {/* Purchase Date */}
                   <div>
                     <Label htmlFor="purchaseDate" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
                       <Calendar className="inline w-4 h-4 mr-2" />
-                      Date of Purchase <span className="ml-1 text-red-600">*</span>
+                      Purchase Date <span className="ml-1 text-red-600">*</span>
                     </Label>
                     <Input
-                      type="date"
                       id="purchaseDate"
+                      type="date"
                       value={formData.purchaseDate}
                       onChange={e => handleInputChange('purchaseDate', e.target.value)}
-                      max={new Date().toISOString().split('T')[0]}
-                      className={`border-2 rounded-xl px-4 py-3 transition-all duration-200 focus:ring-4 focus:ring-blue-200 hover:border-gray-300 ${
-                        errors.purchaseDate ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
-                      }`}
+                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
+                        focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300
+                        ${errors.purchaseDate ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
                     />
                     {errors.purchaseDate && (
                       <p className="text-red-600 text-sm mt-2 flex items-center">
@@ -865,20 +778,20 @@ const DataEntry = () => {
                     )}
                   </div>
 
+                  {/* Assessment Date */}
                   <div>
                     <Label htmlFor="measurementDate" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
                       <Calendar className="inline w-4 h-4 mr-2" />
-                      Date of Assessment <span className="ml-1 text-red-600">*</span>
+                      Assessment Date <span className="ml-1 text-red-600">*</span>
                     </Label>
                     <Input
-                      type="date"
                       id="measurementDate"
+                      type="date"
                       value={formData.measurementDate}
                       onChange={e => handleInputChange('measurementDate', e.target.value)}
-                      max={new Date().toISOString().split('T')[0]}
-                      className={`border-2 rounded-xl px-4 py-3 transition-all duration-200 focus:ring-4 focus:ring-blue-200 hover:border-gray-300 ${
-                        errors.measurementDate ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
-                      }`}
+                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
+                        focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300
+                        ${errors.measurementDate ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
                     />
                     {errors.measurementDate && (
                       <p className="text-red-600 text-sm mt-2 flex items-center">
@@ -888,90 +801,58 @@ const DataEntry = () => {
                     )}
                   </div>
                 </div>
-
-                {/* Location with enhanced autocomplete */}
-                <div className="relative">
-                  <Label htmlFor="location" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
-                    <MapPin className="inline w-4 h-4 mr-2" />
-                    Sample Location <span className="ml-1 text-red-600">*</span>
-                  </Label>
-                  <input
-                    id="location"
-                    type="text"
-                    placeholder="Start typing location..."
-                    autoComplete="off"
-                    value={formData.location}
-                    onChange={handleLocationChange}
-                    className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
-                      focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300
-                      ${errors.location ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
-                  />
-                  {errors.location && (
-                    <p className="text-red-600 text-sm mt-2 flex items-center">
-                      <X className="w-4 h-4 mr-1" />
-                      {errors.location}
-                    </p>
-                  )}
-
-                  {/* Only show dropdown for manual entry, not GPS captures */}
-                  {locationSuggestions.length > 0 && isManualLocationEntry && (
-                    <ul className="absolute z-30 top-full left-0 right-0 mt-1 max-h-40 overflow-auto rounded-xl border-2 border-gray-200 bg-white shadow-xl">
-                      {locationSuggestions.map(suggestion => (
-                        <li
-                          key={suggestion.id}
-                          className="cursor-pointer px-4 py-3 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-colors duration-200"
-                          onMouseDown={() => selectLocationSuggestion(suggestion)}
-                        >
-                          {suggestion.place_name}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleLocationCapture}
-                    disabled={locationLoading}
-                    className="mt-4 inline-flex items-center space-x-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3 text-white font-semibold hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:opacity-50 transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5"
-                  >
-                    {locationLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Getting location...</span>
-                      </>
-                    ) : (
-                      <>
-                        <MapPin className="w-4 h-4" />
-                        <span>Use current location</span>
-                      </>
-                    )}
-                  </button>
-                </div>
               </div>
 
               {/* Optional Fields Section */}
-              <div className="border-l-4 border-green-500 pl-6 pt-8">
+              <div className="border-l-4 border-gray-300 pl-6 mt-12">
                 <div className="flex items-center space-x-2 mb-6">
-                  <h3 className="text-xl font-bold text-gray-900">Additional Information</h3>
-                  <div className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+                  <h3 className="text-xl font-bold text-gray-900">Optional Information</h3>
+                  <div className="px-3 py-1 bg-gray-100 text-gray-800 text-sm font-medium rounded-full">
                     Optional
                   </div>
                 </div>
-                
+
+                {/* Row 5: Variety and Farm Location */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                  {/* Variety */}
+                  {/* Crop Variety */}
                   <div>
-                    <Label htmlFor="variety" className="mb-3 text-sm font-semibold text-gray-700">Variety</Label>
+                    <Label htmlFor="variety" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                      <Package className="inline w-4 h-4 mr-2" />
+                      Crop Variety
+                    </Label>
                     <Input
                       id="variety"
+                      type="text"
+                      placeholder="e.g., Roma, Heirloom"
                       value={formData.variety}
                       onChange={e => handleInputChange('variety', e.target.value)}
-                      placeholder="e.g., Honeycrisp, Beefsteak"
-                      autoComplete="off"
-                      className="border-2 rounded-xl px-4 py-3 transition-all duration-200 focus:ring-4 focus:ring-blue-200 hover:border-gray-300 border-gray-200 focus:border-blue-500"
+                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
+                        focus:outline-none focus:ring-4 focus:ring-gray-200 hover:border-gray-300
+                        ${errors.variety ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-gray-400 bg-white'}`}
                     />
                   </div>
 
+                  {/* Farm Location (Text) */}
+                  <div>
+                    <Label htmlFor="farmLocation" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                      <MapPin className="inline w-4 h-4 mr-2" />
+                      Farm Location (if known)
+                    </Label>
+                    <Input
+                      id="farmLocation"
+                      type="text"
+                      placeholder="e.g., California, USA"
+                      value={formData.farmLocation}
+                      onChange={e => handleInputChange('farmLocation', e.target.value)}
+                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
+                        focus:outline-none focus:ring-4 focus:ring-gray-200 hover:border-gray-300
+                        ${errors.farmLocation ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-gray-400 bg-white'}`}
+                    />
+                  </div>
+                </div>
+
+                {/* Row 6: Harvest Time and Outlier Notes */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                   {/* Harvest Time */}
                   <div>
                     <Label htmlFor="harvestTime" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
@@ -979,69 +860,58 @@ const DataEntry = () => {
                       Harvest Time (if known)
                     </Label>
                     <Input
-                      type="time"
                       id="harvestTime"
+                      type="text"
+                      placeholder="e.g., Fall 2024"
                       value={formData.harvestTime}
                       onChange={e => handleInputChange('harvestTime', e.target.value)}
-                      className="border-2 rounded-xl px-4 py-3 transition-all duration-200 focus:ring-4 focus:ring-blue-200 hover:border-gray-300 border-gray-200 focus:border-blue-500"
+                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
+                        focus:outline-none focus:ring-4 focus:ring-gray-200 hover:border-gray-300
+                        ${errors.harvestTime ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-gray-400 bg-white'}`}
                     />
+                  </div>
+
+                  {/* Outlier Notes */}
+                  <div>
+                    <Label htmlFor="outlierNotes" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                      <FileText className="inline w-4 h-4 mr-2" />
+                      Outlier Notes (e.g., 'sample was bruised', 'refractometer was dirty')
+                    </Label>
+                    <Textarea
+                      id="outlierNotes"
+                      placeholder="Add any notes about the sample or measurement process."
+                      value={formData.outlierNotes}
+                      onChange={e => handleInputChange('outlierNotes', e.target.value)}
+                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
+                        focus:outline-none focus:ring-4 focus:ring-gray-200 hover:border-gray-300
+                        ${errors.outlierNotes ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-gray-400 bg-white'}`}
+                      rows={4}
+                    />
+                    {errors.outlierNotes && (
+                      <p className="text-red-600 text-sm mt-2 flex items-center">
+                        <X className="w-4 h-4 mr-1" />
+                        {errors.outlierNotes}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                {/* Farm Location */}
-                <div className="mb-8">
-                  <Label htmlFor="farmLocation" className="mb-3 text-sm font-semibold text-gray-700">Farm Location</Label>
-                  <Input
-                    id="farmLocation"
-                    value={formData.farmLocation}
-                    onChange={e => handleInputChange('farmLocation', e.target.value)}
-                    placeholder="e.g., Salinas Valley, CA or Local Farm"
-                    autoComplete="off"
-                    className="border-2 rounded-xl px-4 py-3 transition-all duration-200 focus:ring-4 focus:ring-blue-200 hover:border-gray-300 border-gray-200 focus:border-blue-500"
-                  />
-                  <p className="text-sm text-gray-500 mt-2">Where was this crop grown? (if known)</p>
-                </div>
-
-                {/* Notes */}
-                <div className="mb-8">
-                  <Label htmlFor="outlierNotes" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
-                    <FileText className="inline w-4 h-4 mr-2" />
-                    Notes for Outlier Readings
-                  </Label>
-                  <Textarea
-                    id="outlierNotes"
-                    value={formData.outlierNotes}
-                    onChange={e => handleInputChange('outlierNotes', e.target.value)}
-                    rows={3}
-                    maxLength={500}
-                    placeholder="Provide context if BRIX reading is unusually high or low..."
-                    className={`border-2 rounded-xl px-4 py-3 transition-all duration-200 focus:ring-4 focus:ring-blue-200 hover:border-gray-300 resize-none ${
-                      errors.outlierNotes ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
-                    }`}
-                  />
-                  <p className="text-sm text-gray-500 mt-2">{formData.outlierNotes.length}/500 characters</p>
-                  {errors.outlierNotes && (
-                    <p className="text-red-600 text-sm mt-2 flex items-center">
-                      <X className="w-4 h-4 mr-1" />
-                      {errors.outlierNotes}
-                    </p>
-                  )}
-                </div>
-
-                {/* Images Upload */}
+                {/* Row 7: Images */}
                 <div>
                   <Label htmlFor="images" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
                     <Camera className="inline w-4 h-4 mr-2" />
-                    Photo of the Crop (max 3)
+                    Upload Photos (max 3)
                   </Label>
-                  <input
-                    type="file"
+                  <Input
                     id="images"
-                    accept="image/jpeg,image/png,image/webp"
+                    type="file"
                     multiple
+                    accept="image/jpeg, image/png, image/webp"
                     onChange={handleImageUpload}
-                    disabled={formData.images.length >= 3}
-                    className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none transition-colors duration-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
+                      file:bg-blue-50 file:text-blue-700 file:font-medium file:rounded-xl file:px-4 file:py-2 file:border-0 file:cursor-pointer file:mr-4
+                      focus:outline-none focus:ring-4 focus:ring-gray-200 hover:border-gray-300
+                      ${errors.images ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-gray-400 bg-white'}`}
                   />
                   {errors.images && (
                     <p className="text-red-600 text-sm mt-2 flex items-center">
@@ -1049,45 +919,41 @@ const DataEntry = () => {
                       {errors.images}
                     </p>
                   )}
-
-                  <div className="flex space-x-4 mt-4">
-                    {formData.images.map((file, idx) => (
-                      <div
-                        key={idx}
-                        className="relative w-24 h-24 border-2 border-gray-200 rounded-xl overflow-hidden flex-shrink-0 shadow-md"
-                      >
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={`preview-${idx}`}
-                          className="w-full h-full object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeImage(idx)}
-                          className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-red-400 transition-colors duration-200"
-                          aria-label="Remove image"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                  {formData.images.length > 0 && (
+                    <div className="flex flex-wrap mt-4 space-x-4">
+                      {formData.images.map((file, index) => (
+                        <div key={index} className="relative w-24 h-24 border rounded-xl overflow-hidden">
+                          <img src={URL.createObjectURL(file)} alt={`preview-${index}`} className="object-cover w-full h-full" />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(index)}
+                            className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
+              {errors.general && (
+                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl relative text-center" role="alert">
+                      <span className="block sm:inline">{errors.general}</span>
+                  </div>
+              )}
 
               <Button
                 type="submit"
-                disabled={isLoading}
-                className="w-full py-4 text-lg font-bold tracking-wide rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:opacity-50 transition-all duration-200 hover:shadow-2xl transform hover:-translate-y-1"
+                disabled={isLoading || locationLoading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl text-lg transition-colors duration-200"
               >
                 {isLoading ? (
-                  <div className="flex items-center space-x-2">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Submitting...</span>
-                  </div>
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
                 ) : (
-                  'Submit BRIX Measurement'
+                  <Upload className="h-6 w-6 mr-2" />
                 )}
+                {isLoading ? 'Submitting...' : 'Submit Measurement'}
               </Button>
             </form>
           </CardContent>
