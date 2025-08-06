@@ -65,8 +65,7 @@ const DataEntry = () => {
     brand: '',
     store: '',
     farmLocation: '',
-    contributorName: '',
-    time: '',
+    harvestTime: '',
     images: [] as File[],
   });
 
@@ -117,7 +116,7 @@ const DataEntry = () => {
     })();
   }, [toast]);
 
-  // FIXED: Centralized input change handler to keep form data in sync
+  // Centralized input change handler to keep form data in sync
   const handleInputChange = (field: keyof typeof formData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
@@ -127,7 +126,7 @@ const DataEntry = () => {
     }
   };
 
-  // FIXED: Proper dropdown selection that maintains sync
+  // Proper dropdown selection that maintains sync
   const selectDropdownValue = (field: 'cropType' | 'brand' | 'store', value: string) => {
     handleInputChange(field, value);
 
@@ -158,7 +157,7 @@ const DataEntry = () => {
     return true;
   };
 
-  // FIXED: Use centralized handler for image updates
+  // Use centralized handler for image updates
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const validFiles = files.filter(validateFile);
@@ -169,7 +168,7 @@ const DataEntry = () => {
     handleInputChange('images', [...formData.images, ...validFiles]);
   };
 
-  // FIXED: Use centralized handler for image removal
+  // Use centralized handler for image removal
   const removeImage = (index: number) => {
     handleInputChange('images', formData.images.filter((_, i) => i !== index));
   };
@@ -206,7 +205,7 @@ const DataEntry = () => {
     return () => controller.abort();
   }, [formData.location, mapboxToken, toast]);
 
-  // FIXED: Use centralized handler for location selection
+  // Use centralized handler for location selection
   const selectLocationSuggestion = (feature: LocationFeature) => {
     setFormData(prev => ({
       ...prev,
@@ -217,7 +216,7 @@ const DataEntry = () => {
     setLocationSuggestions([]);
   };
 
-  // FIXED: Use centralized handler for location capture
+  // Use centralized handler for location capture
   const handleLocationCapture = () => {
     if (!mapboxToken) {
       setErrors(prev => ({ ...prev, location: 'Mapbox token not loaded yet' }));
@@ -274,15 +273,32 @@ const DataEntry = () => {
     const brand = sanitizeInput(formData.brand);
     const store = sanitizeInput(formData.store);
 
-    if (!cropType) newErrors.cropType = 'Please select or enter a crop type';
+    // Required fields validation
+    if (!cropType) newErrors.cropType = 'Crop type is required';
+    if (!brand) newErrors.brand = 'Brand/Farm name is required';
+    if (!store) newErrors.store = 'Point of purchase is required';
+    if (!location) newErrors.location = 'Sample location is required';
+    if (!formData.purchaseDate) newErrors.purchaseDate = 'Purchase date is required';
+    if (!formData.measurementDate) newErrors.measurementDate = 'Assessment date is required';
+    
+    // Value validation
     if (formData.brixLevel[0] < 0 || formData.brixLevel[0] > 100)
       newErrors.brixLevel = 'BRIX must be between 0–100';
-    if (!location) newErrors.location = 'Location is required';
-    if (new Date(formData.measurementDate) > new Date())
-      newErrors.measurementDate = 'Date cannot be in the future';
+    
+    // Date validation - ensure dates are not in the future
+    const today = new Date();
+    const purchaseDate = new Date(formData.purchaseDate);
+    const measurementDate = new Date(formData.measurementDate);
+    
+    if (purchaseDate > today) newErrors.purchaseDate = 'Purchase date cannot be in the future';
+    if (measurementDate > today) newErrors.measurementDate = 'Assessment date cannot be in the future';
+    
+    // Purchase date should be before or same as measurement date
+    if (formData.purchaseDate && formData.measurementDate && purchaseDate > measurementDate) {
+      newErrors.purchaseDate = 'Purchase date should be before or same as assessment date';
+    }
+    
     if (outlierNotes.length > 500) newErrors.outlierNotes = 'Notes too long (max 500 characters)';
-    if (!brand) newErrors.brand = 'Please select or enter a brand';
-    if (!store) newErrors.store = 'Please select or enter a store';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -292,7 +308,7 @@ const DataEntry = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) {
-      toast({ title: 'Fix errors in form.', variant: 'destructive' });
+      toast({ title: 'Please fix the errors in the form', variant: 'destructive' });
       return;
     }
   
@@ -324,27 +340,21 @@ const DataEntry = () => {
         if (insertCropErr || !insertedCrop) throw new Error('Failed to create new crop type');
         cropData = insertedCrop;
       }
-
-      // --- Variety: find or insert ---
-      // TODO: Once varieties added to the database come back here and fix this
   
-      // --- Brand: find or insert (optional) ---
+      // --- Brand: find or insert ---
       let brandId: string | null = null;
       if (brandName.trim()) {
         try {
-          // First, try to find existing brand with better error handling
           const { data: brandData, error: brandErr } = await supabase
             .from('brands')
             .select('id')
-            .ilike('name', brandName.trim()) // Use ilike for case-insensitive search
+            .ilike('name', brandName.trim())
             .limit(1)
-            .maybeSingle(); // Use maybeSingle() instead of single() to avoid errors when no match
+            .maybeSingle();
 
           if (brandData) {
-            // Found existing brand
             brandId = brandData.id;
           } else {
-            // Try to insert new brand
             const { data: insertedBrand, error: insertBrandErr } = await supabase
               .from('brands')
               .insert({ name: brandName.trim() })
@@ -352,11 +362,7 @@ const DataEntry = () => {
               .single();
 
             if (insertBrandErr) {
-              console.error('Brand insert error:', insertBrandErr);
-              
-              // Check if it's a duplicate key error (brand might have been created by another user)
               if (insertBrandErr.code === '23505') {
-                // Try to find the brand again
                 const { data: retryBrandData } = await supabase
                   .from('brands')
                   .select('id')
@@ -377,7 +383,6 @@ const DataEntry = () => {
             }
           }
         } catch (error) {
-          console.error('Brand handling error:', error);
           throw new Error(`Error handling brand "${brandName}": ${error.message}`);
         }
       }
@@ -386,19 +391,16 @@ const DataEntry = () => {
       let storeId: string | null = null;
       if (storeName.trim()) {
         try {
-          // First, try to find existing store
           const { data: storeData, error: storeErr } = await supabase
             .from('stores')
             .select('id')
-            .ilike('name', storeName.trim()) // Use ilike for case-insensitive search
+            .ilike('name', storeName.trim())
             .limit(1)
-            .maybeSingle(); // Use maybeSingle() instead of single()
+            .maybeSingle();
 
           if (storeData) {
-            // Found existing store
             storeId = storeData.id;
           } else {
-            // Try to insert new store
             const { data: insertedStore, error: insertStoreErr } = await supabase
               .from('stores')
               .insert({ name: storeName.trim() })
@@ -406,11 +408,7 @@ const DataEntry = () => {
               .single();
 
             if (insertStoreErr) {
-              console.error('Store insert error:', insertStoreErr);
-              
-              // Check if it's a duplicate key error
               if (insertStoreErr.code === '23505') {
-                // Try to find the store again
                 const { data: retryStoreData } = await supabase
                   .from('stores')
                   .select('id')
@@ -431,12 +429,12 @@ const DataEntry = () => {
             }
           }
         } catch (error) {
-          console.error('Store handling error:', error);
           throw new Error(`Error handling store "${storeName}": ${error.message}`);
         }
       }
+
       const fixPrecision = (num: number): number =>
-        parseFloat(num.toFixed(6)); // max 6 decimal digits for `numeric(9,6)`
+        parseFloat(num.toFixed(6));
       
       // --- Location ---
       const latitude = fixPrecision(formData.latitude);
@@ -446,11 +444,9 @@ const DataEntry = () => {
         throw new Error('Invalid coordinates');
       }
 
-      // Use range-based search for floating point coordinates instead of exact equality
       let locationData;
       try {
-        // First try to find existing location within a small radius (about 10 meters)
-        const tolerance = 0.0001; // approximately 10 meters
+        const tolerance = 0.0001;
         const { data: existingLocations, error: findLocationErr } = await supabase
           .from('locations')
           .select('*')
@@ -461,15 +457,12 @@ const DataEntry = () => {
           .limit(1);
 
         if (findLocationErr) {
-          console.error('Location search error:', findLocationErr);
           throw new Error('Failed to search for existing location');
         }
 
         if (existingLocations && existingLocations.length > 0) {
-          // Use existing location
           locationData = existingLocations[0];
         } else {
-          // Create new location
           const { data: insertedLocation, error: insertErr } = await supabase
             .from('locations')
             .insert({
@@ -482,16 +475,18 @@ const DataEntry = () => {
             .single();
 
           if (insertErr || !insertedLocation) {
-            console.error('Supabase location insert error:', insertErr);
             throw new Error(`Location insert failed: ${insertErr?.message || 'Unknown error'}`);
           }
 
           locationData = insertedLocation;
         }
       } catch (error) {
-        console.error('Location handling error:', error);
         throw new Error(`Error handling location: ${error.message}`);
       }
+      
+      // Create proper ISO date strings for database insertion
+      const assessmentDate = new Date(formData.measurementDate + 'T00:00:00.000Z').toISOString();
+      const purchaseDateISO = new Date(formData.purchaseDate + 'T00:00:00.000Z').toISOString();
       
       // --- Insert submission ---
       const { data: insertedSubmission, error: submitErr } = await supabase.from('submissions').insert({
@@ -502,11 +497,10 @@ const DataEntry = () => {
         crop_variety: variety || null,                       
         brix_value: formData.brixLevel[0],
         user_id: user?.id,
-        assessment_date: new Date(formData.measurementDate).toISOString(),  
-        purchase_date: formData.purchaseDate || null,
+        assessment_date: assessmentDate,  
+        purchase_date: purchaseDateISO,
         farm_location: formData.farmLocation || null,
-        contributor_name: formData.contributorName || null,
-        harvest_time: formData.time || null,
+        harvest_time: formData.harvestTime || null,
         outlier_notes: formData.outlierNotes || null,  
       })
       .select('id')
@@ -517,28 +511,7 @@ const DataEntry = () => {
       const userId = user?.id;
       if (!userId) throw new Error('User not authenticated');
 
-      // === COMPREHENSIVE AUTH DEBUGGING ===
-      console.log('=== AUTHENTICATION CHECK ===');
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      console.log('Session exists:', !!session);
-      console.log('Session user ID:', session?.user?.id);
-      console.log('Form user ID:', userId);
-      console.log('User IDs match:', session?.user?.id === userId);
-      console.log('Session error:', sessionError);
-
-      // Check if user exists in users table
-      const { data: userRecord, error: userError } = await supabase
-        .from('users')
-        .select('id, role')
-        .eq('id', userId)
-        .single();
-      console.log('User record exists:', !!userRecord);
-      console.log('User record error:', userError);
-
       if (formData.images.length > 0) {
-        console.log('=== STARTING IMAGE UPLOAD ===');
-        console.log('Number of images to upload:', formData.images.length);
-        
         const uploadedImageUrls: string[] = [];
 
         for (let i = 0; i < formData.images.length; i++) {
@@ -547,27 +520,7 @@ const DataEntry = () => {
           const timestamp = Date.now();
           const filePath = `${userId}/${insertedSubmission.id}/${timestamp}_${i}.${ext}`;
 
-          console.log(`=== UPLOADING IMAGE ${i + 1}/${formData.images.length} ===`);
-          console.log('File name:', file.name);
-          console.log('File size:', file.size);
-          console.log('File type:', file.type);
-          console.log('Upload path:', filePath);
-          console.log('Path starts with user ID:', filePath.startsWith(`${userId}/`));
-
           try {
-            // Test bucket access first
-            console.log('Testing bucket access...');
-            const { data: bucketTest, error: bucketError } = await supabase.storage
-              .from('submission-images-bucket')
-              .list('', { limit: 1 });
-            
-            console.log('Bucket access test result:', bucketError ? 'FAILED' : 'SUCCESS');
-            if (bucketError) {
-              console.log('Bucket error:', bucketError);
-            }
-
-            // Attempt upload with maximum detail logging
-            console.log('Attempting upload...');
             const uploadResult = await supabase.storage
               .from('submission-images-bucket')
               .upload(filePath, file, {
@@ -575,15 +528,7 @@ const DataEntry = () => {
                 upsert: false,
               });
 
-            console.log('Upload result:', uploadResult);
-            
             if (uploadResult.error) {
-              console.log('=== UPLOAD ERROR DETAILS ===');
-              console.log('Error message:', uploadResult.error.message);
-              console.log('Error name:', uploadResult.error.name);
-              console.log('Full error object:', JSON.stringify(uploadResult.error, null, 2));
-              
-              // Specific error handling
               if (uploadResult.error.message?.includes('row-level security') || 
                   uploadResult.error.message?.includes('Unauthorized') ||
                   uploadResult.error.message?.includes('403')) {
@@ -591,8 +536,6 @@ const DataEntry = () => {
               }
               throw uploadResult.error;
             }
-
-            console.log('Upload successful for:', file.name);
             
             // Create signed URL
             const { data: signedUrlData, error: urlError } = await supabase.storage
@@ -600,27 +543,17 @@ const DataEntry = () => {
               .createSignedUrl(filePath, 60 * 60 * 24 * 365);
 
             if (urlError || !signedUrlData?.signedUrl) {
-              console.error('Signed URL error:', urlError);
               throw new Error(`Failed to create signed URL for ${file.name}`);
             }
 
             uploadedImageUrls.push(signedUrlData.signedUrl);
-            console.log(`Successfully processed image ${i + 1}/${formData.images.length}`);
 
           } catch (error: any) {
-            console.log('=== CATCH BLOCK ERROR ===');
-            console.log('Error type:', typeof error);
-            console.log('Error message:', error.message);
-            console.log('Error stack:', error.stack);
-            console.log('Full error:', JSON.stringify(error, null, 2));
-            
             throw new Error(`Upload failed for ${file.name}: ${error.message}`);
           }
         }
 
-        // Continue with image record insertion...
         if (uploadedImageUrls.length > 0) {
-          console.log('=== INSERTING IMAGE RECORDS ===');
           const imageInsertPayload = uploadedImageUrls.map((url) => ({
             submission_id: insertedSubmission.id,
             image_url: url,
@@ -631,15 +564,12 @@ const DataEntry = () => {
             .insert(imageInsertPayload);
 
           if (imageInsertErr) {
-            console.error('Image record insert error:', imageInsertErr);
             throw new Error(`Failed to save image records: ${imageInsertErr.message}`);
           }
-
-          console.log('Successfully saved all image records');
         }
       }
   
-      toast({ title: 'Data submitted successfully' });
+      toast({ title: 'BRIX measurement submitted successfully!' });
       navigate('/your-data');
     } catch (err: any) {
       console.error(err);
@@ -668,374 +598,342 @@ const DataEntry = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
-              {/* Grid layout for inputs */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Crop Type - required with dropdown */}
+              
+              {/* Required Fields Section */}
+              <div className="border-b pb-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Required Information</h3>
+                
+                {/* Row 1: Crop Type and Brand */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  {/* Crop Type - required with dropdown */}
+                  <div className="relative">
+                    <Label htmlFor="cropType" className="flex items-center">
+                      Crop Type <span className="ml-1 text-red-600">*</span>
+                    </Label>
+                    <input
+                      id="cropType"
+                      type="text"
+                      placeholder="Type or select crop type"
+                      autoComplete="off"
+                      value={formData.cropType}
+                      onChange={e => handleInputChange('cropType', e.target.value)}
+                      className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
+                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+                        ${errors.cropType ? 'border-red-500' : 'border-gray-300'}`}
+                      onFocus={() => setShowCropDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowCropDropdown(false), 150)}
+                    />
+                    {showCropDropdown && (
+                      <ul className="absolute z-30 w-full max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg">
+                        {cropTypes
+                          .filter(crop => crop.toLowerCase().includes(formData.cropType.toLowerCase()))
+                          .map(crop => (
+                            <li
+                              key={crop}
+                              className="cursor-pointer px-3 py-2 hover:bg-blue-100"
+                              onMouseDown={() => selectDropdownValue('cropType', crop)}
+                            >
+                              {crop}
+                            </li>
+                          ))}
+                        {cropTypes.filter(crop => crop.toLowerCase().includes(formData.cropType.toLowerCase())).length === 0 && (
+                          <li className="px-3 py-2 text-gray-500">No matches found</li>
+                        )}
+                      </ul>
+                    )}
+                    {errors.cropType && <p className="text-red-600 text-sm mt-1">{errors.cropType}</p>}
+                  </div>
+
+                  {/* Brand/Farm Name - required with dropdown */}
+                  <div className="relative">
+                    <Label htmlFor="brand" className="flex items-center">
+                      Farm/Brand Name <span className="ml-1 text-red-600">*</span>
+                    </Label>
+                    <input
+                      id="brand"
+                      type="text"
+                      placeholder="Type or select farm/brand name"
+                      autoComplete="off"
+                      value={formData.brand}
+                      onChange={e => handleInputChange('brand', e.target.value)}
+                      className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
+                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+                        ${errors.brand ? 'border-red-500' : 'border-gray-300'}`}
+                      onFocus={() => setShowBrandDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowBrandDropdown(false), 150)}
+                    />
+                    {showBrandDropdown && (
+                      <ul className="absolute z-30 w-full max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg">
+                        {brands
+                          .filter(brand => brand.toLowerCase().includes(formData.brand.toLowerCase()))
+                          .map(brand => (
+                            <li
+                              key={brand}
+                              className="cursor-pointer px-3 py-2 hover:bg-blue-100"
+                              onMouseDown={() => selectDropdownValue('brand', brand)}
+                            >
+                              {brand}
+                            </li>
+                          ))}
+                        {brands.filter(brand => brand.toLowerCase().includes(formData.brand.toLowerCase())).length === 0 && (
+                          <li className="px-3 py-2 text-gray-500">No matches found</li>
+                        )}
+                      </ul>
+                    )}
+                    {errors.brand && <p className="text-red-600 text-sm mt-1">{errors.brand}</p>}
+                  </div>
+                </div>
+
+                {/* Row 2: Store and BRIX */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  {/* Store/Point of Purchase - required with dropdown */}
+                  <div className="relative">
+                    <Label htmlFor="store" className="flex items-center">
+                      Point of Purchase <span className="ml-1 text-red-600">*</span>
+                    </Label>
+                    <input
+                      id="store"
+                      type="text"
+                      placeholder="e.g., Whole Foods, Farmer's Market"
+                      autoComplete="off"
+                      value={formData.store}
+                      onChange={e => handleInputChange('store', e.target.value)}
+                      className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
+                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+                        ${errors.store ? 'border-red-500' : 'border-gray-300'}`}
+                      onFocus={() => setShowStoreDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowStoreDropdown(false), 150)}
+                    />
+                    {showStoreDropdown && (
+                      <ul className="absolute z-30 w-full max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg">
+                        {stores
+                          .filter(store => store.toLowerCase().includes(formData.store.toLowerCase()))
+                          .map(store => (
+                            <li
+                              key={store}
+                              className="cursor-pointer px-3 py-2 hover:bg-blue-100"
+                              onMouseDown={() => selectDropdownValue('store', store)}
+                            >
+                              {store}
+                            </li>
+                          ))}
+                        {stores.filter(store => store.toLowerCase().includes(formData.store.toLowerCase())).length === 0 && (
+                          <li className="px-3 py-2 text-gray-500">No matches found</li>
+                        )}
+                      </ul>
+                    )}
+                    {errors.store && <p className="text-red-600 text-sm mt-1">{errors.store}</p>}
+                  </div>
+
+                  {/* BRIX Level - required */}
+                  <div>
+                    <Label htmlFor="brixLevel" className="flex items-center">
+                      BRIX Level <span className="ml-1 text-red-600">*</span>
+                    </Label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={formData.brixLevel[0]}
+                      onChange={e => handleInputChange('brixLevel', [parseFloat(e.target.value)])}
+                      id="brixLevel"
+                      className="w-full"
+                    />
+                    <p className="text-sm text-gray-600 mt-1">Selected BRIX: {formData.brixLevel[0]}</p>
+                    {errors.brixLevel && <p className="text-red-600 text-sm mt-1">{errors.brixLevel}</p>}
+                  </div>
+                </div>
+
+                {/* Row 3: Dates */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <Label htmlFor="purchaseDate" className="flex items-center">
+                      Date of Purchase <span className="ml-1 text-red-600">*</span>
+                    </Label>
+                    <Input
+                      type="date"
+                      id="purchaseDate"
+                      value={formData.purchaseDate}
+                      onChange={e => handleInputChange('purchaseDate', e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      className={errors.purchaseDate ? 'border-red-500' : ''}
+                    />
+                    {errors.purchaseDate && <p className="text-red-600 text-sm mt-1">{errors.purchaseDate}</p>}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="measurementDate" className="flex items-center">
+                      Date of Assessment <span className="ml-1 text-red-600">*</span>
+                    </Label>
+                    <Input
+                      type="date"
+                      id="measurementDate"
+                      value={formData.measurementDate}
+                      onChange={e => handleInputChange('measurementDate', e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      className={errors.measurementDate ? 'border-red-500' : ''}
+                    />
+                    {errors.measurementDate && <p className="text-red-600 text-sm mt-1">{errors.measurementDate}</p>}
+                  </div>
+                </div>
+
+                {/* Location with autocomplete - required */}
                 <div className="relative">
-                  <Label htmlFor="cropType" className="flex items-center">
-                    Crop Type <span className="ml-1 text-red-600">*</span>
+                  <Label htmlFor="location" className="flex items-center">
+                    Sample Location <span className="ml-1 text-red-600">*</span>
                   </Label>
                   <input
-                    id="cropType"
+                    id="location"
                     type="text"
-                    placeholder="Type or select crop type"
+                    placeholder="Start typing location..."
                     autoComplete="off"
-                    value={formData.cropType}
-                    onChange={e => handleInputChange('cropType', e.target.value)}
+                    value={formData.location}
+                    onChange={e => handleInputChange('location', e.target.value)}
                     className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-                      ${errors.cropType ? 'border-red-500' : 'border-gray-300'}`}
-                    aria-describedby="cropType-list"
-                    aria-invalid={!!errors.cropType}
-                    onFocus={() => setShowCropDropdown(true)}
-                    onBlur={() => setTimeout(() => setShowCropDropdown(false), 150)} // delay to allow click
+                      ${errors.location ? 'border-red-500' : 'border-gray-300'}`}
                   />
-                  {/* Dropdown panel */}
-                  {showCropDropdown && (
-                    <ul
-                      id="cropType-list"
-                      className="absolute z-30 w-full max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg"
-                    >
-                      {cropTypes
-                        .filter(crop => crop.toLowerCase().includes(formData.cropType.toLowerCase()))
-                        .map(crop => (
-                          <li
-                            key={crop}
-                            className="cursor-pointer px-3 py-2 hover:bg-blue-100"
-                            onMouseDown={() => selectDropdownValue('cropType', crop)}
-                          >
-                            {crop}
-                          </li>
-                        ))}
-                      {cropTypes.filter(crop => crop.toLowerCase().includes(formData.cropType.toLowerCase())).length === 0 && (
-                        <li className="px-3 py-2 text-gray-500">No matches found</li>
-                      )}
+                  {errors.location && <p className="text-red-600 text-sm mt-1">{errors.location}</p>}
+
+                  {locationSuggestions.length > 0 && (
+                    <ul className="absolute z-30 top-full left-0 right-0 mt-1 max-h-40 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg">
+                      {locationSuggestions.map(suggestion => (
+                        <li
+                          key={suggestion.id}
+                          className="cursor-pointer px-3 py-2 hover:bg-blue-100"
+                          onMouseDown={() => selectLocationSuggestion(suggestion)}
+                        >
+                          {suggestion.place_name}
+                        </li>
+                      ))}
                     </ul>
                   )}
-                  {errors.cropType && (
-                    <p className="text-red-600 text-sm mt-1">{errors.cropType}</p>
-                  )}
-                </div>
-  
-                {/* Variety - optional free text */}
-                <div>
-                  <Label htmlFor="variety">Variety</Label>
-                  <Input
-                    id="variety"
-                    value={formData.variety}
-                    onChange={e => handleInputChange('variety', e.target.value)}
-                    autoComplete="off"
-                    className={errors.variety ? 'border-red-500' : ''}
-                  />
-                  {errors.variety && <p className="text-red-600 text-sm mt-1">{errors.variety}</p>}
-                </div>
-  
-                {/* Brand - required with dropdown */}
-                <div className="relative">
-                  <Label htmlFor="brand" className="flex items-center">
-                    Brand <span className="ml-1 text-red-600">*</span>
-                  </Label>
-                  <input
-                    id="brand"
-                    type="text"
-                    placeholder="Type or select brand"
-                    autoComplete="off"
-                    value={formData.brand}
-                    onChange={e => handleInputChange('brand', e.target.value)}
-                    className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
-                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-                      ${errors.brand ? 'border-red-500' : 'border-gray-300'}`}
-                    aria-describedby="brand-list"
-                    aria-invalid={!!errors.brand}
-                    onFocus={() => setShowBrandDropdown(true)}
-                    onBlur={() => setTimeout(() => setShowBrandDropdown(false), 150)}
-                  />
-                  {showBrandDropdown && (
-                    <ul
-                      id="brand-list"
-                      className="absolute z-30 w-full max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg"
-                    >
-                      {brands
-                        .filter(brand => brand.toLowerCase().includes(formData.brand.toLowerCase()))
-                        .map(brand => (
-                          <li
-                            key={brand}
-                            className="cursor-pointer px-3 py-2 hover:bg-blue-100"
-                            onMouseDown={() => selectDropdownValue('brand', brand)}
-                          >
-                            {brand}
-                          </li>
-                        ))}
-                      {brands.filter(brand => brand.toLowerCase().includes(formData.brand.toLowerCase())).length === 0 && (
-                        <li className="px-3 py-2 text-gray-500">No matches found</li>
-                      )}
-                    </ul>
-                  )}
-                  {errors.brand && (
-                    <p className="text-red-600 text-sm mt-1">{errors.brand}</p>
-                  )}
-                </div>
-  
-                {/* Store - required with dropdown */}
-                <div className="relative">
-                  <Label htmlFor="store" className="flex items-center">
-                    Store <span className="ml-1 text-red-600">*</span>
-                  </Label>
-                  <input
-                    id="store"
-                    type="text"
-                    placeholder="Type or select store"
-                    autoComplete="off"
-                    value={formData.store}
-                    onChange={e => handleInputChange('store', e.target.value)}
-                    className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
-                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-                      ${errors.store ? 'border-red-500' : 'border-gray-300'}`}
-                    aria-describedby="store-list"
-                    aria-invalid={!!errors.store}
-                    onFocus={() => setShowStoreDropdown(true)}
-                    onBlur={() => setTimeout(() => setShowStoreDropdown(false), 150)}
-                  />
-                  {showStoreDropdown && (
-                    <ul
-                      id="store-list"
-                      className="absolute z-30 w-full max-h-48 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg"
-                    >
-                      {stores
-                        .filter(store => store.toLowerCase().includes(formData.store.toLowerCase()))
-                        .map(store => (
-                          <li
-                            key={store}
-                            className="cursor-pointer px-3 py-2 hover:bg-blue-100"
-                            onMouseDown={() => selectDropdownValue('store', store)}
-                          >
-                            {store}
-                          </li>
-                        ))}
-                      {stores.filter(store => store.toLowerCase().includes(formData.store.toLowerCase())).length === 0 && (
-                        <li className="px-3 py-2 text-gray-500">No matches found</li>
-                      )}
-                    </ul>
-                  )}
-                  {errors.store && (
-                    <p className="text-red-600 text-sm mt-1">{errors.store}</p>
-                  )}
-                </div>
-              </div>
-  
-              {/* BRIX Level - required */}
-              <div>
-                <Label htmlFor="brixLevel" className="flex items-center">
-                  BRIX Level <span className="ml-1 text-red-600">*</span>
-                </Label>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  value={formData.brixLevel[0]}
-                  onChange={e => handleInputChange('brixLevel', [parseFloat(e.target.value)])}
-                  id="brixLevel"
-                  className="w-full"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={formData.brixLevel[0]}
-                />
-                <p className="text-sm text-gray-600 mt-1">Selected BRIX: {formData.brixLevel[0]}</p>
-                {errors.brixLevel && (
-                  <p className="text-red-600 text-sm mt-1">{errors.brixLevel}</p>
-                )}
-              </div>
-  
-              {/* Location with autocomplete - required */}
-              <div className="relative">
-                <Label htmlFor="location" className="flex items-center">
-                  Location <span className="ml-1 text-red-600">*</span>
-                </Label>
-                <input
-                  id="location"
-                  type="text"
-                  placeholder="Start typing location..."
-                  autoComplete="off"
-                  value={formData.location}
-                  onChange={e => handleInputChange('location', e.target.value)}
-                  className={`w-full border rounded-md px-3 py-2 text-gray-900 placeholder-gray-400
-                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-                    ${errors.location ? 'border-red-500' : 'border-gray-300'}`}
-                  aria-autocomplete="list"
-                  aria-expanded={locationSuggestions.length > 0}
-                  aria-haspopup="listbox"
-                  aria-invalid={!!errors.location}
-                />
-                {errors.location && (
-                  <p className="text-red-600 text-sm mt-1">{errors.location}</p>
-                )}
-  
-                {locationSuggestions.length > 0 && (
-                  <ul
-                    role="listbox"
-                    className="absolute z-30 top-full left-0 right-0 mt-1 max-h-40 overflow-auto rounded-md border border-gray-300 bg-white shadow-lg"
+
+                  <button
+                    type="button"
+                    onClick={handleLocationCapture}
+                    disabled={locationLoading}
+                    className="mt-3 inline-flex items-center space-x-2 rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
                   >
-                    {locationSuggestions.map(suggestion => (
-                      <li
-                        key={suggestion.id}
-                        role="option"
-                        tabIndex={-1}
-                        className="cursor-pointer px-3 py-2 hover:bg-blue-100"
-                        onMouseDown={() => selectLocationSuggestion(suggestion)}
-                      >
-                        {suggestion.place_name}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-  
-                <button
-                  type="button"
-                  onClick={handleLocationCapture}
-                  disabled={locationLoading}
-                  className="mt-3 inline-flex items-center space-x-2 rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-                >
-                  {locationLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Getting location...</span>
-                    </>
-                  ) : (
-                    <>
-                      <MapPin className="w-4 h-4" />
-                      <span>Use current location</span>
-                    </>
-                  )}
-                </button>
-              </div>
-  
-              {/* Dates and other optional fields in grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <Label htmlFor="measurementDate" className="flex items-center">
-                    Measurement Date <span className="ml-1 text-red-600">*</span>
-                  </Label>
-                  <Input
-                    type="date"
-                    id="measurementDate"
-                    value={formData.measurementDate}
-                    onChange={e => handleInputChange('measurementDate', e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
-                    className={errors.measurementDate ? 'border-red-500' : ''}
-                  />
-                  {errors.measurementDate && (
-                    <p className="text-red-600 text-sm mt-1">{errors.measurementDate}</p>
-                  )}
-                </div>
-  
-                <div>
-                  <Label htmlFor="purchaseDate">Purchase Date</Label>
-                  <Input
-                    type="date"
-                    id="purchaseDate"
-                    value={formData.purchaseDate}
-                    onChange={e => handleInputChange('purchaseDate', e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
-                  />
-                </div>
-  
-                <div>
-                  <Label htmlFor="time">Harvest Time</Label>
-                  <Input
-                    type="time"
-                    id="time"
-                    value={formData.time}
-                    onChange={e => handleInputChange('time', e.target.value)}
-                  />
+                    {locationLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Getting location...</span>
+                      </>
+                    ) : (
+                      <>
+                        <MapPin className="w-4 h-4" />
+                        <span>Use current location</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
-  
-              {/* Farm Location & Contributor Name */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
+
+              {/* Optional Fields Section */}
+              <div className="pt-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Additional Information (Optional)</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  {/* Variety */}
+                  <div>
+                    <Label htmlFor="variety">Variety</Label>
+                    <Input
+                      id="variety"
+                      value={formData.variety}
+                      onChange={e => handleInputChange('variety', e.target.value)}
+                      placeholder="e.g., Honeycrisp, Beefsteak"
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  {/* Harvest Time */}
+                  <div>
+                    <Label htmlFor="harvestTime">Harvest Time (if known)</Label>
+                    <Input
+                      type="time"
+                      id="harvestTime"
+                      value={formData.harvestTime}
+                      onChange={e => handleInputChange('harvestTime', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Farm Location */}
+                <div className="mb-6">
                   <Label htmlFor="farmLocation">Farm Location</Label>
                   <Input
                     id="farmLocation"
                     value={formData.farmLocation}
                     onChange={e => handleInputChange('farmLocation', e.target.value)}
+                    placeholder="e.g., Salinas Valley, CA or Local Farm"
                     autoComplete="off"
                   />
+                  <p className="text-sm text-gray-500 mt-1">Where was this crop grown? (if known)</p>
                 </div>
+
+                {/* Notes */}
+                <div className="mb-6">
+                  <Label htmlFor="outlierNotes">Notes for Outlier Readings</Label>
+                  <Textarea
+                    id="outlierNotes"
+                    value={formData.outlierNotes}
+                    onChange={e => handleInputChange('outlierNotes', e.target.value)}
+                    rows={3}
+                    maxLength={500}
+                    placeholder="Provide context if BRIX reading is unusually high or low..."
+                    className={errors.outlierNotes ? 'border-red-500' : ''}
+                  />
+                  <p className="text-sm text-gray-500 mt-1">{formData.outlierNotes.length}/500 characters</p>
+                  {errors.outlierNotes && <p className="text-red-600 text-sm mt-1">{errors.outlierNotes}</p>}
+                </div>
+
+                {/* Images Upload */}
                 <div>
-                  <Label htmlFor="contributorName">Contributor Name</Label>
-                  <Input
-                    id="contributorName"
-                    value={formData.contributorName}
-                    onChange={e => handleInputChange('contributorName', e.target.value)}
-                    autoComplete="off"
+                  <Label htmlFor="images">Photo of the Crop (max 3)</Label>
+                  <input
+                    type="file"
+                    id="images"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    onChange={handleImageUpload}
+                    disabled={formData.images.length >= 3}
+                    className="mt-1 mb-2"
                   />
-                </div>
-              </div>
-  
-              {/* Notes */}
-              <div>
-                <Label htmlFor="outlierNotes">Notes</Label>
-                <Textarea
-                  id="outlierNotes"
-                  value={formData.outlierNotes}
-                  onChange={e => handleInputChange('outlierNotes', e.target.value)}
-                  rows={3}
-                  maxLength={500}
-                  className={errors.outlierNotes ? 'border-red-500' : ''}
-                />
-                <p className="text-sm text-gray-500 mt-1">{formData.outlierNotes.length}/500 characters</p>
-                {errors.outlierNotes && (
-                  <p className="text-red-600 text-sm mt-1">{errors.outlierNotes}</p>
-                )}
-              </div>
-  
-              {/* Images Upload */}
-              <div>
-                <Label htmlFor="images">Upload Images (max 3)</Label>
-                <input
-                  type="file"
-                  id="images"
-                  accept="image/jpeg,image/png,image/webp"
-                  multiple
-                  onChange={handleImageUpload}
-                  disabled={formData.images.length >= 3}
-                  className="mt-1 mb-2"
-                />
-                {errors.images && (
-                  <p className="text-red-600 text-sm mt-1">{errors.images}</p>
-                )}
-  
-                <div className="flex space-x-4 mt-2">
-                  {formData.images.map((file, idx) => (
-                    <div
-                      key={idx}
-                      className="relative w-24 h-24 border border-gray-300 rounded overflow-hidden flex-shrink-0"
-                    >
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={`preview-${idx}`}
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(idx)}
-                        className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-red-400"
-                        aria-label="Remove image"
+                  {errors.images && <p className="text-red-600 text-sm mt-1">{errors.images}</p>}
+
+                  <div className="flex space-x-4 mt-2">
+                    {formData.images.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="relative w-24 h-24 border border-gray-300 rounded overflow-hidden flex-shrink-0"
                       >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  ))}
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={`preview-${idx}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(idx)}
+                          className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-red-400"
+                          aria-label="Remove image"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-  
+
               <Button
                 type="submit"
                 disabled={isLoading}
                 className="w-full py-3 text-lg font-semibold tracking-wide rounded-md bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
               >
-                {isLoading ? 'Submitting...' : 'Submit'}
+                {isLoading ? 'Submitting...' : 'Submit BRIX Measurement'}
               </Button>
             </form>
           </CardContent>
