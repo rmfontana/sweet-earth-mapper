@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -7,6 +6,7 @@ import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { Calendar, X } from 'lucide-react';
+import { fetchCropTypes } from '@/lib/fetchCropTypes'; 
 
 interface MapFiltersProps {
   filters: {
@@ -19,9 +19,24 @@ interface MapFiltersProps {
   onFiltersChange: (filters: any) => void;
 }
 
-const availableCrops = ['Tomato', 'Carrot', 'Apple', 'Spinach', 'Lettuce', 'Cucumber', 'Pepper', 'Strawberry'];
-
 const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => {
+  const [availableCrops, setAvailableCrops] = useState<string[]>([]);
+  const [loadingCrops, setLoadingCrops] = useState<boolean>(true);
+
+  useEffect(() => {
+    const loadCrops = async () => {
+      try {
+        const crops = await fetchCropTypes();
+        setAvailableCrops(crops);
+      } catch (err) {
+        console.error('Failed to fetch crops:', err);
+      } finally {
+        setLoadingCrops(false);
+      }
+    };
+    loadCrops();
+  }, []);
+
   const updateFilters = (key: string, value: any) => {
     onFiltersChange({ ...filters, [key]: value });
   };
@@ -47,55 +62,58 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
   };
 
   return (
-    <Card className="h-fit">
+    <Card className="h-fit shadow-md rounded-2xl border">
       <CardHeader>
         <div className="flex justify-between items-center">
-          <CardTitle className="text-lg">Filters</CardTitle>
-          <Button variant="ghost" size="sm" onClick={clearAllFilters}>
+          <CardTitle className="text-lg font-semibold">Filters</CardTitle>
+          <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-xs text-muted-foreground hover:text-foreground">
             Clear All
           </Button>
         </div>
       </CardHeader>
-      
+
       <CardContent className="space-y-6">
         {/* Crop Types */}
         <div>
-          <Label className="text-sm font-medium mb-3 block">Crop Types</Label>
-          
-          {/* Selected crops */}
+          <Label className="text-sm font-medium mb-2 block">Crop Types</Label>
+
           {filters.cropTypes.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {filters.cropTypes.map(crop => (
-                <Badge key={crop} variant="secondary" className="flex items-center space-x-1">
+                <Badge key={crop} variant="secondary" className="flex items-center gap-1 px-2 py-1 text-xs rounded-full">
                   <span>{crop}</span>
-                  <X 
-                    className="w-3 h-3 cursor-pointer" 
-                    onClick={() => removeCropType(crop)}
-                  />
+                  <X className="w-3 h-3 cursor-pointer" onClick={() => removeCropType(crop)} />
                 </Badge>
               ))}
             </div>
           )}
-          
-          {/* Available crops */}
+
           <div className="grid grid-cols-2 gap-2">
-            {availableCrops.map(crop => (
-              <Button
-                key={crop}
-                variant={filters.cropTypes.includes(crop) ? "default" : "outline"}
-                size="sm"
-                onClick={() => filters.cropTypes.includes(crop) ? removeCropType(crop) : addCropType(crop)}
-                className="text-xs"
-              >
-                {crop}
-              </Button>
-            ))}
+            {loadingCrops ? (
+              <span className="text-xs text-muted-foreground col-span-2">Loading crop types...</span>
+            ) : availableCrops.length > 0 ? (
+              availableCrops.map(crop => (
+                <Button
+                  key={crop}
+                  variant={filters.cropTypes.includes(crop) ? "default" : "outline"}
+                  size="sm"
+                  onClick={() =>
+                    filters.cropTypes.includes(crop) ? removeCropType(crop) : addCropType(crop)
+                  }
+                  className="text-xs"
+                >
+                  {crop}
+                </Button>
+              ))
+            ) : (
+              <span className="text-xs text-muted-foreground col-span-2">No crops found</span>
+            )}
           </div>
         </div>
 
         {/* BRIX Range */}
         <div>
-          <Label className="text-sm font-medium mb-3 block">BRIX Range</Label>
+          <Label className="text-sm font-medium mb-2 block">BRIX Range</Label>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="min-brix" className="text-xs">Min</Label>
@@ -103,7 +121,12 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
                 id="min-brix"
                 type="number"
                 value={filters.brixRange[0]}
-                onChange={(e) => updateFilters('brixRange', [parseInt(e.target.value) || 0, filters.brixRange[1]])}
+                onChange={(e) =>
+                  updateFilters('brixRange', [
+                    parseInt(e.target.value) || 0,
+                    filters.brixRange[1],
+                  ])
+                }
                 className="text-sm"
                 min="0"
                 max="30"
@@ -115,7 +138,12 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
                 id="max-brix"
                 type="number"
                 value={filters.brixRange[1]}
-                onChange={(e) => updateFilters('brixRange', [filters.brixRange[0], parseInt(e.target.value) || 30])}
+                onChange={(e) =>
+                  updateFilters('brixRange', [
+                    filters.brixRange[0],
+                    parseInt(e.target.value) || 30,
+                  ])
+                }
                 className="text-sm"
                 min="0"
                 max="30"
@@ -126,8 +154,8 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
 
         {/* Date Range */}
         <div>
-          <Label className="text-sm font-medium mb-3 block flex items-center">
-            <Calendar className="w-4 h-4 mr-1" />
+          <Label className="text-sm font-medium mb-2 block flex items-center gap-1">
+            <Calendar className="w-4 h-4" />
             Date Range
           </Label>
           <div className="space-y-3">
@@ -137,7 +165,9 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
                 id="start-date"
                 type="date"
                 value={filters.dateRange[0]}
-                onChange={(e) => updateFilters('dateRange', [e.target.value, filters.dateRange[1]])}
+                onChange={(e) =>
+                  updateFilters('dateRange', [e.target.value, filters.dateRange[1]])
+                }
                 className="text-sm"
               />
             </div>
@@ -147,7 +177,9 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
                 id="end-date"
                 type="date"
                 value={filters.dateRange[1]}
-                onChange={(e) => updateFilters('dateRange', [filters.dateRange[0], e.target.value])}
+                onChange={(e) =>
+                  updateFilters('dateRange', [filters.dateRange[0], e.target.value])
+                }
                 className="text-sm"
               />
             </div>
@@ -156,7 +188,7 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
 
         {/* Submitted By */}
         <div>
-          <Label htmlFor="submitted-by" className="text-sm font-medium mb-3 block">
+          <Label htmlFor="submitted-by" className="text-sm font-medium mb-2 block">
             Submitted By
           </Label>
           <Input
@@ -182,9 +214,7 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
 
         {/* Results Count */}
         <div className="pt-4 border-t">
-          <p className="text-xs text-gray-600">
-            Showing filtered measurements on map
-          </p>
+          <p className="text-xs text-muted-foreground">Showing filtered measurements on map</p>
         </div>
       </CardContent>
     </Card>
