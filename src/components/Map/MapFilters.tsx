@@ -56,6 +56,13 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
   const [storeQuery, setStoreQuery] = useState('');
   const [cropQuery, setCropQuery] = useState('');
 
+  // Get slider working 
+  const [localBrixRange, setLocalBrixRange] = useState<[number, number]>(filters.brixRange);
+
+  useEffect(() => {
+    setLocalBrixRange(filters.brixRange);
+  }, [filters.brixRange]);
+
   useEffect(() => {
     const loadFilters = async () => {
       try {
@@ -75,6 +82,21 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
     };
     loadFilters();
   }, []);
+
+  // For the slider's performance
+  const handleMinChange = (value: number) => {
+    const newMin = Math.min(Math.max(0, value), localBrixRange[1]);
+    setLocalBrixRange([newMin, localBrixRange[1]]);
+  };
+  
+  const handleMaxChange = (value: number) => {
+    const newMax = Math.max(Math.min(100, value), localBrixRange[0]);
+    setLocalBrixRange([localBrixRange[0], newMax]);
+  };
+  
+  const commitBrixRange = () => {
+    onFiltersChange({ ...filters, brixRange: localBrixRange, verifiedOnly: true });
+  };
 
   // Memoize filtered dropdown items for performance
   const filteredCategories = useMemo(() =>
@@ -232,17 +254,15 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
               <input
                 type="range"
                 min={0}
-                max={30}
+                max={100}
                 step={0.5}
-                value={filters.brixRange[0]}
-                onChange={(e) => {
-                  const val = Math.min(Number(e.target.value), filters.brixRange[1]);
-                  updateFilters('brixRange', [val, filters.brixRange[1]]);
-                }}
+                value={localBrixRange[0]}
+                onChange={(e) => handleMinChange(Number(e.target.value))}
+                onMouseUp={commitBrixRange}
                 id="min-brix-slider"
                 className="w-full h-3 bg-gradient-to-r from-blue-200 to-indigo-300 rounded-lg appearance-none cursor-pointer"
                 style={{
-                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(filters.brixRange[0] / 30) * 100}%, #e2e8f0 ${(filters.brixRange[0] / 30) * 100}%, #e2e8f0 100%)`
+                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(localBrixRange[0])}%, #e2e8f0 ${(localBrixRange[0])}%, #e2e8f0 100%)`
                 }}
               />
             </div>
@@ -250,14 +270,11 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
               <input
                 type="number"
                 min={0}
-                max={30}
+                max={100}
                 step={0.5}
-                value={filters.brixRange[0]}
-                onChange={(e) => {
-                  let val = Math.min(Number(e.target.value), filters.brixRange[1]);
-                  if (isNaN(val)) val = 0;
-                  updateFilters('brixRange', [val, filters.brixRange[1]]);
-                }}
+                value={localBrixRange[0]}
+                onChange={(e) => handleMinChange(Number(e.target.value))}
+                onBlur={commitBrixRange}
                 className="w-20 px-3 py-2 border-2 border-gray-200 rounded-lg text-center font-semibold focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
               <span className="text-sm font-medium text-gray-600">°Bx</span>
@@ -269,33 +286,28 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
             <div className="flex-1">
               <input
                 type="range"
-                min={filters.brixRange[0]}
-                max={30}
+                min={localBrixRange[0]}
+                max={100}
                 step={0.5}
-                value={filters.brixRange[1]}
-                onChange={(e) => {
-                  const val = Math.max(Number(e.target.value), filters.brixRange[0]);
-                  updateFilters('brixRange', [filters.brixRange[0], val]);
-                }}
+                value={localBrixRange[1]}
+                onChange={(e) => handleMaxChange(Number(e.target.value))}
+                onMouseUp={commitBrixRange}
                 id="max-brix-slider"
                 className="w-full h-3 bg-gradient-to-r from-blue-200 to-indigo-300 rounded-lg appearance-none cursor-pointer"
                 style={{
-                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(filters.brixRange[1] / 30) * 100}%, #e2e8f0 ${(filters.brixRange[1] / 30) * 100}%, #e2e8f0 100%)`
+                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(localBrixRange[1])}%, #e2e8f0 ${(localBrixRange[1])}%, #e2e8f0 100%)`
                 }}
               />
             </div>
             <div className="flex items-center space-x-2">
               <input
                 type="number"
-                min={filters.brixRange[0]}
-                max={30}
+                min={localBrixRange[0]}
+                max={100}
                 step={0.5}
-                value={filters.brixRange[1]}
-                onChange={(e) => {
-                  let val = Math.max(Number(e.target.value), filters.brixRange[0]);
-                  if (isNaN(val)) val = 30;
-                  updateFilters('brixRange', [filters.brixRange[0], val]);
-                }}
+                value={localBrixRange[1]}
+                onChange={(e) => handleMaxChange(Number(e.target.value))}
+                onBlur={commitBrixRange}
                 className="w-20 px-3 py-2 border-2 border-gray-200 rounded-lg text-center font-semibold focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
               <span className="text-sm font-medium text-gray-600">°Bx</span>
