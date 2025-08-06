@@ -205,26 +205,30 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       filter: ['!', ['has', 'point_count']],
       paint: {
         'circle-color': ['get', 'color'],
-        'circle-radius': 12,
+        'circle-radius': 16,
         'circle-stroke-width': 3,
         'circle-stroke-color': '#00000088',
         'circle-opacity': 0.9,
+        'circle-blur': 0.2,
       },
     });
 
-    map.on('click', 'clusters', (e) => {
+    map.on('click', 'clusters', async (e) => {
       const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
       const clusterId = features[0]?.properties?.cluster_id;
-      const source = map.getSource('points') as mapboxgl.GeoJSONSource;
     
       if (!clusterId) return;
     
-      source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-        if (err) return;
-        if (features[0].geometry.type === 'Point') {
-          const coords = features[0].geometry.coordinates as [number, number];
-          map.easeTo({ center: coords, zoom });
+      const source = map.getSource('points') as mapboxgl.GeoJSONSource;
+    
+      source.getClusterLeaves(clusterId, 100, 0, (err, leaves) => {
+        if (err) {
+          console.error('Error retrieving cluster leaves', err);
+          return;
         }
+    
+        // Show a modal with the list of leaves (data points inside the cluster)
+        console.log('Cluster contains these points:', leaves);
       });
     });
     
@@ -262,7 +266,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
 
     if (userLocation) {
       const center: [number, number] = [userLocation.lng, userLocation.lat];
-      const radiusMeters = 1609;
+      const radiusMeters = 1609 * 5; // 1 mile * 5 = 5 miles radius total
 
       const circleGeoJSON = createCircleGeoJSON(center, radiusMeters);
 
