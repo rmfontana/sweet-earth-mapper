@@ -102,6 +102,33 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
     setFilteredData(result);
   }, [filters, allData, userLocation]);
 
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+  
+    // Assume filters presence means sidebar visible, no filters means hidden
+    const filtersVisible = filters && Object.keys(filters).length > 0;
+  
+    // When filters hide, map container probably got bigger
+    if (!filtersVisible) {
+      // Tell Mapbox to resize
+      map.resize();
+  
+      // Optional: zoom out gently to show bigger area, but keep center same
+      const currentZoom = map.getZoom();
+      const newZoom = Math.max(currentZoom - 1, 5); // Zoom out by 1, min 5
+  
+      map.easeTo({
+        zoom: newZoom,
+        duration: 1000,
+      });
+    } else {
+      // If filters show, you might want to zoom back in or do nothing
+      // Optional: map.resize() anyway
+      map.resize();
+    }
+  }, [filters]);
+  
   const getDistanceInMiles = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 3959;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
