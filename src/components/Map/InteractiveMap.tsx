@@ -163,6 +163,17 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
     if (map.getSource('points')) {
       console.log('Updating existing source with', filteredData.length, 'points');
       (map.getSource('points') as mapboxgl.GeoJSONSource).setData(toGeoJSON(filteredData));
+      
+      // Fit map to show all data points
+      if (filteredData.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        filteredData.forEach(point => {
+          if (point.latitude && point.longitude) {
+            bounds.extend([point.longitude, point.latitude]);
+          }
+        });
+        map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
+      }
       return;
     }
 
@@ -171,18 +182,43 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       type: 'geojson',
       data: toGeoJSON(filteredData),
       cluster: true,
-      clusterMaxZoom: 14,
-      clusterRadius: 50,
+      clusterMaxZoom: 16, // Increased for better granularity
+      clusterRadius: 60,
+      clusterProperties: {
+        // Add aggregate properties for cluster styling
+        'avg_brix': ['/', ['+', ['get', 'brix']], ['get', 'point_count']]
+      }
     });
 
+    // Enhanced cluster styling with better visual hierarchy
     map.addLayer({
       id: 'clusters',
       type: 'circle',
       source: 'points',
       filter: ['has', 'point_count'],
       paint: {
-        'circle-color': '#6366f1',
-        'circle-radius': ['step', ['get', 'point_count'], 15, 10, 20, 50, 25],
+        'circle-color': [
+          'step',
+          ['get', 'point_count'],
+          'hsl(220, 70%, 60%)', // Primary blue for small clusters
+          5,
+          'hsl(45, 80%, 55%)', // Warning yellow for medium clusters  
+          15,
+          'hsl(350, 70%, 60%)', // Destructive red for large clusters
+        ],
+        'circle-radius': [
+          'step',
+          ['get', 'point_count'],
+          25, // Larger base size
+          5,
+          35,
+          15,
+          45,
+        ],
+        'circle-stroke-width': 3,
+        'circle-stroke-color': 'hsl(0, 0%, 100%)',
+        'circle-stroke-opacity': 0.8,
+        'circle-opacity': 0.85,
       },
     });
 
@@ -193,8 +229,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       filter: ['has', 'point_count'],
       layout: {
         'text-field': '{point_count_abbreviated}',
-        'text-font': ['Open Sans Bold'],
-        'text-size': 12,
+        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+        'text-size': 14,
+      },
+      paint: {
+        'text-color': 'hsl(0, 0%, 100%)',
+        'text-halo-color': 'hsl(0, 0%, 0%)',
+        'text-halo-width': 1,
       },
     });
 
@@ -205,33 +246,43 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       filter: ['!', ['has', 'point_count']],
       paint: {
         'circle-color': ['get', 'color'],
-        'circle-radius': 16,
-        'circle-stroke-width': 3,
-        'circle-stroke-color': '#00000088',
+        'circle-radius': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          10, 8,
+          16, 20,
+        ],
+        'circle-stroke-width': 2,
+        'circle-stroke-color': 'hsl(0, 0%, 100%)',
         'circle-opacity': 0.9,
-        'circle-blur': 0.2,
+        'circle-stroke-opacity': 0.8,
       },
     });
 
-    map.on('click', 'clusters', async (e) => {
+    // Proper cluster expansion on click
+    map.on('click', 'clusters', (e) => {
       const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
       const clusterId = features[0]?.properties?.cluster_id;
     
-      if (!clusterId) return;
+      if (!clusterId || features[0].geometry.type !== 'Point') return;
     
       const source = map.getSource('points') as mapboxgl.GeoJSONSource;
+      const coords = features[0].geometry.coordinates as [number, number];
     
-      source.getClusterLeaves(clusterId, 100, 0, (err, leaves) => {
+      source.getClusterExpansionZoom(clusterId, (err, zoom) => {
         if (err) {
-          console.error('Error retrieving cluster leaves', err);
+          console.error('Error getting cluster expansion zoom:', err);
           return;
         }
-    
-        // Show a modal with the list of leaves (data points inside the cluster)
-        console.log('Cluster contains these points:', leaves);
+        
+        map.easeTo({
+          center: coords,
+          zoom: zoom || map.getZoom() + 2,
+          duration: 800,
+        });
       });
     });
-    
 
     map.on('click', 'unclustered-point', (e) => {
       const feature = e.features?.[0];
@@ -239,6 +290,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       if (point) setSelectedPoint(point);
     });
 
+    // Enhanced hover effects
     map.on('mouseenter', 'clusters', () => {
       map.getCanvas().style.cursor = 'pointer';
     });
@@ -246,6 +298,25 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
     map.on('mouseleave', 'clusters', () => {
       map.getCanvas().style.cursor = '';
     });
+
+    map.on('mouseenter', 'unclustered-point', () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+
+    map.on('mouseleave', 'unclustered-point', () => {
+      map.getCanvas().style.cursor = '';
+    });
+
+    // Fit map to show all data points initially
+    if (filteredData.length > 0) {
+      const bounds = new mapboxgl.LngLatBounds();
+      filteredData.forEach(point => {
+        if (point.latitude && point.longitude) {
+          bounds.extend([point.longitude, point.latitude]);
+        }
+      });
+      map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
+    }
   }, [isMapLoaded, filteredData]);
 
   // Pan & zoom to userLocation when it changes
