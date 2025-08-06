@@ -78,17 +78,16 @@ const YourData = () => {
     const thresholds = brixThresholdsByCrop[cropType.toLowerCase().trim()];
 
     if (!thresholds) {
-      console.warn(`No thresholds found for cropType: "${key}"`);
+      console.warn(`No thresholds found for cropType: "${cropType}"`);
     return 'bg-gray-300';
   }
   
     const { poor, average, good, excellent } = thresholds;
   
-    if (brixLevel < poor) return 'bg-gray-400';
-    if (brixLevel < average) return 'bg-red-500';
-    if (brixLevel < good) return 'bg-orange-500';
-    if (brixLevel < excellent) return 'bg-yellow-500';
-    return 'bg-green-500';
+    if (brixLevel < poor) return 'bg-red-500';
+    if (brixLevel < average) return 'bg-orange-500';
+    if (brixLevel < good) return 'bg-yellow-500';
+    if (brixLevel < excellent) return 'bg-green-500';
   };
 
   const handleDelete = (id: string) => {
