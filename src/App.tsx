@@ -17,6 +17,7 @@ import NotFound from "./pages/NotFound";
 import VerifyEmailNotice from "./pages/VerifyEmailNotice";
 import Profile from './pages/Profile';
 import ProtectedRoute from './components/misc/ProtectedRoute';
+import DataPointEdit from "./pages/DataPointEdit";
 
 
 const queryClient = new QueryClient();
@@ -58,6 +59,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <DataPointDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/data-point/edit/:id"
+              element={
+                <ProtectedRoute>
+                  <DataPointEdit />
                 </ProtectedRoute>
               }
             />

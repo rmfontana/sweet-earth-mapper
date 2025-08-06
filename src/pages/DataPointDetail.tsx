@@ -101,6 +101,7 @@ const DataPointDetail = () => {
   };
 
   const isOwner = user?.display_name === dataPoint.submittedBy;
+  const dataPointLocationName = dataPoint.locationName || dataPoint.location?.name || 'Unknown';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -142,7 +143,7 @@ const DataPointDetail = () => {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => navigate(`/data/edit/${dataPoint.id}`)}
+                      onClick={() => navigate(`/data-point/edit/${dataPoint.id}`)}
                     >
                       <Edit className="w-4 h-4 mr-1" />
                       Edit
@@ -159,30 +160,33 @@ const DataPointDetail = () => {
             <CardContent className="space-y-6">
               {/* BRIX Reading */}
               <div className="bg-gray-50 rounded-lg p-6 text-center">
-                <div className="flex items-center justify-center space-x-4 mb-4">
-                  <div className={`w-16 h-16 rounded-full ${getBrixColor(dataPoint.brixLevel)} flex items-center justify-center`}>
-                    <span className="text-white font-bold text-xl">{dataPoint.brixLevel}</span>
-                  </div>
-                  <div className="text-left">
-                    <p className="text-2xl font-bold text-gray-900">{dataPoint.brixLevel} BRIX</p>
-                    <p className="text-sm text-gray-600">Refractometer Reading</p>
-                    <Badge className={`mt-1 ${getBrixColor(dataPoint.brixLevel)} text-white`}>
-                      {getBrixQuality(dataPoint.brixLevel)} Quality
-                    </Badge>
-                  </div>
+              <div className="flex items-center justify-center space-x-4 mb-4">
+                <div className={`w-16 h-16 rounded-full ${getBrixColor(dataPoint.brixLevel)} flex items-center justify-center`}>
+                  <span className="text-white font-bold text-xl">{dataPoint.brixLevel}</span>
+                </div>
+                <div className="text-left">
+                  <p className="text-2xl font-bold text-gray-900">{dataPoint.brixLevel} BRIX</p>
+                  <p className="text-sm text-gray-600">Refractometer Reading</p>
+                  <Badge className={`mt-1 ${getBrixColor(dataPoint.brixLevel)} text-white`}>
+                    {getBrixQuality(dataPoint.brixLevel)} Quality
+                  </Badge>
                 </div>
               </div>
+            </div>
 
-              {/* Measurement Details */}
+              {/* Measurement & Submission Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Assessment Date */}
                 <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
                   <Calendar className="w-5 h-5 text-gray-600" />
                   <div>
-                    <p className="text-sm text-gray-600">Measurement Date</p>
-                    <p className="font-medium">{new Date(dataPoint.measurementDate).toLocaleDateString()}</p>
+                    <p className="text-sm text-gray-600">Assessment Date</p>
+                    <p className="font-medium">{new Date(dataPoint.submittedAt).toLocaleDateString()}</p>
                   </div>
                 </div>
 
+                {/* Submitted By */}
                 <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
                   <User className="w-5 h-5 text-gray-600" />
                   <div>
@@ -191,29 +195,97 @@ const DataPointDetail = () => {
                   </div>
                 </div>
 
+                {/* Verified Status */}
                 <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
-                  <MapPin className="w-5 h-5 text-gray-600" />
-                  <div>
-                    <p className="text-sm text-gray-600">Location</p>
-                    <p className="font-medium">{dataPoint.latitude.toFixed(4)}, {dataPoint.longitude.toFixed(4)}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
-                  <CheckCircle className="w-5 h-5 text-gray-600" />
+                  {dataPoint.verified ? (
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-yellow-500" />
+                  )}
                   <div>
                     <p className="text-sm text-gray-600">Verification Status</p>
                     <p className="font-medium">{dataPoint.verified ? 'Verified' : 'Pending'}</p>
                   </div>
                 </div>
+
+                {/* Verified By */}
+                {dataPoint.verified && dataPoint.verifiedBy && (
+                  <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <User className="w-5 h-5 text-gray-600" />
+                    <div>
+                      <p className="text-sm text-gray-600">Verified By</p>
+                      <p className="font-medium">{dataPoint.verifiedBy}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Crop Variety */}
+                {dataPoint.label && (
+                  <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <Badge variant="outline" className="text-gray-700">
+                      Variety: {dataPoint.label}
+                    </Badge>
+                  </div>
+                )}
+
+                {/* Crop Category */}
+                {cropData?.category && (
+                  <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <Badge variant="secondary" className="text-gray-700">
+                      Category: {cropData.category}
+                    </Badge>
+                  </div>
+                )}
+
+                {/* Location Name + Coordinates */}
+                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                  <MapPin className="w-5 h-5 text-gray-600" />
+                  <div>
+                    <p className="text-sm text-gray-600">Location</p>
+                    <p className="font-medium">{dataPointLocationName}</p>
+                    <p className="text-xs text-gray-500">
+                      {dataPoint.latitude.toFixed(4)}, {dataPoint.longitude.toFixed(4)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Store Name */}
+                {dataPoint.storeName && (
+                  <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <MapPin className="w-5 h-5 text-gray-600" />
+                    <div>
+                      <p className="text-sm text-gray-600">Store</p>
+                      <p className="font-medium">{dataPoint.storeName}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Brand Name */}
+                {dataPoint.brandName && (
+                  <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <User className="w-5 h-5 text-gray-600" />
+                    <div>
+                      <p className="text-sm text-gray-600">Brand</p>
+                      <p className="font-medium">{dataPoint.brandName}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Notes */}
-              {dataPoint.notes && (
+              {/* Submission Images */}
+              {dataPoint.images && dataPoint.images.length > 0 && (
                 <div>
-                  <h3 className="font-semibold mb-2">Notes</h3>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-gray-700">{dataPoint.notes}</p>
+                  <h3 className="font-semibold mb-2 mt-8">Submission Images</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {dataPoint.images.map((url: string, idx: number) => (
+                      <img
+                        key={idx}
+                        src={url}
+                        alt={`Submission Image ${idx + 1}`}
+                        className="rounded-lg shadow-md object-cover w-full h-32 sm:h-40"
+                        loading="lazy"
+                      />
+                    ))}
                   </div>
                 </div>
               )}
