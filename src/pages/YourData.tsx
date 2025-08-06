@@ -88,6 +88,7 @@ const YourData = () => {
     if (brixLevel < average) return 'bg-orange-500';
     if (brixLevel < good) return 'bg-yellow-500';
     if (brixLevel < excellent) return 'bg-green-500';
+    return 'bg-green-500';
   };
 
   const handleDelete = (id: string) => {
