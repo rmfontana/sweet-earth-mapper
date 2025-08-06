@@ -111,7 +111,7 @@ const MapView = () => {
             <Card>
               <CardContent className="p-0">
                 <div className="h-[600px] w-full relative">
-                  <InteractiveMap filters={filters} userLocation={userLocation} />
+                  <InteractiveMap filters={filters} userLocation={userLocation} showFilters={showFilters}/>
                 </div>
               </CardContent>
             </Card>

@@ -21,6 +21,7 @@ interface InteractiveMapProps {
     nearbyOnly?: boolean;
   };
   userLocation?: { lat: number; lng: number } | null;
+  showFilters: boolean;
 }
 
 async function getMapboxToken() {
@@ -43,7 +44,7 @@ async function getMapboxToken() {
   }
 }
 
-const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }) => {
+const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation, showFilters }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [allData, setAllData] = useState<BrixDataPoint[]>([]);
@@ -104,30 +105,17 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
 
   useEffect(() => {
     if (!mapRef.current) return;
-    const map = mapRef.current;
+    mapRef.current.resize();
   
-    // Assume filters presence means sidebar visible, no filters means hidden
-    const filtersVisible = filters && Object.keys(filters).length > 0;
-  
-    // When filters hide, map container probably got bigger
-    if (!filtersVisible) {
-      // Tell Mapbox to resize
-      map.resize();
-  
-      // Optional: zoom out gently to show bigger area, but keep center same
-      const currentZoom = map.getZoom();
-      const newZoom = Math.max(currentZoom - 1, 5); // Zoom out by 1, min 5
-  
-      map.easeTo({
-        zoom: newZoom,
-        duration: 1000,
+    // Optional: zoom out a bit to show expanded map area when filters hide
+    if (!showFilters) {
+      const currentZoom = mapRef.current.getZoom();
+      mapRef.current.easeTo({
+        zoom: Math.max(currentZoom - 1, 5), // zoom out by 1, min zoom 5
+        duration: 700,
       });
-    } else {
-      // If filters show, you might want to zoom back in or do nothing
-      // Optional: map.resize() anyway
-      map.resize();
     }
-  }, [filters]);
+  }, [showFilters]);
   
   const getDistanceInMiles = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 3959;
