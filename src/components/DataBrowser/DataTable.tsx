@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { BrixDataPoint, MapFilter } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -16,39 +16,29 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
-
-// Simple debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-
-  return debounced;
-}
+import { createClient } from '@supabase/supabase-js';
+import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
 
 const DataTable: React.FC = () => {
-  // --- State ---
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getPublishableKey();
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
   const [data, setData] = useState<BrixDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-
+  const [itemsPerPage] = useState(10);
   const [sortBy, setSortBy] = useState<keyof BrixDataPoint>('submittedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
-
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
   const [cropTypes, setCropTypes] = useState<string[]>([]);
 
+  // We'll keep verifiedOnly filter only if admin, else force true
   const [filters, setFilters] = useState<MapFilter>({
     cropTypes: [],
     brixRange: [0, 30],
@@ -56,7 +46,50 @@ const DataTable: React.FC = () => {
     verifiedOnly: false,
   });
 
-  // --- Fetch data on mount ---
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Load user role from Supabase on mount
+  useEffect(() => {
+    const getUserRole = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+
+      // Assuming your Supabase RBAC or custom claims have "role" or admin flag
+      // Replace the following check with your actual role check method:
+      const { data: profile, error } = await supabase
+        .from('profiles') // or wherever you store roles
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (error || !profile) {
+        setIsAdmin(false);
+        return;
+      }
+
+      setIsAdmin(profile.role === 'admin'); // adjust 'admin' string as needed
+    };
+
+    getUserRole();
+  }, [supabase]);
+
+  // After we know isAdmin, update verifiedOnly filter accordingly:
+  useEffect(() => {
+    if (!isAdmin) {
+      setFilters((prev) => ({ ...prev, verifiedOnly: true }));
+    } else {
+      // Allow toggling for admins - default false or keep previous
+      setFilters((prev) => ({ ...prev, verifiedOnly: prev.verifiedOnly ?? false }));
+    }
+  }, [isAdmin]);
+
+  // Fetch submissions on mount
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -67,10 +100,12 @@ const DataTable: React.FC = () => {
         const uniqueCropTypes = Array.from(
           new Set(submissions.map((s) => s.cropType).filter(Boolean))
         ).sort();
+
         setCropTypes(uniqueCropTypes);
 
         setError(null);
       } catch (err) {
+        console.error('Error fetching submissions:', err);
         setError('Failed to load data');
         setData([]);
         setCropTypes([]);
@@ -85,34 +120,37 @@ const DataTable: React.FC = () => {
   // Reset to page 1 when filters or search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters, debouncedSearchTerm]);
+  }, [filters, searchTerm]);
 
-  // --- Filter + Sort data ---
   const filteredData = useMemo(() => {
     let filtered = data.filter((point) => {
-      // Search across multiple fields (cropType, submittedBy, storeName)
-      if (debouncedSearchTerm) {
-        const searchLower = debouncedSearchTerm.toLowerCase();
-        const match =
-          point.cropType.toLowerCase().includes(searchLower) ||
-          point.submittedBy.toLowerCase().includes(searchLower) ||
-          (point.storeName?.toLowerCase().includes(searchLower) ?? false);
-        if (!match) return false;
+      // Force verified only if not admin
+      if (!isAdmin && !point.verified) {
+        return false;
+      }
+
+      // If admin and verifiedOnly filter is on, filter unverified out
+      if (isAdmin && filters.verifiedOnly && !point.verified) {
+        return false;
+      }
+
+      // Search filter across multiple fields
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        const matches =
+          (point.cropType && point.cropType.toLowerCase().includes(searchLower)) ||
+          (point.submittedBy && point.submittedBy.toLowerCase().includes(searchLower));
+
+        if (!matches) return false;
       }
 
       // Crop types filter
-      if (
-        filters.cropTypes.length > 0 &&
-        !filters.cropTypes.includes(point.cropType)
-      ) {
+      if (filters.cropTypes.length > 0 && !filters.cropTypes.includes(point.cropType)) {
         return false;
       }
 
       // Brix range filter
-      if (
-        point.brixLevel < filters.brixRange[0] ||
-        point.brixLevel > filters.brixRange[1]
-      ) {
+      if (point.brixLevel < filters.brixRange[0] || point.brixLevel > filters.brixRange[1]) {
         return false;
       }
 
@@ -120,21 +158,16 @@ const DataTable: React.FC = () => {
       const submittedDate = new Date(point.submittedAt).getTime();
       const startDate = new Date(filters.dateRange[0]).getTime();
       const endDate = new Date(filters.dateRange[1]).getTime();
-      if (submittedDate < startDate || submittedDate > endDate) {
-        return false;
-      }
 
-      // Verified only filter
-      if (filters.verifiedOnly && !point.verified) {
+      if (submittedDate < startDate || submittedDate > endDate) {
         return false;
       }
 
       return true;
     });
 
-    // Sort
-    filtered = [...filtered];
-    filtered.sort((a, b) => {
+    // Sorting
+    filtered = [...filtered].sort((a, b) => {
       let aValue = a[sortBy];
       let bValue = b[sortBy];
 
@@ -151,20 +184,13 @@ const DataTable: React.FC = () => {
     });
 
     return filtered;
-  }, [data, filters, debouncedSearchTerm, sortBy, sortOrder]);
+  }, [data, searchTerm, filters, sortBy, sortOrder, isAdmin]);
 
-  // --- Pagination ---
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
-
-  // Clamp current page if it goes out of range due to filtering
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [currentPage, totalPages]);
-
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
-  // --- Event Handlers ---
   const handleSort = (column: keyof BrixDataPoint) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -174,18 +200,6 @@ const DataTable: React.FC = () => {
     }
   };
 
-  // Crop Types Select All / Clear
-  const selectAllCrops = () => setFilters((prev) => ({ ...prev, cropTypes: [...cropTypes] }));
-  const clearAllCrops = () => setFilters((prev) => ({ ...prev, cropTypes: [] }));
-  const clearFilters = () =>
-    setFilters({
-      cropTypes: [],
-      brixRange: [0, 30],
-      dateRange: ['2024-01-01', '2024-12-31'],
-      verifiedOnly: false,
-    });
-
-  // Brix color helper
   const getBrixColor = (brixLevel: number) => {
     if (brixLevel < 10) return 'bg-red-100 text-red-800';
     if (brixLevel < 15) return 'bg-orange-100 text-orange-800';
@@ -193,91 +207,12 @@ const DataTable: React.FC = () => {
     return 'bg-green-100 text-green-800';
   };
 
-  // --- Helper Components ---
-  // Pagination button with accessibility props
-  const PageButton: React.FC<{
-    page: number;
-    active: boolean;
-    onClick: () => void;
-  }> = ({ page, active, onClick }) => (
-    <Button
-      onClick={onClick}
-      variant={active ? 'default' : 'outline'}
-      size="sm"
-      aria-current={active ? 'page' : undefined}
-      aria-label={`Page ${page}`}
-      className="rounded-none"
-    >
-      {page}
-    </Button>
-  );
-
-  // Render pagination with ellipsis logic
-  const renderPaginationButtons = () => {
-    if (totalPages <= 1) return null;
-
-    const pages: (number | 'ellipsis')[] = [];
-
-    // Always show first and last
-    // Show current page ±1
-    // Insert ellipsis if gap > 1
-
-    for (let page = 1; page <= totalPages; page++) {
-      if (
-        page === 1 ||
-        page === totalPages ||
-        (page >= currentPage - 1 && page <= currentPage + 1)
-      ) {
-        pages.push(page);
-      } else if (
-        page === 2 && currentPage > 4 ||
-        page === totalPages - 1 && currentPage < totalPages - 3
-      ) {
-        pages.push('ellipsis');
-      }
-    }
-
-    // Remove duplicates and sort
-    const uniquePages = [...new Set(pages)].sort((a, b) => {
-      if (a === 'ellipsis') return 1;
-      if (b === 'ellipsis') return -1;
-      return (a as number) - (b as number);
-    });
-
-    // Render buttons and ellipsis
-    return uniquePages.map((page, i) =>
-      page === 'ellipsis' ? (
-        <span key={`ellipsis-${i}`} className="px-2 select-none">
-          ...
-        </span>
-      ) : (
-        <PageButton
-          key={page}
-          page={page as number}
-          active={currentPage === page}
-          onClick={() => setCurrentPage(page as number)}
-        />
-      )
-    );
-  };
-
-  // --- Render ---
-
-  // Loading / Error
   if (loading) {
-    return (
-      <div className="py-12 text-center text-gray-600" role="status" aria-live="polite">
-        Loading data...
-      </div>
-    );
+    return <div className="py-12 text-center text-gray-600">Loading data...</div>;
   }
 
   if (error) {
-    return (
-      <div className="py-12 text-center text-red-600" role="alert">
-        {error}
-      </div>
-    );
+    return <div className="py-12 text-center text-red-600">{error}</div>;
   }
 
   return (
@@ -288,67 +223,34 @@ const DataTable: React.FC = () => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
             <CardTitle>Brix Data Browser</CardTitle>
             <div className="flex items-center space-x-2">
-              {/* Search Input */}
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <Input
-                  placeholder="Search crops, submitters, or stores..."
+                  placeholder="Search crops, varieties, or submitters..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 w-80"
-                  aria-label="Search data table"
                 />
               </div>
-
-              {/* Filters toggle with badge */}
               <Button
                 variant="outline"
                 onClick={() => setShowFilters(!showFilters)}
                 className="flex items-center space-x-2"
-                aria-pressed={showFilters}
-                aria-label="Toggle filters panel"
               >
                 <Filter className="w-4 h-4" />
                 <span>Filters</span>
-                {Object.values(filters).some((val) =>
-                  Array.isArray(val) ? val.length > 0 : val
-                ) && (
-                  <Badge className="ml-1 bg-blue-100 text-blue-800">Active</Badge>
-                )}
               </Button>
-
-              {/* Clear all filters */}
-              {showFilters && (
-                <Button
-                  variant="ghost"
-                  onClick={clearFilters}
-                  className="ml-2"
-                  size="sm"
-                  aria-label="Clear all filters"
-                >
-                  Clear Filters
-                </Button>
-              )}
             </div>
           </div>
         </CardHeader>
 
-        {/* Filters Panel */}
         {showFilters && (
           <CardContent className="border-t bg-gray-50">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Crop Type Filter */}
               <div>
                 <label className="block text-sm font-medium mb-2">Crop Types</label>
-                <div className="flex space-x-2 mb-2">
-                  <Button size="sm" variant="outline" onClick={selectAllCrops} aria-label="Select all crop types">
-                    Select All
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={clearAllCrops} aria-label="Clear all crop types">
-                    Clear
-                  </Button>
-                </div>
-                <div className="space-y-2 max-h-32 overflow-y-auto border p-2 rounded bg-white">
+                <div className="space-y-2 max-h-32 overflow-y-auto">
                   {cropTypes.map((crop) => (
                     <div key={crop} className="flex items-center space-x-2">
                       <Checkbox
@@ -366,11 +268,8 @@ const DataTable: React.FC = () => {
                             }));
                           }
                         }}
-                        id={`crop-${crop}`}
                       />
-                      <label htmlFor={`crop-${crop}`} className="text-sm cursor-pointer">
-                        {crop}
-                      </label>
+                      <label className="text-sm">{crop}</label>
                     </div>
                   ))}
                 </div>
@@ -384,29 +283,23 @@ const DataTable: React.FC = () => {
                     type="number"
                     placeholder="Min Brix"
                     value={filters.brixRange[0]}
-                    min={0}
-                    max={30}
                     onChange={(e) =>
                       setFilters((prev) => ({
                         ...prev,
                         brixRange: [Number(e.target.value), prev.brixRange[1]],
                       }))
                     }
-                    aria-label="Minimum Brix level"
                   />
                   <Input
                     type="number"
                     placeholder="Max Brix"
                     value={filters.brixRange[1]}
-                    min={0}
-                    max={30}
                     onChange={(e) =>
                       setFilters((prev) => ({
                         ...prev,
                         brixRange: [prev.brixRange[0], Number(e.target.value)],
                       }))
                     }
-                    aria-label="Maximum Brix level"
                   />
                 </div>
               </div>
@@ -424,7 +317,6 @@ const DataTable: React.FC = () => {
                         dateRange: [e.target.value, prev.dateRange[1]],
                       }))
                     }
-                    aria-label="Start date"
                   />
                   <Input
                     type="date"
@@ -435,30 +327,28 @@ const DataTable: React.FC = () => {
                         dateRange: [prev.dateRange[0], e.target.value],
                       }))
                     }
-                    aria-label="End date"
                   />
                 </div>
               </div>
 
-              {/* Verified Only */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Options</label>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={filters.verifiedOnly}
-                    onCheckedChange={(checked) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        verifiedOnly: !!checked,
-                      }))
-                    }
-                    id="verified-only"
-                  />
-                  <label htmlFor="verified-only" className="text-sm cursor-pointer">
-                    Verified only
-                  </label>
+              {/* Verified Only Filter: only visible to admins */}
+              {isAdmin && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Options</label>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      checked={filters.verifiedOnly}
+                      onCheckedChange={(checked) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          verifiedOnly: !!checked,
+                        }))
+                      }
+                    />
+                    <label className="text-sm">Verified only</label>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </CardContent>
         )}
@@ -471,35 +361,42 @@ const DataTable: React.FC = () => {
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  {[
-                    { label: 'Crop Type', key: 'cropType' },
-                    { label: 'Brix Level', key: 'brixLevel' },
-                    { label: 'Date', key: 'submittedAt' },
-                    { label: 'Submitted By', key: 'submittedBy' },
-                  ].map(({ label, key }) => (
-                    <th
-                      key={key}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
-                      onClick={() => handleSort(key as keyof BrixDataPoint)}
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          handleSort(key as keyof BrixDataPoint);
-                        }
-                      }}
-                      role="button"
-                      aria-sort={
-                        sortBy === key ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'
-                      }
-                      aria-label={`Sort by ${label}`}
-                    >
-                      {label}
-                      {sortBy === key && (
-                        <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                      )}
-                    </th>
-                  ))}
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('cropType')}
+                  >
+                    Crop Type
+                    {sortBy === 'cropType' && (
+                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </th>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('brixLevel')}
+                  >
+                    Brix Level
+                    {sortBy === 'brixLevel' && (
+                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </th>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('submittedAt')}
+                  >
+                    Date
+                    {sortBy === 'submittedAt' && (
+                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </th>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('submittedBy')}
+                  >
+                    Submitted By
+                    {sortBy === 'submittedBy' && (
+                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
@@ -508,54 +405,40 @@ const DataTable: React.FC = () => {
                   </th>
                 </tr>
               </thead>
-
               <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedData.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-20 text-center text-gray-500 text-lg">
-                      No data matches your filters or search.
+                {paginatedData.map((point) => (
+                  <tr key={point.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{point.cropType}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Badge className={getBrixColor(point.brixLevel)}>{point.brixLevel}°</Badge>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(point.submittedAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {point.submittedBy}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {point.verified ? (
+                        <div className="flex items-center text-green-600">
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          <span className="text-sm">Verified</span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">Pending</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedPoint(point)}>
+                        View Details
+                      </Button>
                     </td>
                   </tr>
-                ) : (
-                  paginatedData.map((point) => (
-                    <tr key={point.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{point.cropType}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge className={getBrixColor(point.brixLevel)}>
-                          {point.brixLevel}
-                          </Badge>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(point.submittedAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {point.submittedBy}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {point.verified ? (
-                          <div className="flex items-center text-green-600">
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            <span className="text-sm">Verified</span>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-500">Pending</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedPoint(point)}
-                          aria-label={`View details for ${point.cropType} submitted by ${point.submittedBy}`}
-                        >
-                          View Details
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>
@@ -567,7 +450,6 @@ const DataTable: React.FC = () => {
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
                 variant="outline"
-                aria-label="Previous page"
               >
                 Previous
               </Button>
@@ -575,44 +457,54 @@ const DataTable: React.FC = () => {
                 onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
                 variant="outline"
-                aria-label="Next page"
               >
                 Next
               </Button>
             </div>
-
             <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm text-gray-700">
                   Showing{' '}
-                  <span className="font-medium">{filteredData.length === 0 ? 0 : startIndex + 1}</span>
-                  {' '}to{' '}
+                  <span className="font-medium">{startIndex + 1}</span> to{' '}
                   <span className="font-medium">
                     {Math.min(startIndex + itemsPerPage, filteredData.length)}
-                  </span>
-                  {' '}of{' '}
-                  <span className="font-medium">{filteredData.length}</span>
-                  {' '}results
+                  </span>{' '}
+                  of <span className="font-medium">{filteredData.length}</span> results
                 </p>
               </div>
-
               <div>
-                <nav
-                  className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
-                  aria-label="Pagination"
-                >
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                   <Button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
                     variant="outline"
                     size="sm"
                     className="rounded-l-md"
-                    aria-label="Previous page"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
 
-                  {renderPaginationButtons()}
+                  {[...Array(totalPages)].map((_, i) => {
+                    const page = i + 1;
+                    if (
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    ) {
+                      return (
+                        <Button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          variant={page === currentPage ? 'default' : 'outline'}
+                          size="sm"
+                        >
+                          {page}
+                        </Button>
+                      );
+                    }
+                    // For brevity, skip rendering pages too far away, but you could add ellipsis here.
+                    return null;
+                  })}
 
                   <Button
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
@@ -620,7 +512,6 @@ const DataTable: React.FC = () => {
                     variant="outline"
                     size="sm"
                     className="rounded-r-md"
-                    aria-label="Next page"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -631,64 +522,33 @@ const DataTable: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Detail Modal */}
+      {/* Selected Point Modal or Details (if you have one) */}
       {selectedPoint && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title"
-        >
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle id="modal-title" className="flex items-center space-x-2">
-                    <span>{selectedPoint.cropType}</span>
-                    {selectedPoint.verified && (
-                      <CheckCircle className="w-5 h-5 text-green-600" aria-label="Verified" />
-                    )}
-                  </CardTitle>
-                </div>
-                <Button
-                  variant="ghost"
-                  onClick={() => setSelectedPoint(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                  aria-label="Close details modal"
-                >
-                  ×
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Brix Level</span>
-                  <Badge className={getBrixColor(selectedPoint.brixLevel)}>
-                    {selectedPoint.brixLevel}°
-                  </Badge>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Calendar className="w-4 h-4 text-gray-500" />
-                  <span>{new Date(selectedPoint.submittedAt).toLocaleDateString()}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <User className="w-4 h-4 text-gray-500" />
-                  <span>{selectedPoint.submittedBy}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <MapPin className="w-4 h-4 text-gray-500" />
-                  <span>
-                    {selectedPoint.latitude.toFixed(4)}, {selectedPoint.longitude.toFixed(4)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-xs text-gray-500 border-t pt-4">
-                Submitted on {new Date(selectedPoint.submittedAt).toLocaleString()}
-              </div>
-            </CardContent>
-          </Card>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full relative">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+              onClick={() => setSelectedPoint(null)}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+            <h2 className="text-xl font-semibold mb-4">{selectedPoint.cropType} Details</h2>
+            <p>
+              <strong>Brix Level:</strong> {selectedPoint.brixLevel}°
+            </p>
+            <p>
+              <strong>Submitted By:</strong> {selectedPoint.submittedBy}
+            </p>
+            <p>
+              <strong>Date:</strong> {new Date(selectedPoint.submittedAt).toLocaleDateString()}
+            </p>
+            <p>
+              <strong>Status:</strong>{' '}
+              {selectedPoint.verified ? 'Verified' : 'Pending Verification'}
+            </p>
+            {/* Add more details as needed */}
+          </div>
         </div>
       )}
     </div>
