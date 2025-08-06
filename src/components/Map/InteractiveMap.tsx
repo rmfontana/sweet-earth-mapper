@@ -49,6 +49,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
   const [allData, setAllData] = useState<BrixDataPoint[]>([]);
   const [filteredData, setFilteredData] = useState<BrixDataPoint[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
 
   useEffect(() => {
     console.log('Fetching submissions...');
@@ -72,9 +73,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
 
     console.log('Applying filters to', allData.length, 'submissions');
     const result = allData.filter((point) => {
-      // Ensure coordinates are valid (additional safety check)
-      if (!point.latitude || !point.longitude || 
-          isNaN(point.latitude) || isNaN(point.longitude)) {
+      if (!point.latitude || !point.longitude || isNaN(point.latitude) || isNaN(point.longitude)) {
         console.warn('Filtering out point with invalid coordinates:', point.id);
         return false;
       }
@@ -139,110 +138,114 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       mapRef.current = map;
 
       map.on('load', () => {
-        console.log('Map loaded, adding initial data source...');
-        map.addSource('points', {
-          type: 'geojson',
-          data: toGeoJSON(filteredData),
-          cluster: true,
-          clusterMaxZoom: 14,
-          clusterRadius: 50,
-        });
-
-        map.addLayer({
-          id: 'clusters',
-          type: 'circle',
-          source: 'points',
-          filter: ['has', 'point_count'],
-          paint: {
-            'circle-color': '#6366f1',
-            'circle-radius': ['step', ['get', 'point_count'], 15, 10, 20, 50, 25],
-          },
-        });
-
-        map.addLayer({
-          id: 'cluster-count',
-          type: 'symbol',
-          source: 'points',
-          filter: ['has', 'point_count'],
-          layout: {
-            'text-field': '{point_count_abbreviated}',
-            'text-font': ['Open Sans Bold'],
-            'text-size': 12,
-          },
-        });
-
-        map.addLayer({
-          id: 'unclustered-point',
-          type: 'circle',
-          source: 'points',
-          filter: ['!', ['has', 'point_count']],
-          paint: {
-            'circle-color': ['get', 'color'],
-            'circle-radius': 8,
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#fff',
-          },
-        });
-
-        map.on('click', 'clusters', (e) => {
-          const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-          const clusterId = features[0].properties?.cluster_id;
-          const source = map.getSource('points') as mapboxgl.GeoJSONSource;
-
-          source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-            if (err || !features[0].geometry) return;
-            map.easeTo({
-              center: (features[0].geometry as any).coordinates,
-              zoom,
-            });
-          });
-        });
-
-        map.on('click', 'unclustered-point', (e) => {
-          const feature = e.features?.[0];
-          const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
-          if (point) setSelectedPoint(point);
-        });
-
-        map.on('mouseenter', 'clusters', () => {
-          map.getCanvas().style.cursor = 'pointer';
-        });
-        map.on('mouseleave', 'clusters', () => {
-          map.getCanvas().style.cursor = '';
-        });
+        console.log('Map loaded');
+        setIsMapLoaded(true);
       });
     }
 
     initializeMap();
 
-    // Cleanup on unmount
     return () => {
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
+        setIsMapLoaded(false);
       }
     };
   }, []);
 
-  // Update map source data on filteredData changes
+  // Add or update source and layers after map loaded or filteredData changed
   useEffect(() => {
-    if (mapRef.current && mapRef.current.isStyleLoaded()) {
-      console.log('Updating map with', filteredData.length, 'data points');
-      const source = mapRef.current.getSource('points') as mapboxgl.GeoJSONSource | undefined;
-      if (source) {
-        const geoJsonData = toGeoJSON(filteredData);
-        console.log('Generated GeoJSON with', geoJsonData.features.length, 'features');
-        source.setData(geoJsonData);
-      }
+    if (!mapRef.current || !isMapLoaded) return;
+
+    const map = mapRef.current;
+
+    if (map.getSource('points')) {
+      console.log('Updating existing source with', filteredData.length, 'points');
+      (map.getSource('points') as mapboxgl.GeoJSONSource).setData(toGeoJSON(filteredData));
+      return;
     }
-  }, [filteredData]);
+
+    console.log('Adding source and layers with', filteredData.length, 'points');
+    map.addSource('points', {
+      type: 'geojson',
+      data: toGeoJSON(filteredData),
+      cluster: true,
+      clusterMaxZoom: 14,
+      clusterRadius: 50,
+    });
+
+    map.addLayer({
+      id: 'clusters',
+      type: 'circle',
+      source: 'points',
+      filter: ['has', 'point_count'],
+      paint: {
+        'circle-color': '#6366f1',
+        'circle-radius': ['step', ['get', 'point_count'], 15, 10, 20, 50, 25],
+      },
+    });
+
+    map.addLayer({
+      id: 'cluster-count',
+      type: 'symbol',
+      source: 'points',
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': '{point_count_abbreviated}',
+        'text-font': ['Open Sans Bold'],
+        'text-size': 12,
+      },
+    });
+
+    map.addLayer({
+      id: 'unclustered-point',
+      type: 'circle',
+      source: 'points',
+      filter: ['!', ['has', 'point_count']],
+      paint: {
+        'circle-color': ['get', 'color'],
+        'circle-radius': 8,
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#fff',
+      },
+    });
+
+    map.on('click', 'clusters', (e) => {
+      const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+      const clusterId = features[0].properties?.cluster_id;
+      const source = map.getSource('points') as mapboxgl.GeoJSONSource;
+
+      source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+        if (err || !features[0].geometry) return;
+        map.easeTo({
+          center: (features[0].geometry as any).coordinates,
+          zoom,
+        });
+      });
+    });
+
+    map.on('click', 'unclustered-point', (e) => {
+      const feature = e.features?.[0];
+      const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
+      if (point) setSelectedPoint(point);
+    });
+
+    map.on('mouseenter', 'clusters', () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+
+    map.on('mouseleave', 'clusters', () => {
+      map.getCanvas().style.cursor = '';
+    });
+  }, [isMapLoaded, filteredData]);
 
   // Pan & zoom to userLocation when it changes
   useEffect(() => {
     if (mapRef.current && userLocation) {
       mapRef.current.easeTo({
         center: [userLocation.lng, userLocation.lat],
-        zoom: 14, // Adjust zoom as needed
+        zoom: 14,
         duration: 1000,
       });
     }
@@ -255,7 +258,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
 
     if (userLocation) {
       const center: [number, number] = [userLocation.lng, userLocation.lat];
-      const radiusMeters = 1609; // 1 mile in meters
+      const radiusMeters = 1609;
 
       const circleGeoJSON = createCircleGeoJSON(center, radiusMeters);
 
@@ -288,7 +291,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
         });
       }
     } else {
-      // Remove radius if no user location
       if (map.getLayer('user-radius-fill')) map.removeLayer('user-radius-fill');
       if (map.getLayer('user-radius-outline')) map.removeLayer('user-radius-outline');
       if (map.getSource('user-radius')) map.removeSource('user-radius');
@@ -328,9 +330,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
     console.log('Converting', data.length, 'data points to GeoJSON');
     
     const features = data.map((point) => {
-      // Double-check coordinates are valid
-      if (!point.latitude || !point.longitude || 
-          isNaN(point.latitude) || isNaN(point.longitude)) {
+      if (!point.latitude || !point.longitude || isNaN(point.latitude) || isNaN(point.longitude)) {
         console.warn('Skipping point with invalid coordinates:', point);
         return null;
       }
@@ -348,7 +348,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
           raw: JSON.stringify(point),
         },
       };
-    }).filter(Boolean); // Remove null values
+    }).filter(Boolean);
 
     console.log('Generated', features.length, 'valid GeoJSON features');
     
