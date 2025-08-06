@@ -5,8 +5,22 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
-import { Calendar, X } from 'lucide-react';
+import { ChevronDown, Check, Calendar, X } from 'lucide-react';
 import { fetchCropTypes } from '@/lib/fetchCropTypes'; 
+
+import {
+  Command,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandEmpty,
+} from "@/components/ui/command";
+
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 interface MapFiltersProps {
   filters: {
@@ -74,42 +88,64 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
 
       <CardContent className="space-y-6">
         {/* Crop Types */}
-        <div>
-          <Label className="text-sm font-medium mb-2 block">Crop Types</Label>
+<div>
+  <Label className="text-sm font-medium mb-2 block">Crop Types</Label>
 
-          {filters.cropTypes.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {filters.cropTypes.map(crop => (
-                <Badge key={crop} variant="secondary" className="flex items-center gap-1 px-2 py-1 text-xs rounded-full">
-                  <span>{crop}</span>
-                  <X className="w-3 h-3 cursor-pointer" onClick={() => removeCropType(crop)} />
-                </Badge>
-              ))}
-            </div>
-          )}
+  {/* Selected Crop Badges */}
+  {filters.cropTypes.length > 0 && (
+    <div className="flex flex-wrap gap-2 mb-3">
+      {filters.cropTypes.map((crop) => (
+        <Badge
+          key={crop}
+          variant="secondary"
+          className="flex items-center gap-1 px-2 py-1 text-xs rounded-full"
+        >
+          <span>{crop}</span>
+          <X
+            className="w-3 h-3 cursor-pointer"
+            onClick={() => removeCropType(crop)}
+          />
+        </Badge>
+      ))}
+    </div>
+  )}
 
-          <div className="grid grid-cols-2 gap-2">
-            {loadingCrops ? (
-              <span className="text-xs text-muted-foreground col-span-2">Loading crop types...</span>
-            ) : availableCrops.length > 0 ? (
-              availableCrops.map(crop => (
-                <Button
-                  key={crop}
-                  variant={filters.cropTypes.includes(crop) ? "default" : "outline"}
-                  size="sm"
-                  onClick={() =>
-                    filters.cropTypes.includes(crop) ? removeCropType(crop) : addCropType(crop)
-                  }
-                  className="text-xs"
-                >
-                  {crop}
-                </Button>
-              ))
-            ) : (
-              <span className="text-xs text-muted-foreground col-span-2">No crops found</span>
-            )}
-          </div>
-        </div>
+  {/* Searchable Multi-Select */}
+  <Popover>
+    <PopoverTrigger asChild>
+      <Button
+        variant="outline"
+        className="w-full justify-between text-sm"
+      >
+        Select Crops
+        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent className="w-[300px] p-0">
+      <Command>
+        <CommandInput placeholder="Search crops..." className="h-9" />
+        <CommandList>
+          <CommandEmpty>No crops found.</CommandEmpty>
+          {availableCrops.map((crop) => {
+            const selected = filters.cropTypes.includes(crop);
+            return (
+              <CommandItem
+                key={crop}
+                onSelect={() =>
+                  selected ? removeCropType(crop) : addCropType(crop)
+                }
+                className="flex justify-between items-center"
+              >
+                <span>{crop}</span>
+                {selected && <Check className="h-4 w-4" />}
+              </CommandItem>
+            );
+          })}
+        </CommandList>
+      </Command>
+    </PopoverContent>
+  </Popover>
+</div>
 
         {/* BRIX Range */}
         <div>
