@@ -262,7 +262,7 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
                 id="min-brix-slider"
                 className="w-full h-3 bg-gradient-to-r from-blue-200 to-indigo-300 rounded-lg appearance-none cursor-pointer"
                 style={{
-                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(localBrixRange[0])}%, #e2e8f0 ${(localBrixRange[0])}%, #e2e8f0 100%)`
+                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(localBrixRange[0] / 100) * 100}%, #e2e8f0 ${(localBrixRange[0] / 100) * 100}%, #e2e8f0 100%)`
                 }}
               />
             </div>
@@ -295,7 +295,7 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
                 id="max-brix-slider"
                 className="w-full h-3 bg-gradient-to-r from-blue-200 to-indigo-300 rounded-lg appearance-none cursor-pointer"
                 style={{
-                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(localBrixRange[1])}%, #e2e8f0 ${(localBrixRange[1])}%, #e2e8f0 100%)`
+                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(localBrixRange[1] / 100) * 100}%, #e2e8f0 ${(localBrixRange[1] / 100) * 100}%, #e2e8f0 100%)`
                 }}
               />
             </div>
