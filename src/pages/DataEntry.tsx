@@ -371,17 +371,16 @@ const DataEntry = () => {
     setIsLoading(true);
   
     try {
-      // --- Step 1: Gather and sanitize all form data ---
-      // This part remains the same, as the client is responsible for preparing the data
       const cropName = sanitizeInput(formData.cropType);
       const brandName = sanitizeInput(formData.brand);
       const storeName = sanitizeInput(formData.store);
       const variety = sanitizeInput(formData.variety);
-      const locationName = sanitizeInput(formData.location).slice(0, 150);
+      const locationName = sanitizeInput(formData.location).slice(0, MAX_NAME_LENGTH);
       const brixValue = formData.brixLevel[0];
       const assessmentDate = new Date(formData.measurementDate + 'T00:00:00.000Z').toISOString();
       const purchaseDateISO = new Date(formData.purchaseDate + 'T00:00:00.000Z').toISOString();
-  
+      
+      // Create a robust payload with all necessary data
       const payload = {
         cropName,
         brandName,
@@ -390,25 +389,22 @@ const DataEntry = () => {
         brixValue,
         assessmentDate,
         purchaseDate: purchaseDateISO,
-        farmLocation: formData.farmLocation,
-        harvestTime: formData.harvestTime,
-        outlierNotes: formData.outlierNotes,
+        farmLocation: sanitizeInput(formData.farmLocation),
+        harvestTime: sanitizeInput(formData.harvestTime),
+        outlierNotes: sanitizeInput(formData.outlierNotes),
         latitude: formData.latitude,
         longitude: formData.longitude,
         locationName,
-        // You must send the user's ID to the Edge Function to link the submission to a user
-        userId: user?.id,
+        userId: user?.id, // <-- CRITICAL: Include the user ID
       };
   
-      // --- Step 2: Call the Supabase Edge Function ---
-      // Replaced all direct database operations with a single fetch call.
       const supabaseUrl = getSupabaseUrl();
-      const publishKey = getPublishableKey(); // Use the client's public key for the request
+      const publishKey = getPublishableKey();
       const response = await fetch(`${supabaseUrl}/functions/v1/auto-verify-submission`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${publishKey}`,
+          Authorization: `Bearer ${publishKey}`, // Use the client's public key for the request
         },
         body: JSON.stringify(payload),
       });
@@ -419,64 +415,55 @@ const DataEntry = () => {
       }
   
       const result = await response.json();
-  
-      // --- Step 3: Handle the response and image uploads ---
-      // Now you get the `submission_id` from the Edge Function's response.
       const { verified, submission_id } = result;
   
       if (!submission_id) {
         throw new Error('Submission ID was not returned by the server.');
       }
   
-      // Now upload images using the client-side Supabase client, but with the
-      // new submission_id from the server.
+      // --- Image Upload and Database Insertion ---
       if (formData.images.length > 0) {
         const userId = user?.id;
         if (!userId) throw new Error('User not authenticated for image upload.');
   
         for (let i = 0; i < formData.images.length; i++) {
           const file = formData.images[i];
-          const ext = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
-          const timestamp = Date.now();
-          // Use the submission_id from the Edge Function's response
-          const filePath = `${userId}/${submission_id}/${timestamp}_${i}.${ext}`;
-  
+          const fileExtension = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
+          const filePath = `${userId}/${submission_id}/${Date.now()}_${i}.${fileExtension}`;
+          
+          // 1. Upload the image file to Supabase Storage
           const { error: uploadError } = await supabase.storage
             .from('submission-images-bucket')
-            .upload(filePath, file, {
-              contentType: file.type,
-              upsert: false,
-            });
+            .upload(filePath, file);
   
           if (uploadError) {
             console.error('Image upload failed:', uploadError);
-            // Decide whether to throw or just log an error here.
-            // The submission is already saved, so failing image uploads should be handled gracefully.
             toast({
               title: 'Image upload failed',
-              description: `Some images could not be uploaded: ${uploadError.message}`,
+              description: `Some images could not be uploaded. Error: ${uploadError.message}`,
               variant: 'destructive',
             });
-          } else {
-              // If the image upload succeeds, you need to save the image metadata to the `submission_images` table.
-              // This is a crucial step that was missing from your Edge Function. The client-side approach is easier to manage here, as RLS can be used to ensure only the authenticated user can upload to their submission's folder.
-              const { data: signedUrlData } = await supabase.storage
-                .from('submission-images-bucket')
-                .createSignedUrl(filePath, 60 * 60 * 24 * 365);
-              
-              if (signedUrlData) {
-                await supabase
-                  .from('submission_images')
-                  .insert({
-                    submission_id: submission_id,
-                    image_url: signedUrlData.signedUrl,
-                  });
-              }
+            continue; // Continue with the next image even if one fails
+          }
+          
+          // 2. Insert the image's URL into the submissions_images table
+          // We use the `from` and `select` APIs to interact with our tables
+          const { error: insertError } = await supabase
+            .from('submission_images')
+            .insert({
+              submission_id: submission_id,
+              // The file path is what you need to store.
+              // You can generate a public URL later for display.
+              image_url: filePath,
+            });
+          
+          if (insertError) {
+            console.error('Failed to save image metadata:', insertError);
+            // Handle this error case gracefully
           }
         }
       }
   
-      // --- Step 4: Display the toast message and navigate ---
       if (verified) {
         toast({ title: 'BRIX measurement automatically verified!', description: 'Thank you for your contribution!' });
       } else {
