@@ -9,12 +9,22 @@ import { Plus, Edit, Trash2, Eye, MapPin, Calendar, Beaker, CheckCircle } from '
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchFormattedSubmissions } from '../lib/fetchSubmissions';
+import { fetchBrixByCrop } from '../lib/fetchBrixByCrop'; 
 
 
 const YourData = () => {
   const { user } = useAuth();
   const [userSubmissions, setUserSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [brixThresholdsByCrop, setBrixThresholdsByCrop] = useState<Record<string, BrixThresholds>>({});
+
+  type BrixThresholds = {
+    poor: number;
+    average: number;
+    good: number;
+    excellent: number;
+  };
 
   useEffect(() => {
     const loadSubmissions = async () => {
@@ -26,7 +36,24 @@ const YourData = () => {
       setLoading(true);
       try {
         const submissions = await fetchFormattedSubmissions();
-        setUserSubmissions(submissions.filter(sub => sub.submittedBy === user.display_name));
+        const filtered = submissions.filter(sub => sub.submittedBy === user.display_name);
+        setUserSubmissions(filtered);
+  
+        // Get unique crop types
+        const uniqueCrops = [...new Set(filtered.map(sub => sub.cropType).filter(Boolean))];
+  
+        const thresholdsEntries = await Promise.all(
+          uniqueCrops.map(async (crop) => {
+            const result = await fetchBrixByCrop(crop);
+            return result ? [crop, result.brixLevels] : null;
+          })
+        );
+  
+        const thresholdMap = Object.fromEntries(
+          thresholdsEntries.filter(Boolean) as [string, BrixThresholds][]
+        );
+  
+        setBrixThresholdsByCrop(thresholdMap);
       } catch (e) {
         console.error(e);
         setUserSubmissions([]);
@@ -38,10 +65,16 @@ const YourData = () => {
     loadSubmissions();
   }, [user?.display_name]);
 
-  const getBrixColor = (brixLevel: number) => {
-    if (brixLevel < 10) return 'bg-red-500';
-    if (brixLevel < 15) return 'bg-orange-500';
-    if (brixLevel < 20) return 'bg-yellow-500';
+  const getBrixColor = (brixLevel: number, cropType: string) => {
+    const thresholds = brixThresholdsByCrop[cropType];
+    if (!thresholds) return 'bg-gray-300'; // fallback if not loaded
+  
+    const { poor, average, good, excellent } = thresholds;
+  
+    if (brixLevel < poor) return 'bg-gray-400';
+    if (brixLevel < average) return 'bg-red-500';
+    if (brixLevel < good) return 'bg-orange-500';
+    if (brixLevel < excellent) return 'bg-yellow-500';
     return 'bg-green-500';
   };
 
@@ -161,7 +194,7 @@ const YourData = () => {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge className={`${getBrixColor(submission.brixLevel)} text-white`}>
+                              <Badge className={`${getBrixColor(submission.brixLevel, submission.cropType)} text-white`}>
                                 {submission.brixLevel}
                               </Badge>
                             </TableCell>
@@ -194,13 +227,14 @@ const YourData = () => {
                                     <Eye className="w-4 h-4" />
                                   </Button>
                                 </Link>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => handleEdit(submission.id)}
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
+                                <Link 
+                                    to={`/data-point/${submission.id}?edit=true`} 
+                                    state={{ from: '/your-data' }}
+                                  >
+                                  <Button variant="ghost" size="sm">
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                </Link>
                                 <Button 
                                   variant="ghost" 
                                   size="sm"

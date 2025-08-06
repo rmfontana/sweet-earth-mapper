@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Header from '../components/Layout/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -13,8 +13,13 @@ import { supabase } from '../integrations/supabase/client';
 
 const DataPointEdit = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { user } = useAuth();
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check if navigation state exists and has "from"
+  const fromPage = location.state?.from;
 
   const [userRole, setUserRole] = useState<string>('public');
   const [isAdmin, setIsAdmin] = useState(false);
@@ -37,8 +42,8 @@ const DataPointEdit = () => {
   const [notes, setNotes] = useState('');
   const [brixLevel, setBrixLevel] = useState<number | ''>('');
 
-  const isOwner = user?.display_name === dataPoint.submittedBy;
-  const canEdit = isAdmin || (isOwner && !dataPoint.verified);
+  const isOwner = !!dataPoint && user?.display_name === dataPoint?.submittedBy;
+  const canEdit = isAdmin || (isOwner && !dataPoint?.verified);
 
   const [brands, setBrands] = useState([]);
   const [crops, setCrops] = useState([]);
@@ -191,6 +196,14 @@ const DataPointEdit = () => {
     );
   }
 
+  const handleCancel = () => {
+    if (fromPage) {
+      navigate(fromPage);
+    } else {
+      navigate(-1);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -218,8 +231,13 @@ const DataPointEdit = () => {
         .eq('id', dataPoint.id);
   
       if (error) throw error;
+
+      if (fromPage) {
+        navigate(fromPage);
+      } else {
+        navigate(`/data-point/${dataPoint.id}`); 
+      }
   
-      navigate(`/data-point/${dataPoint.id}`);
     } catch (error) {
       console.error('Failed to save data point:', error);
       alert('Failed to save changes. Please try again.');
@@ -400,7 +418,7 @@ const DataPointEdit = () => {
               <Button onClick={handleSave} disabled={saving || !canEdit}>
                 {saving ? 'Saving...' : 'Save Changes'}
               </Button>
-              <Button variant="outline" onClick={() => navigate(-1)} disabled={saving}>
+              <Button variant="outline" onClick={handleCancel} disabled={saving}>
                 Cancel
               </Button>
             </div>
