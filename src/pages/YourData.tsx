@@ -196,8 +196,17 @@ const YourData = () => {
                             <TableCell>
                               <div>
                                 <div className="font-medium">{submission.cropType}</div>
+
                                 {submission.variety && (
                                   <div className="text-sm text-gray-600">{submission.variety}</div>
+                                )}
+                                
+                                {submission.brand && (
+                                  <div className="text-sm text-gray-600">Brand: {submission.brand}</div>
+                                )}
+
+                                {submission.store && (
+                                  <div className="text-sm text-gray-600">Store: {submission.store}</div>
                                 )}
                               </div>
                             </TableCell>
@@ -209,7 +218,7 @@ const YourData = () => {
                             <TableCell>
                               <div className="flex items-center space-x-1 text-sm">
                                 <MapPin className="w-3 h-3" />
-                                <span>{submission.latitude.toFixed(3)}, {submission.longitude.toFixed(3)}</span>
+                                <span>{submission.location?.name || 'Unknown location'}</span>
                               </div>
                             </TableCell>
                             <TableCell>
