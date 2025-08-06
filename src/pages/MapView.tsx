@@ -16,9 +16,13 @@ const MapView = () => {
     cropTypes: [] as string[],
     brixRange: [0, 30] as [number, number],
     dateRange: ['', ''] as [string, string],
-    verifiedOnly: false,
+    verifiedOnly: true,
     submittedBy: '',
-    nearbyOnly: false
+    nearbyOnly: false,
+    store: '',
+    brand: '',
+    hasImage: false,
+    category: '' // for crop category
   });
 
   const handleLocationSearch = () => {
