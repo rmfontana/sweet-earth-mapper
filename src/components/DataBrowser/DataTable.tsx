@@ -23,7 +23,6 @@ const DataTable: React.FC = () => {
 
   const [cropTypes, setCropTypes] = useState<string[]>([]);
 
-
   const [filters, setFilters] = useState<MapFilter>({
     cropTypes: [],
     brixRange: [0, 30],
@@ -31,20 +30,26 @@ const DataTable: React.FC = () => {
     verifiedOnly: false
   });
 
+  // Fetch submissions on mount
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
         const submissions = await fetchFormattedSubmissions();
+        console.log('Fetched submissions:', submissions);
+
         setData(submissions);
-        // Derive unique crop types from submissions
+
         const uniqueCropTypes = Array.from(
           new Set(submissions.map(s => s.cropType).filter(Boolean))
         ).sort();
+
+        console.log('Unique crop types:', uniqueCropTypes);
         setCropTypes(uniqueCropTypes);
 
         setError(null);
-      } catch {
+      } catch (err) {
+        console.error('Error fetching submissions:', err);
         setError('Failed to load data');
         setData([]);
         setCropTypes([]);
@@ -56,19 +61,27 @@ const DataTable: React.FC = () => {
     loadData();
   }, []);
 
+  // Reset to page 1 when filters or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, searchTerm]);
 
   const filteredData = useMemo(() => {
+    console.log('Running filters with:', { dataLength: data.length, searchTerm, filters, sortBy, sortOrder });
+
     let filtered = data.filter(point => {
-      // Search filter
+      // Search term filter
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
-        if (!point.cropType.toLowerCase().includes(searchLower) &&
-            !point.submittedBy.toLowerCase().includes(searchLower)) {
+        if (
+          !point.cropType.toLowerCase().includes(searchLower) &&
+          !point.submittedBy.toLowerCase().includes(searchLower)
+        ) {
           return false;
         }
       }
 
-      // Crop type filter
+      // Crop types filter
       if (filters.cropTypes.length > 0 && !filters.cropTypes.includes(point.cropType)) {
         return false;
       }
@@ -78,8 +91,12 @@ const DataTable: React.FC = () => {
         return false;
       }
 
-      // Date range filter
-      if (point.submittedAt < filters.dateRange[0] || point.submittedAt > filters.dateRange[1]) {
+      // Date range filter with timestamps
+      const submittedDate = new Date(point.submittedAt).getTime();
+      const startDate = new Date(filters.dateRange[0]).getTime();
+      const endDate = new Date(filters.dateRange[1]).getTime();
+
+      if (submittedDate < startDate || submittedDate > endDate) {
         return false;
       }
 
@@ -91,8 +108,12 @@ const DataTable: React.FC = () => {
       return true;
     });
 
-    // Sort data
-    data.sort((a, b) => {
+    console.log(`Filtered down to ${filtered.length} items`);
+
+    // Clone before sorting to avoid mutating state
+    filtered = [...filtered];
+
+    filtered.sort((a, b) => {
       let aValue = a[sortBy];
       let bValue = b[sortBy];
 
@@ -108,13 +129,18 @@ const DataTable: React.FC = () => {
       }
     });
 
+    console.log('Sorted filtered data:', filtered.map(d => ({ id: d.id, [sortBy]: d[sortBy] })));
+
     return filtered;
   }, [data, searchTerm, filters, sortBy, sortOrder]);
 
-  // Pagination
+  // Pagination calculations
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+
+  console.log(`Paginating data: page ${currentPage} with items per page ${itemsPerPage}`);
+  console.log(`Showing items ${startIndex + 1} to ${startIndex + paginatedData.length} of ${filteredData.length}`);
 
   const handleSort = (column: keyof BrixDataPoint) => {
     if (sortBy === column) {
