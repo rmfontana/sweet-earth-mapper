@@ -180,91 +180,102 @@ const YourData = () => {
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Crop</TableHead>
-                          <TableHead>BRIX</TableHead>
-                          <TableHead>Location</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {userSubmissions.map((submission) => (
-                          <TableRow key={submission.id}>
-                            <TableCell>
-                              <div>
-                                <div className="font-medium">{submission.cropType}</div>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Crop / Variety / Brand / Store</TableHead>
+                        <TableHead className="text-center">BRIX</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead>Assessment Date</TableHead>
+                        <TableHead className="text-center">Verified?</TableHead>
+                        <TableHead className="text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {userSubmissions.map((submission) => (
+                        <TableRow 
+                          key={submission.id} 
+                          className="hover:bg-gray-100 transition-colors duration-200 cursor-pointer"
+                        >
+                          <TableCell className="whitespace-nowrap">
+                            <div>
+                              <div className="font-semibold text-gray-900">{submission.cropType}</div>
 
-                                {submission.variety && (
-                                  <div className="text-sm text-gray-600">{submission.variety}</div>
-                                )}
-                                
-                                {submission.brand && (
-                                  <div className="text-sm text-gray-600">Brand: {submission.brand}</div>
-                                )}
+                              {submission.label && (
+                                <div className="text-xs text-gray-500">{submission.label}</div>
+                              )}
 
-                                {submission.store && (
-                                  <div className="text-sm text-gray-600">Store: {submission.store}</div>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                            <Badge className={`${getBrixColor(submission.brixLevel, submission.cropType?.toLowerCase() || '')} text-white`}>
+                              {submission.brandName && (
+                                <div className="text-xs text-indigo-600 mt-1">Brand: {submission.brandName}</div>
+                              )}
+
+                              {submission.storeName && (
+                                <div className="text-xs text-green-600 flex items-center space-x-1 mt-1">
+                                  <MapPin className="w-3 h-3" />
+                                  <span>{submission.storeName}</span>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            <Badge className={`${getBrixColor(submission.brixLevel, submission.cropType?.toLowerCase() || '')} text-white px-3 py-1 rounded-full`}>
                               {submission.brixLevel}
                             </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-1 text-sm">
-                                <MapPin className="w-3 h-3" />
-                                <span>{submission.locationName}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-1 text-sm">
-                                <Calendar className="w-3 h-3" />
-                                <span>{new Date(submission.measurementDate).toLocaleDateString()}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {submission.verified ? (
-                                <Badge variant="secondary" className="flex items-center space-x-1">
-                                  <CheckCircle className="w-3 h-3" />
-                                  <span>Verified</span>
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline">Pending</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex space-x-2">
-                                <Link to={`/data-point/${submission.id}`}>
-                                  <Button variant="ghost" size="sm">
-                                    <Eye className="w-4 h-4" />
-                                  </Button>
-                                </Link>
-                                <Link 
-                                    to={`/data-point/${submission.id}?edit=true`} 
-                                    state={{ from: '/your-data' }}
-                                  >
-                                  <Button variant="ghost" size="sm">
-                                    <Edit className="w-4 h-4" />
-                                  </Button>
-                                </Link>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => handleDelete(submission.id)}
-                                  className="text-red-600 hover:text-red-800"
-                                >
-                                  <Trash2 className="w-4 h-4" />
+                          </TableCell>
+
+                          <TableCell>
+                            <div className="flex items-center space-x-1 text-sm text-gray-700">
+                              <MapPin className="w-4 h-4" />
+                              <span>{submission.locationName}</span>
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="whitespace-nowrap">
+                            <div className="flex items-center space-x-1 text-sm text-gray-700">
+                              <Calendar className="w-4 h-4" />
+                              <span>{new Date(submission.submittedAt).toLocaleDateString()}</span>
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            {submission.verified ? (
+                              <Badge variant="secondary" className="flex items-center space-x-1 px-2 py-1 rounded-full bg-green-100 text-green-800">
+                                <CheckCircle className="w-4 h-4" />
+                                <span className="text-sm font-medium">Verified</span>
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-sm font-medium px-2 py-1 rounded-full">
+                                Pending
+                              </Badge>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            <div className="flex justify-center space-x-2">
+                              <Link to={`/data-point/${submission.id}`}>
+                                <Button variant="ghost" size="sm" aria-label="View submission">
+                                  <Eye className="w-5 h-5" />
                                 </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
+                              </Link>
+                              <Link to={`/data-point/${submission.id}?edit=true`} state={{ from: '/your-data' }}>
+                                <Button variant="ghost" size="sm" aria-label="Edit submission">
+                                  <Edit className="w-5 h-5" />
+                                </Button>
+                              </Link>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(submission.id)}
+                                className="text-red-600 hover:text-red-800"
+                                aria-label="Delete submission"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
                     </Table>
                   </div>
                 )}
