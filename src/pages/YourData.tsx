@@ -53,6 +53,7 @@ const YourData = () => {
           thresholdsEntries.filter(Boolean) as [string, BrixThresholds][]
         );
   
+        console.log('Threshold map:', thresholdMap);
         setBrixThresholdsByCrop(thresholdMap);
       } catch (e) {
         console.error(e);
@@ -66,9 +67,20 @@ const YourData = () => {
   }, [user?.display_name]);
 
   const getBrixColor = (brixLevel: number, cropType: string) => {
+    console.log('Checking brix color for:', cropType, 'with brixLevel:', brixLevel);
+
+    if (brixLevel === null || brixLevel === undefined || isNaN(brixLevel)) {
+      return 'bg-gray-300';
+    }
+
     if (!cropType) return 'bg-gray-300';  // no crop type? show gray
-    const thresholds = brixThresholdsByCrop[cropType.toLowerCase()];
-    if (!thresholds) return 'bg-gray-300'; // fallback if not loaded
+
+    const thresholds = brixThresholdsByCrop[cropType.toLowerCase().trim()];
+
+    if (!thresholds) {
+      console.warn(`No thresholds found for cropType: "${key}"`);
+    return 'bg-gray-300';
+  }
   
     const { poor, average, good, excellent } = thresholds;
   
