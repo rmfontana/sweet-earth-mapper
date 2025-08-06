@@ -66,6 +66,7 @@ export async function fetchFormattedSubmissions() {
     category: item.crop?.category ?? '',
     latitude: item.location?.latitude,
     longitude: item.location?.longitude,
+    locationName: item.location?.name ?? '',
     storeName: item.store?.name ?? '',
     brandName: item.brand?.name ?? '',
     submittedBy: item.user?.display_name ?? 'Anonymous',

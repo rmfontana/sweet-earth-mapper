@@ -218,7 +218,7 @@ const YourData = () => {
                             <TableCell>
                               <div className="flex items-center space-x-1 text-sm">
                                 <MapPin className="w-3 h-3" />
-                                <span>{submission.location?.name || 'Unknown location'}</span>
+                                <span>{submission.locationName || 'Unknown location'}</span>
                               </div>
                             </TableCell>
                             <TableCell>
