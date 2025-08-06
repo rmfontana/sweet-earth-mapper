@@ -40,7 +40,7 @@ const YourData = () => {
         setUserSubmissions(filtered);
   
         // Get unique crop types
-        const uniqueCrops = [...new Set(filtered.map(sub => sub.cropType).filter(Boolean))];
+        const uniqueCrops = [...new Set(filtered.map(sub => sub.cropType?.toLowerCase()).filter(Boolean))];
   
         const thresholdsEntries = await Promise.all(
           uniqueCrops.map(async (crop) => {
@@ -66,7 +66,8 @@ const YourData = () => {
   }, [user?.display_name]);
 
   const getBrixColor = (brixLevel: number, cropType: string) => {
-    const thresholds = brixThresholdsByCrop[cropType];
+    if (!cropType) return 'bg-gray-300';  // no crop type? show gray
+    const thresholds = brixThresholdsByCrop[cropType.toLowerCase()];
     if (!thresholds) return 'bg-gray-300'; // fallback if not loaded
   
     const { poor, average, good, excellent } = thresholds;
@@ -76,11 +77,6 @@ const YourData = () => {
     if (brixLevel < good) return 'bg-orange-500';
     if (brixLevel < excellent) return 'bg-yellow-500';
     return 'bg-green-500';
-  };
-
-  const handleEdit = (id: string) => {
-    console.log('Edit submission:', id);
-    // Mock edit functionality
   };
 
   const handleDelete = (id: string) => {
@@ -194,9 +190,9 @@ const YourData = () => {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge className={`${getBrixColor(submission.brixLevel, submission.cropType)} text-white`}>
-                                {submission.brixLevel}
-                              </Badge>
+                            <Badge className={`${getBrixColor(submission.brixLevel, submission.cropType?.toLowerCase() || '')} text-white`}>
+                              {submission.brixLevel}
+                            </Badge>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center space-x-1 text-sm">
