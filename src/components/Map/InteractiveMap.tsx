@@ -205,25 +205,29 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       filter: ['!', ['has', 'point_count']],
       paint: {
         'circle-color': ['get', 'color'],
-        'circle-radius': 8,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#fff',
+        'circle-radius': 12,
+        'circle-stroke-width': 3,
+        'circle-stroke-color': '#00000088',
+        'circle-opacity': 0.9,
       },
     });
 
     map.on('click', 'clusters', (e) => {
       const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-      const clusterId = features[0].properties?.cluster_id;
+      const clusterId = features[0]?.properties?.cluster_id;
       const source = map.getSource('points') as mapboxgl.GeoJSONSource;
-
+    
+      if (!clusterId) return;
+    
       source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-        if (err || !features[0].geometry) return;
-        map.easeTo({
-          center: (features[0].geometry as any).coordinates,
-          zoom,
-        });
+        if (err) return;
+        if (features[0].geometry.type === 'Point') {
+          const coords = features[0].geometry.coordinates as [number, number];
+          map.easeTo({ center: coords, zoom });
+        }
       });
     });
+    
 
     map.on('click', 'unclustered-point', (e) => {
       const feature = e.features?.[0];
