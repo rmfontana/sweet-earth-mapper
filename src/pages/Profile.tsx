@@ -18,7 +18,6 @@ const Profile = () => {
 
   useEffect(() => {
     if (!user) {
-      // Redirect to login if not logged in
       navigate('/login');
     } else {
       setDisplayName(user.display_name || '');
@@ -57,6 +56,15 @@ const Profile = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        {/* Back Button */}
+        <Button
+          variant="secondary"
+          className="mb-4"
+          onClick={() => navigate(-1)}
+        >
+          &larr; Back
+        </Button>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-center text-2xl font-bold text-gray-900">
@@ -86,7 +94,11 @@ const Profile = () => {
                 />
               </div>
 
-              <Button type="submit" disabled={isLoading} className="w-full bg-green-600 hover:bg-green-700">
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-green-600 hover:bg-green-700"
+              >
                 {isLoading ? 'Saving...' : 'Save Changes'}
               </Button>
             </form>
