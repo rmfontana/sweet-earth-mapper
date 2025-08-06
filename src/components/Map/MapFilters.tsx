@@ -10,6 +10,7 @@ import { fetchCropTypes } from '@/lib/fetchCropTypes';
 import { fetchBrands } from '@/lib/fetchBrands';
 import { fetchStores } from '@/lib/fetchStores';
 import { fetchCropCategories } from '@/lib/fetchCropCategories';
+import { Range, getTrackBackground } from 'react-range';
 
 import {
   Command,
@@ -24,6 +25,67 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+
+const STEP = 0.5;
+const MIN = 0;
+const MAX = 100;
+
+const BrixRangeSlider = ({
+  brixRange,
+  onChange,
+}: {
+  brixRange: [number, number];
+  onChange: (range: [number, number]) => void;
+}) => {
+  return (
+    <Range
+      values={brixRange}
+      step={STEP}
+      min={MIN}
+      max={MAX}
+      onChange={(values) => onChange([values[0], values[1]])}
+      renderTrack={({ props, children }) => (
+        <div
+          {...props}
+          style={{
+            ...props.style,
+            height: '6px',
+            width: '100%',
+            background: getTrackBackground({
+              values: brixRange,
+              colors: ['#ccc', '#3b82f6', '#ccc'],
+              min: MIN,
+              max: MAX,
+            }),
+            borderRadius: '4px',
+          }}
+        >
+          {children}
+        </div>
+      )}
+      renderThumb={({ props, index }) => (
+        <div
+          {...props}
+          style={{
+            ...props.style,
+            height: '24px',
+            width: '24px',
+            backgroundColor: '#3b82f6',
+            borderRadius: '50%',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            boxShadow: '0 0 2px #00000044',
+          }}
+        >
+          <span style={{ color: '#fff', fontSize: '12px' }}>
+            {brixRange[index].toFixed(1)}
+          </span>
+        </div>
+      )}
+    />
+  );
+};
 
 interface Filters {
   cropTypes: string[];
@@ -56,13 +118,6 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
   const [storeQuery, setStoreQuery] = useState('');
   const [cropQuery, setCropQuery] = useState('');
 
-  // Get slider working 
-  const [localBrixRange, setLocalBrixRange] = useState<[number, number]>(filters.brixRange);
-
-  useEffect(() => {
-    setLocalBrixRange(filters.brixRange);
-  }, [filters.brixRange]);
-
   useEffect(() => {
     const loadFilters = async () => {
       try {
@@ -82,21 +137,6 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
     };
     loadFilters();
   }, []);
-
-  // For the slider's performance
-  const handleMinChange = (value: number) => {
-    const newMin = Math.min(Math.max(0, value), localBrixRange[1]);
-    setLocalBrixRange([newMin, localBrixRange[1]]);
-  };
-  
-  const handleMaxChange = (value: number) => {
-    const newMax = Math.max(Math.min(100, value), localBrixRange[0]);
-    setLocalBrixRange([localBrixRange[0], newMax]);
-  };
-  
-  const commitBrixRange = () => {
-    onFiltersChange({ ...filters, brixRange: localBrixRange, verifiedOnly: true });
-  };
 
   // Memoize filtered dropdown items for performance
   const filteredCategories = useMemo(() =>
@@ -248,72 +288,17 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
         <div>
           <Label className="text-sm font-medium mb-2 block">BRIX Range</Label>
 
-          {/* Min Slider + Number */}
-          <div className="flex items-center space-x-4 mb-4">
-            <div className="flex-1">
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={0.5}
-                value={localBrixRange[0]}
-                onChange={(e) => handleMinChange(Number(e.target.value))}
-                onMouseUp={commitBrixRange}
-                id="min-brix-slider"
-                className="w-full h-3 bg-gradient-to-r from-blue-200 to-indigo-300 rounded-lg appearance-none cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(localBrixRange[0] / 100) * 100}%, #e2e8f0 ${(localBrixRange[0] / 100) * 100}%, #e2e8f0 100%)`
-                }}
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.5}
-                value={localBrixRange[0]}
-                onChange={(e) => handleMinChange(Number(e.target.value))}
-                onBlur={commitBrixRange}
-                className="w-20 px-3 py-2 border-2 border-gray-200 rounded-lg text-center font-semibold focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              />
-              <span className="text-sm font-medium text-gray-600">°Bx</span>
-            </div>
-          </div>
-
-          {/* Max Slider + Number */}
-          <div className="flex items-center space-x-4">
-            <div className="flex-1">
-              <input
-                type="range"
-                min={localBrixRange[0]}
-                max={100}
-                step={0.5}
-                value={localBrixRange[1]}
-                onChange={(e) => handleMaxChange(Number(e.target.value))}
-                onMouseUp={commitBrixRange}
-                id="max-brix-slider"
-                className="w-full h-3 bg-gradient-to-r from-blue-200 to-indigo-300 rounded-lg appearance-none cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(localBrixRange[1] / 100) * 100}%, #e2e8f0 ${(localBrixRange[1] / 100) * 100}%, #e2e8f0 100%)`
-                }}
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="number"
-                min={localBrixRange[0]}
-                max={100}
-                step={0.5}
-                value={localBrixRange[1]}
-                onChange={(e) => handleMaxChange(Number(e.target.value))}
-                onBlur={commitBrixRange}
-                className="w-20 px-3 py-2 border-2 border-gray-200 rounded-lg text-center font-semibold focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              />
-              <span className="text-sm font-medium text-gray-600">°Bx</span>
-            </div>
-          </div>
+          <BrixRangeSlider
+            brixRange={filters.brixRange}
+            onChange={(newRange) => {
+              // Enforce valid range and update filters
+              if (newRange[0] <= newRange[1]) {
+                onFiltersChange({ ...filters, brixRange: newRange });
+              }
+            }}
+          />
         </div>
+          
 
         {/* Date Range */}
         <div>
