@@ -131,18 +131,18 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       map.removeSource('spider-lines');
     }
 
-    // Calculate positions in a spiral around the center
-    const spiderRadius = 80; // pixels
-    const angleStep = (2 * Math.PI) / points.length;
-    
-    const spiderFeatures = points.map((point, index) => {
-      const angle = index * angleStep;
-      const x = Math.cos(angle) * spiderRadius;
-      const y = Math.sin(angle) * spiderRadius;
-      
-      // Convert pixel offset to geographical coordinates
-      const pixelCoords = map.project(centerCoords);
-      const newPixelCoords = new mapboxgl.Point(pixelCoords.x + x, pixelCoords.y + y);
+     // Use spiral distribution for better spacing — works well for many points
+    const spiderRadiusBase = 60; // base radius in pixels
+    const features = points.map((point, index) => {
+      // Spiral formula for angle and distance to avoid overlap
+      const angle = 0.5 * index;
+      const radius = spiderRadiusBase * (1 + 0.15 * angle);
+
+      const pixelCenter = map.project(centerCoords);
+      const offsetX = radius * Math.cos(angle);
+      const offsetY = radius * Math.sin(angle);
+
+      const newPixelCoords = new mapboxgl.Point(pixelCenter.x + offsetX, pixelCenter.y + offsetY);
       const newGeoCoords = map.unproject(newPixelCoords);
       
       return {
@@ -161,13 +161,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       };
     });
 
+    // Spider lines from center to each point
     const spiderLines = points.map((point, index) => {
-      const angle = index * angleStep;
-      const x = Math.cos(angle) * spiderRadius;
-      const y = Math.sin(angle) * spiderRadius;
-      
-      const pixelCoords = map.project(centerCoords);
-      const newPixelCoords = new mapboxgl.Point(pixelCoords.x + x, pixelCoords.y + y);
+      const angle = 0.5 * index;
+      const radius = spiderRadiusBase * (1 + 0.15 * angle);
+
+      const pixelCenter = map.project(centerCoords);
+      const offsetX = radius * Math.cos(angle);
+      const offsetY = radius * Math.sin(angle);
+
+      const newPixelCoords = new mapboxgl.Point(pixelCenter.x + offsetX, pixelCenter.y + offsetY);
       const newGeoCoords = map.unproject(newPixelCoords);
       
       return {
@@ -179,14 +182,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
         properties: {},
       };
     });
-
+    
     // Add spider lines
     map.addSource('spider-lines', {
       type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: spiderLines,
-      },
+      data: { type: 'FeatureCollection', features: spiderLines },
     });
 
     map.addLayer({
@@ -194,19 +194,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       type: 'line',
       source: 'spider-lines',
       paint: {
-        'line-color': 'hsl(0, 0%, 50%)',
+        'line-color': 'rgba(0,0,0,0.3)',
         'line-width': 2,
-        'line-opacity': 0.6,
+        'line-dasharray': [2, 4],
       },
     });
 
     // Add spider points
     map.addSource('spider-points', {
       type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: spiderFeatures,
-      },
+      data: { type: 'FeatureCollection', features },
     });
 
     map.addLayer({
@@ -215,9 +212,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       source: 'spider-points',
       paint: {
         'circle-color': ['get', 'color'],
-        'circle-radius': 12,
+        'circle-radius': 10,
         'circle-stroke-width': 2,
-        'circle-stroke-color': 'hsl(0, 0%, 100%)',
+        'circle-stroke-color': '#fff',
         'circle-opacity': 0.9,
       },
     });
@@ -225,8 +222,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
     // Add click handler for spider points
     map.on('click', 'spider-points', (e) => {
       const feature = e.features?.[0];
-      const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
-      if (point) setSelectedPoint(point);
+      if (feature?.properties?.raw) {
+        const point = JSON.parse(feature.properties.raw);
+        setSelectedPoint(point);
+      }
     });
 
     // Add hover effects for spider points
