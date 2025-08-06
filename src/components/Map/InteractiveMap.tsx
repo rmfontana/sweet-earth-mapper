@@ -325,10 +325,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation }
       cluster: true,
       clusterMaxZoom: 13, // Lower for better UX - individual points show sooner
       clusterRadius: 35, // Smaller radius for less aggressive clustering
-      clusterProperties: {
-        'avg_brix': ['/', ['+', ['get', 'brix']], ['get', 'point_count']],
-        'crop_types': ['case', ['>', ['get', 'point_count'], 1], 'mixed', ['get', 'cropType']]
-      }
+      //clusterProperties: {
+      //  'avg_brix': ['/', ['+', ['get', 'brix']], ['get', 'point_count']],
+      //  'crop_types': ['case', ['>', ['get', 'point_count'], 1], 'mixed', ['get', 'cropType']]
+      //}
     });
 
     // Enhanced cluster styling with better visual hierarchy
