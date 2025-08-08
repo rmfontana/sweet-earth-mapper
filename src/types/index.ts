@@ -52,7 +52,6 @@ export interface MapFilter {
   dateRange: [string, string];
   verifiedOnly: boolean;
   submittedBy: string;
-  nearbyOnly: boolean;
   store: string;
   brand: string;
   hasImage: boolean;

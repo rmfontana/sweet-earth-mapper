@@ -18,6 +18,8 @@ import { getBrixColor } from '../../lib/getBrixColor';
 interface InteractiveMapProps {
   userLocation?: { lat: number; lng: number } | null;
   showFilters: boolean;
+  nearMeTriggered?: boolean; // Add this prop to trigger near me action
+  onNearMeHandled?: () => void; // Callback to reset the trigger
 }
 
 async function getMapboxToken() {
@@ -40,7 +42,12 @@ async function getMapboxToken() {
   }
 }
 
-const InteractiveMap: React.FC<InteractiveMapProps> = ({ userLocation, showFilters }) => {
+const InteractiveMap: React.FC<InteractiveMapProps> = ({ 
+  userLocation, 
+  showFilters, 
+  nearMeTriggered, 
+  onNearMeHandled 
+}) => {
   const { filters, isAdmin } = useFilters();
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -72,24 +79,29 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ userLocation, showFilte
   useEffect(() => {
     console.log('Applying filters to', allData.length, 'submissions');
     
-    // Use shared filter logic
-    let filtered = applyFilters(allData, filters, isAdmin);
-    
-    // Apply nearby filter separately since it requires userLocation
-    if (filters.nearbyOnly && userLocation) {
-      filtered = filtered.filter((point) => {
-        if (!point.latitude || !point.longitude || isNaN(point.latitude) || isNaN(point.longitude)) {
-          return false;
-        }
-        
-        const distance = getDistanceInMiles(userLocation.lat, userLocation.lng, point.latitude, point.longitude);
-        return distance <= 1; // 1 mile radius
-      });
-    }
+    // Apply filters directly since nearbyOnly is no longer part of the filter system
+    const filtered = applyFilters(allData, filters, isAdmin);
 
     console.log('Filtered results:', filtered.length, 'submissions');
     setFilteredData(filtered);
-  }, [filters, allData, userLocation, isAdmin]);
+  }, [filters, allData, isAdmin]);
+
+  // Handle "Near Me" action separately
+  useEffect(() => {
+    if (nearMeTriggered && userLocation && mapRef.current) {
+      const map = mapRef.current;
+      
+      // Zoom to user location with a tight zoom level to show nearby area
+      map.easeTo({
+        center: [userLocation.lng, userLocation.lat],
+        zoom: 14, // Tight zoom to focus on nearby area
+        duration: 1000,
+      });
+
+      // Call the callback to reset the trigger
+      onNearMeHandled?.();
+    }
+  }, [nearMeTriggered, userLocation, onNearMeHandled]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -526,17 +538,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ userLocation, showFilte
       map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
     }
   }, [isMapLoaded, filteredData]);
-
-  // Pan & zoom to userLocation when it changes
-  useEffect(() => {
-    if (mapRef.current && userLocation) {
-      mapRef.current.easeTo({
-        center: [userLocation.lng, userLocation.lat],
-        zoom: 14,
-        duration: 1000,
-      });
-    }
-  }, [userLocation]);
 
   // Add or update 1-mile radius circle around userLocation
   useEffect(() => {
