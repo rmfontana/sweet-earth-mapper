@@ -539,78 +539,41 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [isMapLoaded, filteredData]);
 
-  // Add or update 1-mile radius circle around userLocation
+  // Add user location marker (optional - could add a simple marker instead of radius)
   useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
 
+    // Clean up any existing user location indicators
+    if (map.getLayer('user-location')) map.removeLayer('user-location');
+    if (map.getSource('user-location')) map.removeSource('user-location');
+
     if (userLocation) {
-      const center: [number, number] = [userLocation.lng, userLocation.lat];
-      const radiusMeters = 1609 * 5; // 1 mile * 5 = 5 miles radius total
-
-      const circleGeoJSON = createCircleGeoJSON(center, radiusMeters);
-
-      if (map.getSource('user-radius')) {
-        (map.getSource('user-radius') as mapboxgl.GeoJSONSource).setData(circleGeoJSON);
-      } else {
-        map.addSource('user-radius', {
-          type: 'geojson',
-          data: circleGeoJSON,
-        });
-
-        map.addLayer({
-          id: 'user-radius-fill',
-          type: 'fill',
-          source: 'user-radius',
-          paint: {
-            'fill-color': '#3b82f6',
-            'fill-opacity': 0.2,
+      // Add a simple marker for user location
+      map.addSource('user-location', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [userLocation.lng, userLocation.lat],
           },
-        });
-
-        map.addLayer({
-          id: 'user-radius-outline',
-          type: 'line',
-          source: 'user-radius',
-          paint: {
-            'line-color': '#2563eb',
-            'line-width': 2,
-          },
-        });
-      }
-    } else {
-      if (map.getLayer('user-radius-fill')) map.removeLayer('user-radius-fill');
-      if (map.getLayer('user-radius-outline')) map.removeLayer('user-radius-outline');
-      if (map.getSource('user-radius')) map.removeSource('user-radius');
-    }
-
-    function createCircleGeoJSON(center: [number, number], radiusInMeters: number): Feature<Polygon> {
-      const points = 64;
-      const coords: [number, number][] = [];
-      const earthRadius = 6371000; // meters
-      const lat = center[1] * (Math.PI / 180);
-      const lng = center[0] * (Math.PI / 180);
-      const d = radiusInMeters / earthRadius;
-
-      for (let i = 0; i < points; i++) {
-        const bearing = (i * 360) / points * (Math.PI / 180);
-        const latRadians = Math.asin(Math.sin(lat) * Math.cos(d) + Math.cos(lat) * Math.sin(d) * Math.cos(bearing));
-        const lngRadians = lng + Math.atan2(
-          Math.sin(bearing) * Math.sin(d) * Math.cos(lat),
-          Math.cos(d) - Math.sin(lat) * Math.sin(latRadians)
-        );
-        coords.push([lngRadians * (180 / Math.PI), latRadians * (180 / Math.PI)]);
-      }
-      coords.push(coords[0]);
-
-      return {
-        type: 'Feature' as const,
-        geometry: {
-          type: 'Polygon' as const,
-          coordinates: [coords],
+          properties: {},
         },
-        properties: {},
-      };
+      });
+
+      map.addLayer({
+        id: 'user-location',
+        type: 'circle',
+        source: 'user-location',
+        paint: {
+          'circle-color': '#3b82f6',
+          'circle-radius': 8,
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.9,
+        },
+      });
     }
   }, [userLocation]);
 
