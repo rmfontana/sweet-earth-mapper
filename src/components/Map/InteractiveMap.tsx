@@ -256,35 +256,40 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ userLocation, showFilte
   // Initialize Mapbox map once
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
-
-    async function initializeMap() {
-      console.log('Initializing Mapbox map...');
-      const token = await getMapboxToken();
-      if (!token) {
-        console.error('Failed to retrieve Mapbox token');
-        return;
+  
+    const timeout = setTimeout(() => {
+      if (!mapContainer.current) return;
+  
+      async function initializeMap() {
+        console.log('Initializing Mapbox map...');
+        const token = await getMapboxToken();
+        if (!token) {
+          console.error('Failed to retrieve Mapbox token');
+          return;
+        }
+  
+        mapboxgl.accessToken = token;
+  
+        const map = new mapboxgl.Map({
+          container: mapContainer.current, 
+          style: 'mapbox://styles/mapbox/satellite-v9',
+          center: userLocation ? [userLocation.lng, userLocation.lat] : [-74.0242, 40.6941],
+          zoom: 10,
+        });
+  
+        mapRef.current = map;
+  
+        map.on('load', () => {
+          console.log('Map loaded');
+          setIsMapLoaded(true);
+        });
       }
-
-      mapboxgl.accessToken = token;
-
-      const map = new mapboxgl.Map({
-        container: mapContainer.current!,
-        style: 'mapbox://styles/mapbox/satellite-v9',
-        center: userLocation ? [userLocation.lng, userLocation.lat] : [-74.0242, 40.6941],
-        zoom: 10,
-      });
-
-      mapRef.current = map;
-
-      map.on('load', () => {
-        console.log('Map loaded');
-        setIsMapLoaded(true);
-      });
-    }
-
-    initializeMap();
-
+  
+      initializeMap();
+    }, 0);
+  
     return () => {
+      clearTimeout(timeout);
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
