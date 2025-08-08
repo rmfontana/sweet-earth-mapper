@@ -395,7 +395,7 @@ const DataEntry = () => {
         latitude: formData.latitude,
         longitude: formData.longitude,
         locationName,
-        userId: user?.id, // <-- CRITICAL: Include the user ID
+        userId: user?.id, 
       };
   
       const supabaseUrl = getSupabaseUrl();
@@ -404,7 +404,7 @@ const DataEntry = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${publishKey}`, // Use the client's public key for the request
+          Authorization: `Bearer ${publishKey}`, 
         },
         body: JSON.stringify(payload),
       });
