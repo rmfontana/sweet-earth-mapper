@@ -15,4 +15,19 @@ export async function fetchCropCategories(): Promise<string[]> {
     const categories = Array.from(new Set(data.map((row) => row.category)));
     return categories;
   }
+
+  export async function fetchCropCategoryByName(cropName: string): Promise<{ category: string } | null> {
+    const { data, error } = await supabase
+      .from('crops')
+      .select('category')
+      .eq('name', cropName)
+      .single();
+  
+    if (error) {
+      console.error('Error fetching crop by name:', error);
+      return null;
+    }
+  
+    return data;
+  }
   

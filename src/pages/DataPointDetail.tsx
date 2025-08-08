@@ -7,51 +7,80 @@ import { Badge } from '../components/ui/badge';
 import { ArrowLeft, MapPin, Calendar, User, CheckCircle, AlertCircle, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchFormattedSubmissions } from '../lib/fetchSubmissions';
-import { fetchBrixByCrop } from '../lib/fetchBrixByCrop'; 
+import { useCropThresholds } from '../contexts/CropThresholdContext';
+import { getBrixColor } from '../lib/getBrixColor';
+import { getBrixQuality } from '../lib/getBrixQuality';
+import { fetchCropCategoryByName } from '../lib/fetchCropCategories';
 
 const DataPointDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  const { cache: thresholdsCache, loading: thresholdsLoading } = useCropThresholds();
+
+  const [category, setCategory] = useState<string | null>(null);
   const [dataPoint, setDataPoint] = useState<any | null>(null);
-  const [cropData, setCropData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadDataPointAndCrop = async () => {
+    let isMounted = true;
+
+    const loadDataPoint = async () => {
       if (!id) {
-        setDataPoint(null);
-        setCropData(null);
-        setLoading(false);
+        if (isMounted) {
+          setDataPoint(null);
+          setLoading(false);
+        }
         return;
       }
 
-      setLoading(true);
+      if (isMounted) setLoading(true);
+
       try {
         const submissions = await fetchFormattedSubmissions();
         const found = submissions.find(point => point.id === id);
-        setDataPoint(found || null);
-
-        if (found?.cropType) {
-          const cropInfo = await fetchBrixByCrop(found.cropType);
-          setCropData(cropInfo);
-        } else {
-          setCropData(null);
-        }
+        if (isMounted) setDataPoint(found || null);
       } catch (error) {
-        console.error('Failed to load data point or crop:', error);
-        setDataPoint(null);
-        setCropData(null);
+        console.error('Failed to load data point:', error);
+        if (isMounted) setDataPoint(null);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
-    loadDataPointAndCrop();
+    loadDataPoint();
+
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
-  if (loading) {
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchCategoryForCrop = async () => {
+      if (!dataPoint?.cropType) {
+        if (isMounted) setCategory(null);
+        return;
+      }
+
+      try {
+        const cropData = await fetchCropCategoryByName(dataPoint.cropType);
+        if (isMounted) setCategory(cropData?.category ?? null);
+      } catch (error) {
+        if (isMounted) setCategory(null);
+      }
+    };
+
+    fetchCategoryForCrop();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dataPoint?.cropType]);
+
+  if (loading || thresholdsLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -82,23 +111,9 @@ const DataPointDetail = () => {
     );
   }
 
-  const getBrixColor = (brixLevel: number) => {
-    if (!cropData) return 'bg-gray-300';
-    const { poor, average, good, excellent } = cropData.brixLevels;
-    if (brixLevel < poor) return 'bg-red-500';
-    if (brixLevel < average) return 'bg-orange-500';
-    if (brixLevel < good) return 'bg-yellow-500';
-    return 'bg-green-500';
-  };
-
-  const getBrixQuality = (brixLevel: number) => {
-    if (!cropData) return 'Unknown';
-    const { poor, average, good, excellent } = cropData.brixLevels;
-    if (brixLevel < poor) return 'Poor';
-    if (brixLevel < average) return 'Average';
-    if (brixLevel < good) return 'Good';
-    return 'Excellent';
-  };
+  const cropThresholds = dataPoint.cropType ? thresholdsCache[dataPoint.cropType] : undefined;
+  const colorClass = getBrixColor(dataPoint.brixLevel, cropThresholds, 'bg');
+  const qualityText = getBrixQuality(dataPoint.brixLevel, cropThresholds);
 
   const isOwner = user?.display_name === dataPoint.submittedBy;
   const dataPointLocationName = dataPoint.locationName || dataPoint.location?.name || 'Unknown';
@@ -106,7 +121,7 @@ const DataPointDetail = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      
+
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back Button */}
         <div className="mb-6">
@@ -137,12 +152,12 @@ const DataPointDetail = () => {
                     <p className="text-gray-600 mt-1">{dataPoint.variety}</p>
                   )}
                 </div>
-                
+
                 {isOwner && (
                   <div className="flex space-x-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => navigate(`/data-point/edit/${dataPoint.id}`)}
                     >
                       <Edit className="w-4 h-4 mr-1" />
@@ -156,27 +171,27 @@ const DataPointDetail = () => {
                 )}
               </div>
             </CardHeader>
-            
+
             <CardContent className="space-y-6">
               {/* BRIX Reading */}
               <div className="bg-gray-50 rounded-lg p-6 text-center">
-              <div className="flex items-center justify-center space-x-4 mb-4">
-                <div className={`w-16 h-16 rounded-full ${getBrixColor(dataPoint.brixLevel)} flex items-center justify-center`}>
-                  <span className="text-white font-bold text-xl">{dataPoint.brixLevel}</span>
-                </div>
-                <div className="text-left">
-                  <p className="text-2xl font-bold text-gray-900">{dataPoint.brixLevel} BRIX</p>
-                  <p className="text-sm text-gray-600">Refractometer Reading</p>
-                  <Badge className={`mt-1 ${getBrixColor(dataPoint.brixLevel)} text-white`}>
-                    {getBrixQuality(dataPoint.brixLevel)} Quality
-                  </Badge>
+                <div className="flex items-center justify-center space-x-4 mb-4">
+                  <div className={`${colorClass} w-16 h-16 rounded-full flex items-center justify-center`}>
+                    <span className="text-white font-bold text-xl">{dataPoint.brixLevel}</span>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-2xl font-bold text-gray-900">{dataPoint.brixLevel} BRIX</p>
+                    <p className="text-sm text-gray-600">Refractometer Reading</p>
+                    <Badge className={`${colorClass} mt-1 text-white`}>
+                      {qualityText} Quality
+                    </Badge>
+                  </div>
                 </div>
               </div>
-            </div>
 
               {/* Measurement & Submission Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
+
                 {/* Assessment Date */}
                 <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
                   <Calendar className="w-5 h-5 text-gray-600" />
@@ -229,10 +244,10 @@ const DataPointDetail = () => {
                 )}
 
                 {/* Crop Category */}
-                {cropData?.category && (
+                {category && (
                   <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
                     <Badge variant="secondary" className="text-gray-700">
-                      Category: {cropData.category}
+                      Category: {category}
                     </Badge>
                   </div>
                 )}
@@ -306,7 +321,7 @@ const DataPointDetail = () => {
                     View on Map
                   </Button>
                 </Link>
-                
+
                 <Link to="/data" className="block">
                   <Button variant="outline" className="w-full">
                     View All Data
@@ -321,24 +336,28 @@ const DataPointDetail = () => {
                 <CardTitle className="text-lg">BRIX Scale Reference</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                    <span>&lt; {cropData?.brixLevels?.poor ?? 10} BRIX (Poor)</span>
+                {cropThresholds ? (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                      <span>{`Less than ${cropThresholds.average} BRIX — Poor`}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                      <span>{`Between ${cropThresholds.average} and ${cropThresholds.good} BRIX — Average`}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                      <span>{`Between ${cropThresholds.good} and ${cropThresholds.excellent} BRIX — Good`}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-green-700"></div>
+                      <span>{`${cropThresholds.excellent} BRIX and above — Excellent`}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                    <span>{cropData?.brixLevels?.poor ?? 10} - {cropData?.brixLevels?.average ?? 15} BRIX (Average)</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                    <span>{cropData?.brixLevels?.average ?? 15} - {cropData?.brixLevels?.good ?? 20} BRIX (Good)</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span>&gt; {cropData?.brixLevels?.good ?? 20} BRIX (Excellent)</span>
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">BRIX scale data unavailable for this crop.</p>
+                )}
               </CardContent>
             </Card>
           </div>

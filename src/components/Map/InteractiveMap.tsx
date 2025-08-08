@@ -12,6 +12,8 @@ import { MapPin, Calendar, User, CheckCircle, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
 import type { Feature, Polygon } from 'geojson';
+import { useCropThresholds } from '../../contexts/CropThresholdContext';
+import { getBrixColor } from '../../lib/getBrixColor';
 
 interface InteractiveMapProps {
   userLocation?: { lat: number; lng: number } | null;
@@ -51,6 +53,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ userLocation, showFilte
     points: BrixDataPoint[];
     position: { x: number; y: number };
   } | null>(null);
+
+  const { cache, loading } = useCropThresholds();
 
   useEffect(() => {
     console.log('Fetching submissions...');
@@ -111,11 +115,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ userLocation, showFilte
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  const getBrixColor = (brix: number) => {
-    if (brix < 10) return '#ef4444';
-    if (brix < 15) return '#f97316';
-    if (brix < 20) return '#eab308';
-    return '#22c55e';
+  // Fallback color if loading or no thresholds
+  const getColor = (cropType: string, brixLevel: number) => {
+    if (loading) return '#d1d5db'; // gray fallback hex
+    const thresholds = cache[cropType];
+    // Use your getBrixColor utility from your utils, which expects thresholds
+    return getBrixColor(brixLevel, thresholds, 'hex');
   };
 
   // Spiderfy cluster function
@@ -153,7 +158,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ userLocation, showFilte
         properties: {
           id: point.id,
           brix: point.brixLevel,
-          color: getBrixColor(point.brixLevel),
+          color: getColor(point.cropType, point.brixLevel),
           raw: JSON.stringify(point),
           cropType: point.cropType,
         },
@@ -626,7 +631,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ userLocation, showFilte
         properties: {
           id: point.id,
           brix: point.brixLevel,
-          color: getBrixColor(point.brixLevel),
+          color: getColor(point.cropType, point.brixLevel),
           raw: JSON.stringify(point),
         },
       };
@@ -702,7 +707,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ userLocation, showFilte
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">BRIX Reading</span>
-                  <Badge className="text-white" style={{ backgroundColor: getBrixColor(selectedPoint.brixLevel) }}>
+                  <Badge className="text-white" style={{ backgroundColor: getColor(selectedPoint.cropType, selectedPoint.brixLevel) }}>
                     {selectedPoint.brixLevel}
                   </Badge>
                 </div>

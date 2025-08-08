@@ -8,7 +8,6 @@ import { Badge } from '../ui/badge';
 import {
   Calendar,
   User,
-  MapPin,
   CheckCircle,
   Filter,
   Search,
@@ -18,10 +17,11 @@ import {
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
 import { useFilters } from '../../contexts/FilterContext';
 import { applyFilters, getFilterSummary } from '../../lib/filterUtils';
+import { useBrixColorFromContext } from '../../lib/getBrixColor';
 
 const DataTable: React.FC = () => {
   const { filters, setFilters, isAdmin, setFilteredCount } = useFilters();
-  
+
   const [data, setData] = useState<BrixDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +36,10 @@ const DataTable: React.FC = () => {
 
   const [cropTypes, setCropTypes] = useState<string[]>([]);
 
+  type BrixColorBadgeProps = {
+    cropType: string;
+    brixLevel: number;
+  };
 
   // Fetch submissions on mount
   useEffect(() => {
@@ -71,10 +75,8 @@ const DataTable: React.FC = () => {
   }, [filters, searchTerm]);
 
   const filteredData = useMemo(() => {
-    // Apply shared filter logic first
     let filtered = applyFilters(data, filters, isAdmin);
 
-    // Apply search filter separately
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter((point) => {
@@ -88,10 +90,8 @@ const DataTable: React.FC = () => {
       });
     }
 
-    // Update filtered count for context
     setFilteredCount(filtered.length);
 
-    // Sorting
     filtered = [...filtered].sort((a, b) => {
       let aValue = a[sortBy];
       let bValue = b[sortBy];
@@ -111,7 +111,6 @@ const DataTable: React.FC = () => {
     return filtered;
   }, [data, searchTerm, filters, sortBy, sortOrder, isAdmin, setFilteredCount]);
 
-  // Pagination calculations
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
@@ -125,13 +124,6 @@ const DataTable: React.FC = () => {
     }
   };
 
-  const getBrixColor = (brixLevel: number) => {
-    if (brixLevel < 10) return 'bg-red-100 text-red-800';
-    if (brixLevel < 15) return 'bg-orange-100 text-orange-800';
-    if (brixLevel < 20) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-green-100 text-green-800';
-  };
-
   if (loading) {
     return <div className="py-12 text-center text-gray-600">Loading data...</div>;
   }
@@ -139,6 +131,12 @@ const DataTable: React.FC = () => {
   if (error) {
     return <div className="py-12 text-center text-red-600">{error}</div>;
   }
+
+  const BrixColorBadge: React.FC<BrixColorBadgeProps> = ({ cropType, brixLevel }) => {
+    const colorClass = useBrixColorFromContext(cropType, brixLevel, 'bg');
+
+    return <Badge className={colorClass}>{brixLevel}</Badge>;
+  };
 
   return (
     <div className="space-y-6">
@@ -185,19 +183,17 @@ const DataTable: React.FC = () => {
                     <div key={crop} className="flex items-center space-x-2">
                       <Checkbox
                         checked={filters.cropTypes.includes(crop)}
-                         onCheckedChange={(checked) => {
+                        onCheckedChange={(checked) => {
                           if (checked) {
-                            const newFilters = {
+                            setFilters({
                               ...filters,
                               cropTypes: [...filters.cropTypes, crop],
-                            };
-                            setFilters(newFilters);
+                            });
                           } else {
-                            const newFilters = {
+                            setFilters({
                               ...filters,
                               cropTypes: filters.cropTypes.filter((c) => c !== crop),
-                            };
-                            setFilters(newFilters);
+                            });
                           }
                         }}
                       />
@@ -346,7 +342,7 @@ const DataTable: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge className={getBrixColor(point.brixLevel)}>{point.brixLevel}</Badge>
+                      <BrixColorBadge cropType={point.cropType} brixLevel={point.brixLevel} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {new Date(point.submittedAt).toLocaleDateString()}
@@ -434,7 +430,6 @@ const DataTable: React.FC = () => {
                         </Button>
                       );
                     }
-                    // For brevity, skip rendering pages too far away, but you could add ellipsis here.
                     return null;
                   })}
 
@@ -454,7 +449,7 @@ const DataTable: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Selected Point Modal or Details (if you have one) */}
+      {/* Selected Point Modal */}
       {selectedPoint && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 max-w-lg w-full relative">
@@ -476,10 +471,8 @@ const DataTable: React.FC = () => {
               <strong>Date:</strong> {new Date(selectedPoint.submittedAt).toLocaleDateString()}
             </p>
             <p>
-              <strong>Status:</strong>{' '}
-              {selectedPoint.verified ? 'Verified' : 'Pending Verification'}
+              <strong>Status:</strong> {selectedPoint.verified ? 'Verified' : 'Pending Verification'}
             </p>
-            {/* Add more details as needed */}
           </div>
         </div>
       )}

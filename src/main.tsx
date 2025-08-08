@@ -3,11 +3,14 @@ import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import { FilterProvider } from './contexts/FilterContext'
+import { CropThresholdProvider } from './contexts/CropThresholdContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <FilterProvider>
-      <App />
+      <CropThresholdProvider> 
+        <App />
+      </CropThresholdProvider>
     </FilterProvider>
   </StrictMode>,
-)
+);

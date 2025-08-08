@@ -10,6 +10,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchFormattedSubmissions } from '../lib/fetchSubmissions';
 import { fetchBrixByCrop } from '../lib/fetchBrixByCrop'; 
+import { BrixThresholds } from '../lib/getBrixQuality';
+import { useBrixColorFromContext } from '../lib/getBrixColor';
 
 
 const YourData = () => {
@@ -18,13 +20,6 @@ const YourData = () => {
   const [loading, setLoading] = useState(true);
 
   const [brixThresholdsByCrop, setBrixThresholdsByCrop] = useState<Record<string, BrixThresholds>>({});
-
-  type BrixThresholds = {
-    poor: number;
-    average: number;
-    good: number;
-    excellent: number;
-  };
 
   useEffect(() => {
     const loadSubmissions = async () => {
@@ -66,34 +61,10 @@ const YourData = () => {
     loadSubmissions();
   }, [user?.display_name]);
 
-  const getBrixColor = (brixLevel: number, cropType: string) => {
-    console.log('Checking brix color for:', cropType, 'with brixLevel:', brixLevel);
-
-    if (brixLevel === null || brixLevel === undefined || isNaN(brixLevel)) {
-      return 'bg-gray-300';
-    }
-
-    if (!cropType) return 'bg-gray-300';  // no crop type? show gray
-
-    const thresholds = brixThresholdsByCrop[cropType.toLowerCase().trim()];
-
-    if (!thresholds) {
-      console.warn(`No thresholds found for cropType: "${cropType}"`);
-    return 'bg-gray-300';
-  }
-  
-    const { poor, average, good, excellent } = thresholds;
-  
-    if (brixLevel < poor) return 'bg-red-500';
-    if (brixLevel < average) return 'bg-orange-500';
-    if (brixLevel < good) return 'bg-yellow-500';
-    if (brixLevel < excellent) return 'bg-green-500';
-    return 'bg-green-500';
-  };
-
   const handleDelete = (id: string) => {
     console.log('Delete submission:', id);
     // Mock delete functionality
+    // TODO Handle delete!
   };
 
   if (!user) {
@@ -218,9 +189,17 @@ const YourData = () => {
                           </TableCell>
 
                           <TableCell className="text-center">
-                            <Badge className={`${getBrixColor(submission.brixLevel, submission.cropType?.toLowerCase() || '')} text-white px-3 py-1 rounded-full`}>
-                              {submission.brixLevel}
-                            </Badge>
+                            {(() => {
+                              const colorClass = useBrixColorFromContext(
+                                submission.cropType?.toLowerCase().trim() || '',
+                                submission.brixLevel
+                              );
+                              return (
+                                <Badge className={`${colorClass} text-white px-3 py-1 rounded-full`}>
+                                  {colorClass === 'bg-gray-300' ? '...' : submission.brixLevel}
+                                </Badge>
+                              );
+                            })()}
                           </TableCell>
 
                           <TableCell>
