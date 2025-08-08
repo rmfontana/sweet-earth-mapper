@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -12,10 +12,12 @@ import { useToast } from '../hooks/use-toast';
 
 const Register = () => {
   const [formData, setFormData] = useState({
+    display_name: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
   });
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -28,6 +30,10 @@ const Register = () => {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
+
+    if (!formData.display_name.trim()) {
+      newErrors.display_name = 'Display name is required';
+    }
 
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
@@ -66,34 +72,32 @@ const Register = () => {
     e.preventDefault();
     setIsLoading(true);
     setFormErrors({});
-  
+
     if (!validateForm()) {
       setIsLoading(false);
       return;
     }
-  
-    // Register WITHOUT username (only email, password)
-    const success = await register(formData.email, formData.password);
+
+    const success = await register(
+      formData.email,
+      formData.password,
+      formData.display_name
+    );
     setIsLoading(false);
-  
+
     if (success) {
       toast({
-        title: "Welcome to BRIX!",
-        description: "Your account has been created successfully.",
+        title: 'Welcome to BRIX!',
+        description: 'Your account has been created successfully.',
       });
-      // Navigate to verify email page
       navigate('/verify-email');
-  
-      // Optional: You can also store the username temporarily (localStorage or context)
-      // and update it AFTER user confirms email and logs in.
     } else {
       setFormErrors(prev => ({
         ...prev,
-        general: authError || 'Registration failed. Please try again.'
+        general: authError || 'Registration failed. Please try again.',
       }));
     }
   };
-  
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -122,7 +126,30 @@ const Register = () => {
                   <AlertDescription>{formErrors.general}</AlertDescription>
                 </Alert>
               )}
-              
+
+              {/* display name */}
+              <div>
+                <Label htmlFor="display_name">Display Name</Label>
+                <div className="mt-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <User className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <Input
+                    id="display_name"
+                    name="display_name"
+                    type="text"
+                    value={formData.display_name}
+                    onChange={handleInputChange}
+                    required
+                    className={`pl-10 ${formErrors.display_name ? 'border-red-300' : ''}`}
+                    placeholder="Choose a display name"
+                  />
+                </div>
+                {formErrors.display_name && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.display_name}</p>
+                )}
+              </div>
+
               {/* email */}
               <div>
                 <Label htmlFor="email">Email address</Label>
@@ -170,11 +197,7 @@ const Register = () => {
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     onClick={() => setShowPassword(!showPassword)}
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-5 w-5 text-gray-400" />
-                    ) : (
-                      <Eye className="h-5 w-5 text-gray-400" />
-                    )}
+                    {showPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
                   </button>
                 </div>
                 {formErrors.password && (
@@ -205,11 +228,7 @@ const Register = () => {
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   >
-                    {showConfirmPassword ? (
-                      <EyeOff className="h-5 w-5 text-gray-400" />
-                    ) : (
-                      <Eye className="h-5 w-5 text-gray-400" />
-                    )}
+                    {showConfirmPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
                   </button>
                 </div>
                 {formErrors.confirmPassword && (
@@ -231,13 +250,9 @@ const Register = () => {
                 />
                 <Label htmlFor="terms" className="text-sm text-gray-600">
                   I agree to the{' '}
-                  <Link to="/terms" className="text-green-600 hover:text-green-500">
-                    Terms and Conditions
-                  </Link>{' '}
+                  <Link to="/terms" className="text-green-600 hover:text-green-500">Terms and Conditions</Link>{' '}
                   and{' '}
-                  <Link to="/privacy" className="text-green-600 hover:text-green-500">
-                    Privacy Policy
-                  </Link>
+                  <Link to="/privacy" className="text-green-600 hover:text-green-500">Privacy Policy</Link>
                 </Label>
               </div>
               {formErrors.terms && (
@@ -256,10 +271,7 @@ const Register = () => {
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
                 Already have an account?{' '}
-                <Link
-                  to="/login"
-                  className="font-medium text-green-600 hover:text-green-500"
-                >
+                <Link to="/login" className="font-medium text-green-600 hover:text-green-500">
                   Sign in
                 </Link>
               </p>

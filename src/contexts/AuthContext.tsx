@@ -25,7 +25,7 @@ interface AuthContextType {
   authError: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  register: (email: string, password: string) => Promise<boolean>;
+  register: (email: string, password: string, displayName: string) => Promise<boolean>;
   updateUsername: (newUsername: string) => Promise<boolean>;
 }
 
@@ -177,12 +177,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const register = async (email: string, password: string): Promise<boolean> => {
+  const register = async (email: string, password: string, displayName: string): Promise<boolean> => {
     setAuthError(null);
-
-    const supabaseUrl  = getSupabaseUrl();
+  
+    const supabaseUrl = getSupabaseUrl();
     const emailRedirectTo = `${supabaseUrl}/login`;
-
+  
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -191,18 +191,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           emailRedirectTo,
         },
       });
-
+  
       if (error) {
         console.error('[REGISTER] Error:', error.message);
         setAuthError(error.message);
         return false;
       }
-
-      if (!data.user && !data.session) {
+  
+      const user = data.user;
+  
+      // Insert into public.users table
+      if (user) {
+        const { error: insertError } = await supabase.from('users').insert({
+          id: user.id,
+          email,
+          display_name: displayName,
+        });
+  
+        if (insertError) {
+          console.error('[REGISTER] Failed to insert user profile:', insertError.message);
+          setAuthError(insertError.message);
+          return false;
+        }
+      }
+  
+      if (!user && !data.session) {
         setAuthError('Account created, but you must verify your email.');
         return false;
       }
-
+  
       return true;
     } catch (err: any) {
       console.error('[REGISTER] Unexpected error:', err.message || err);
