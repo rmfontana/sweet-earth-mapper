@@ -547,34 +547,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     // Clean up any existing user location indicators
     if (map.getLayer('user-location')) map.removeLayer('user-location');
     if (map.getSource('user-location')) map.removeSource('user-location');
-
-    if (userLocation) {
-      // Add a simple marker for user location
-      map.addSource('user-location', {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          geometry: {
-            type: 'Point',
-            coordinates: [userLocation.lng, userLocation.lat],
-          },
-          properties: {},
-        },
-      });
-
-      map.addLayer({
-        id: 'user-location',
-        type: 'circle',
-        source: 'user-location',
-        paint: {
-          'circle-color': '#3b82f6',
-          'circle-radius': 8,
-          'circle-stroke-width': 3,
-          'circle-stroke-color': '#ffffff',
-          'circle-opacity': 0.9,
-        },
-      });
-    }
   }, [userLocation]);
 
   const toGeoJSON = (data: BrixDataPoint[]): GeoJSON.FeatureCollection => {
