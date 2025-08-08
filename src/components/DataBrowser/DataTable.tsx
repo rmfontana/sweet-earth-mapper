@@ -346,7 +346,7 @@ const DataTable: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge className={getBrixColor(point.brixLevel)}>{point.brixLevel}°</Badge>
+                      <Badge className={getBrixColor(point.brixLevel)}>{point.brixLevel}</Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {new Date(point.submittedAt).toLocaleDateString()}
@@ -467,7 +467,7 @@ const DataTable: React.FC = () => {
             </button>
             <h2 className="text-xl font-semibold mb-4">{selectedPoint.cropType} Details</h2>
             <p>
-              <strong>Brix Level:</strong> {selectedPoint.brixLevel}°
+              <strong>Brix Level:</strong> {selectedPoint.brixLevel}
             </p>
             <p>
               <strong>Submitted By:</strong> {selectedPoint.submittedBy}

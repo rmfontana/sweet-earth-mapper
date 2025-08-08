@@ -675,7 +675,7 @@ const DataEntry = () => {
                           focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300
                           ${errors.brixLevel ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
                       />
-                      <span className="absolute top-1/2 right-4 -translate-y-1/2 text-gray-500 text-lg font-bold">%</span>
+                      <span className="absolute top-1/2 right-4 -translate-y-1/2 text-gray-500 text-lg font-bold"></span>
                     </div>
                     {errors.brixLevel && (
                       <p className="text-red-600 text-sm mt-2 flex items-center">
