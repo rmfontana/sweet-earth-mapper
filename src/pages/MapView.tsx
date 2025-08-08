@@ -28,7 +28,7 @@ const MapView = () => {
           
           toast({
             title: "Location found",
-            description: "Showing measurements within 1 mile of your location.",
+            description: "Showing measurements 5 miles of your location.",
           });
         },
         (error) => {
