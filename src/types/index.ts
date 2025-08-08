@@ -7,8 +7,10 @@ export interface BrixDataPoint {
   verifiedAt: string;
   label: string;
   cropType: string;
+  category: string;
   latitude: number;
   longitude: number;
+  locationName: string;
   storeName: string;
   brandName: string;
   submittedBy: string;
@@ -49,4 +51,10 @@ export interface MapFilter {
   brixRange: [number, number];
   dateRange: [string, string];
   verifiedOnly: boolean;
+  submittedBy: string;
+  nearbyOnly: boolean;
+  store: string;
+  brand: string;
+  hasImage: boolean;
+  category: string;
 }

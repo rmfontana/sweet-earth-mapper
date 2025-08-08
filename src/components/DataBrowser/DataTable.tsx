@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { BrixDataPoint, MapFilter } from '../../types';
+import { BrixDataPoint } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -16,14 +16,12 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
-import { createClient } from '@supabase/supabase-js';
-import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
+import { useFilters } from '../../contexts/FilterContext';
+import { applyFilters, getFilterSummary } from '../../lib/filterUtils';
 
 const DataTable: React.FC = () => {
-  const supabaseUrl = getSupabaseUrl();
-  const supabaseAnonKey = getPublishableKey();
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
+  const { filters, setFilters, isAdmin, setFilteredCount } = useFilters();
+  
   const [data, setData] = useState<BrixDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,56 +36,6 @@ const DataTable: React.FC = () => {
 
   const [cropTypes, setCropTypes] = useState<string[]>([]);
 
-  // We'll keep verifiedOnly filter only if admin, else force true
-  const [filters, setFilters] = useState<MapFilter>({
-    cropTypes: [],
-    brixRange: [0, 30],
-    dateRange: ['2024-01-01', '2024-12-31'],
-    verifiedOnly: false,
-  });
-
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  // Load user role from Supabase on mount
-  useEffect(() => {
-    const getUserRole = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setIsAdmin(false);
-        return;
-      }
-
-      // Assuming your Supabase RBAC or custom claims have "role" or admin flag
-      // Replace the following check with your actual role check method:
-      const { data: profile, error } = await supabase
-        .from('profiles') // or wherever you store roles
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (error || !profile) {
-        setIsAdmin(false);
-        return;
-      }
-
-      setIsAdmin(profile.role === 'admin'); // adjust 'admin' string as needed
-    };
-
-    getUserRole();
-  }, [supabase]);
-
-  // After we know isAdmin, update verifiedOnly filter accordingly:
-  useEffect(() => {
-    if (!isAdmin) {
-      setFilters((prev) => ({ ...prev, verifiedOnly: true }));
-    } else {
-      // Allow toggling for admins - default false or keep previous
-      setFilters((prev) => ({ ...prev, verifiedOnly: prev.verifiedOnly ?? false }));
-    }
-  }, [isAdmin]);
 
   // Fetch submissions on mount
   useEffect(() => {
@@ -123,48 +71,25 @@ const DataTable: React.FC = () => {
   }, [filters, searchTerm]);
 
   const filteredData = useMemo(() => {
-    let filtered = data.filter((point) => {
-      // Force verified only if not admin
-      if (!isAdmin && !point.verified) {
-        return false;
-      }
+    // Apply shared filter logic first
+    let filtered = applyFilters(data, filters, isAdmin);
 
-      // If admin and verifiedOnly filter is on, filter unverified out
-      if (isAdmin && filters.verifiedOnly && !point.verified) {
-        return false;
-      }
-
-      // Search filter across multiple fields
-      if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
+    // Apply search filter separately
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter((point) => {
         const matches =
           (point.cropType && point.cropType.toLowerCase().includes(searchLower)) ||
-          (point.submittedBy && point.submittedBy.toLowerCase().includes(searchLower));
+          (point.submittedBy && point.submittedBy.toLowerCase().includes(searchLower)) ||
+          (point.locationName && point.locationName.toLowerCase().includes(searchLower)) ||
+          (point.storeName && point.storeName.toLowerCase().includes(searchLower)) ||
+          (point.brandName && point.brandName.toLowerCase().includes(searchLower));
+        return matches;
+      });
+    }
 
-        if (!matches) return false;
-      }
-
-      // Crop types filter
-      if (filters.cropTypes.length > 0 && !filters.cropTypes.includes(point.cropType)) {
-        return false;
-      }
-
-      // Brix range filter
-      if (point.brixLevel < filters.brixRange[0] || point.brixLevel > filters.brixRange[1]) {
-        return false;
-      }
-
-      // Date range filter
-      const submittedDate = new Date(point.submittedAt).getTime();
-      const startDate = new Date(filters.dateRange[0]).getTime();
-      const endDate = new Date(filters.dateRange[1]).getTime();
-
-      if (submittedDate < startDate || submittedDate > endDate) {
-        return false;
-      }
-
-      return true;
-    });
+    // Update filtered count for context
+    setFilteredCount(filtered.length);
 
     // Sorting
     filtered = [...filtered].sort((a, b) => {
@@ -184,7 +109,7 @@ const DataTable: React.FC = () => {
     });
 
     return filtered;
-  }, [data, searchTerm, filters, sortBy, sortOrder, isAdmin]);
+  }, [data, searchTerm, filters, sortBy, sortOrder, isAdmin, setFilteredCount]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -221,7 +146,12 @@ const DataTable: React.FC = () => {
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
-            <CardTitle>Brix Data Browser</CardTitle>
+            <div>
+              <CardTitle>Brix Data Browser</CardTitle>
+              <p className="text-sm text-gray-600 mt-1">
+                Showing {filteredData.length} of {data.length} submissions ({getFilterSummary(filters, isAdmin)})
+              </p>
+            </div>
             <div className="flex items-center space-x-2">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -255,17 +185,19 @@ const DataTable: React.FC = () => {
                     <div key={crop} className="flex items-center space-x-2">
                       <Checkbox
                         checked={filters.cropTypes.includes(crop)}
-                        onCheckedChange={(checked) => {
+                         onCheckedChange={(checked) => {
                           if (checked) {
-                            setFilters((prev) => ({
-                              ...prev,
-                              cropTypes: [...prev.cropTypes, crop],
-                            }));
+                            const newFilters = {
+                              ...filters,
+                              cropTypes: [...filters.cropTypes, crop],
+                            };
+                            setFilters(newFilters);
                           } else {
-                            setFilters((prev) => ({
-                              ...prev,
-                              cropTypes: prev.cropTypes.filter((c) => c !== crop),
-                            }));
+                            const newFilters = {
+                              ...filters,
+                              cropTypes: filters.cropTypes.filter((c) => c !== crop),
+                            };
+                            setFilters(newFilters);
                           }
                         }}
                       />
@@ -284,10 +216,10 @@ const DataTable: React.FC = () => {
                     placeholder="Min Brix"
                     value={filters.brixRange[0]}
                     onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        brixRange: [Number(e.target.value), prev.brixRange[1]],
-                      }))
+                      setFilters({
+                        ...filters,
+                        brixRange: [Number(e.target.value), filters.brixRange[1]],
+                      })
                     }
                   />
                   <Input
@@ -295,10 +227,10 @@ const DataTable: React.FC = () => {
                     placeholder="Max Brix"
                     value={filters.brixRange[1]}
                     onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        brixRange: [prev.brixRange[0], Number(e.target.value)],
-                      }))
+                      setFilters({
+                        ...filters,
+                        brixRange: [filters.brixRange[0], Number(e.target.value)],
+                      })
                     }
                   />
                 </div>
@@ -312,20 +244,20 @@ const DataTable: React.FC = () => {
                     type="date"
                     value={filters.dateRange[0]}
                     onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        dateRange: [e.target.value, prev.dateRange[1]],
-                      }))
+                      setFilters({
+                        ...filters,
+                        dateRange: [e.target.value, filters.dateRange[1]],
+                      })
                     }
                   />
                   <Input
                     type="date"
                     value={filters.dateRange[1]}
                     onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        dateRange: [prev.dateRange[0], e.target.value],
-                      }))
+                      setFilters({
+                        ...filters,
+                        dateRange: [filters.dateRange[0], e.target.value],
+                      })
                     }
                   />
                 </div>
@@ -339,10 +271,10 @@ const DataTable: React.FC = () => {
                     <Checkbox
                       checked={filters.verifiedOnly}
                       onCheckedChange={(checked) =>
-                        setFilters((prev) => ({
-                          ...prev,
+                        setFilters({
+                          ...filters,
                           verifiedOnly: !!checked,
-                        }))
+                        })
                       }
                     />
                     <label className="text-sm">Verified only</label>

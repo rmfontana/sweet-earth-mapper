@@ -11,6 +11,7 @@ import { fetchBrands } from '@/lib/fetchBrands';
 import { fetchStores } from '@/lib/fetchStores';
 import { fetchCropCategories } from '@/lib/fetchCropCategories';
 import { Range, getTrackBackground } from 'react-range';
+import { useFilters } from '../../contexts/FilterContext';
 
 import {
   Command,
@@ -87,25 +88,8 @@ const BrixRangeSlider = ({
   );
 };
 
-interface Filters {
-  cropTypes: string[];
-  brixRange: [number, number];
-  dateRange: [string, string];
-  verifiedOnly: boolean;    // required
-  submittedBy: string;
-  nearbyOnly: boolean;
-  store: string;
-  brand: string;
-  hasImage: boolean;
-  category: string;
-}
-
-interface MapFiltersProps {
-  filters: Filters;
-  onFiltersChange: (filters: Filters) => void;
-}
-
-const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => {
+const MapFilters: React.FC = () => {
+  const { filters, setFilters, isAdmin } = useFilters();
   // Data options for dropdowns
   const [availableCrops, setAvailableCrops] = useState<string[]>([]);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
@@ -159,13 +143,9 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
       crop.toLowerCase().includes(cropQuery.toLowerCase())
     ), [availableCrops, cropQuery]);
 
-  // Always ensure verifiedOnly is true, hide toggle from UI
-  const updateFilters = (key: keyof Filters, value: any) => {
-    if (key === 'verifiedOnly') {
-      // Always true, ignore any attempts to change
-      return;
-    }
-    onFiltersChange({ ...filters, [key]: value, verifiedOnly: true });
+  // Update filters helper
+  const updateFilters = (key: keyof typeof filters, value: any) => {
+    setFilters({ ...filters, [key]: value });
   };
 
   // Crop type add/remove helpers
@@ -179,7 +159,7 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
   };
 
   const clearAllFilters = () => {
-    onFiltersChange({
+    setFilters({
       cropTypes: [],
       brixRange: [0, 30],
       dateRange: ['', ''],
@@ -188,7 +168,7 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
       category: '',
       hasImage: false,
       submittedBy: '',
-      verifiedOnly: true, // enforced
+      verifiedOnly: true,
       nearbyOnly: false,
     });
     // Clear search queries too
@@ -293,7 +273,7 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
             onChange={(newRange) => {
               // Enforce valid range and update filters
               if (newRange[0] <= newRange[1]) {
-                onFiltersChange({ ...filters, brixRange: newRange });
+                setFilters({ ...filters, brixRange: newRange });
               }
             }}
           />
@@ -488,6 +468,20 @@ const MapFilters: React.FC<MapFiltersProps> = ({ filters, onFiltersChange }) => 
             aria-label="Filter by measurements with images"
           />
         </div>
+
+        {/* Verified Only - only for admins */}
+        {isAdmin && (
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">Verified Only</Label>
+            <Switch
+              checked={filters.verifiedOnly}
+              onCheckedChange={(val) => updateFilters('verifiedOnly', val)}
+              aria-checked={filters.verifiedOnly}
+              role="switch"
+              aria-label="Show only verified measurements"
+            />
+          </div>
+        )}
 
         {/* Summary */}
         <div className="pt-4 border-t">

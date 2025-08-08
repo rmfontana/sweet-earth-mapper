@@ -3,6 +3,8 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { BrixDataPoint } from '../../types';
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
+import { useFilters } from '../../contexts/FilterContext';
+import { applyFilters } from '../../lib/filterUtils';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -12,14 +14,6 @@ import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
 import type { Feature, Polygon } from 'geojson';
 
 interface InteractiveMapProps {
-  filters?: {
-    cropTypes: string[];
-    brixRange: [number, number];
-    dateRange: [string, string];
-    verifiedOnly: boolean;
-    submittedBy: string;
-    nearbyOnly?: boolean;
-  };
   userLocation?: { lat: number; lng: number } | null;
   showFilters: boolean;
 }
@@ -44,7 +38,8 @@ async function getMapboxToken() {
   }
 }
 
-const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation, showFilters }) => {
+const InteractiveMap: React.FC<InteractiveMapProps> = ({ userLocation, showFilters }) => {
+  const { filters, isAdmin } = useFilters();
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [allData, setAllData] = useState<BrixDataPoint[]>([]);
@@ -71,37 +66,26 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ filters, userLocation, 
   }, []);
 
   useEffect(() => {
-    if (!filters) {
-      console.log('No filters applied, showing all data:', allData.length);
-      setFilteredData(allData);
-      return;
+    console.log('Applying filters to', allData.length, 'submissions');
+    
+    // Use shared filter logic
+    let filtered = applyFilters(allData, filters, isAdmin);
+    
+    // Apply nearby filter separately since it requires userLocation
+    if (filters.nearbyOnly && userLocation) {
+      filtered = filtered.filter((point) => {
+        if (!point.latitude || !point.longitude || isNaN(point.latitude) || isNaN(point.longitude)) {
+          return false;
+        }
+        
+        const distance = getDistanceInMiles(userLocation.lat, userLocation.lng, point.latitude, point.longitude);
+        return distance <= 1; // 1 mile radius
+      });
     }
 
-    console.log('Applying filters to', allData.length, 'submissions');
-    const result = allData.filter((point) => {
-      if (!point.latitude || !point.longitude || isNaN(point.latitude) || isNaN(point.longitude)) {
-        console.warn('Filtering out point with invalid coordinates:', point.id);
-        return false;
-      }
-
-      if (filters.cropTypes.length && !filters.cropTypes.includes(point.cropType)) return false;
-      if (point.brixLevel < filters.brixRange[0] || point.brixLevel > filters.brixRange[1]) return false;
-      if (filters.dateRange[0] && new Date(point.submittedAt) < new Date(filters.dateRange[0])) return false;
-      if (filters.dateRange[1] && new Date(point.submittedAt) > new Date(filters.dateRange[1])) return false;
-      if (filters.verifiedOnly && !point.verified) return false;
-      if (filters.submittedBy && !point.submittedBy.toLowerCase().includes(filters.submittedBy.toLowerCase())) return false;
-      if (
-        filters.nearbyOnly &&
-        userLocation &&
-        getDistanceInMiles(userLocation.lat, userLocation.lng, point.latitude, point.longitude) > 1
-      )
-        return false;
-      return true;
-    });
-
-    console.log('Filtered results:', result.length, 'submissions');
-    setFilteredData(result);
-  }, [filters, allData, userLocation]);
+    console.log('Filtered results:', filtered.length, 'submissions');
+    setFilteredData(filtered);
+  }, [filters, allData, userLocation, isAdmin]);
 
   useEffect(() => {
     if (!mapRef.current) return;

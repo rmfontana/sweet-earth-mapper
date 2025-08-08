@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Header from '../components/Layout/Header';
 import InteractiveMap from '../components/Map/InteractiveMap';
 import MapFilters from '../components/Map/MapFilters';
+import { useFilters } from '../contexts/FilterContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Filter, List, Locate } from 'lucide-react';
@@ -10,20 +11,9 @@ import { useToast } from '../hooks/use-toast';
 
 const MapView = () => {
   const { toast } = useToast();
+  const { filters, setFilters } = useFilters();
   const [showFilters, setShowFilters] = useState(true);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
-  const [filters, setFilters] = useState({
-    cropTypes: [] as string[],
-    brixRange: [0, 30] as [number, number],
-    dateRange: ['', ''] as [string, string],
-    verifiedOnly: true,
-    submittedBy: '',
-    nearbyOnly: false,
-    store: '',
-    brand: '',
-    hasImage: false,
-    category: '' // for crop category
-  });
 
   const handleLocationSearch = () => {
     if (navigator.geolocation) {
@@ -34,7 +24,7 @@ const MapView = () => {
             lng: position.coords.longitude
           };
           setUserLocation(userLoc);
-          setFilters(prev => ({ ...prev, nearbyOnly: true }));
+          setFilters({ ...filters, nearbyOnly: true });
           
           toast({
             title: "Location found",
@@ -106,7 +96,7 @@ const MapView = () => {
           {/* Filters Sidebar */}
           {showFilters && (
             <div className="lg:col-span-1">
-              <MapFilters filters={filters} onFiltersChange={setFilters} />
+              <MapFilters />
             </div>
           )}
           
@@ -115,7 +105,7 @@ const MapView = () => {
             <Card>
               <CardContent className="p-0">
                 <div className="h-[600px] w-full relative">
-                  <InteractiveMap filters={filters} userLocation={userLocation} showFilters={showFilters}/>
+                  <InteractiveMap userLocation={userLocation} showFilters={showFilters}/>
                 </div>
               </CardContent>
             </Card>
