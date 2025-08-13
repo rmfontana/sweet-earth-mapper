@@ -6,7 +6,7 @@ import { Badge } from '../ui/badge';
 import { MapPin, Calendar, User, CheckCircle, AlertCircle, MessageSquare, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor } from '../../lib/getBrixColor';
-import { getBrixQuality } from '../../lib/getBrixQuality'; // Corrected this line!
+import { getBrixQuality } from '../../lib/getBrixQuality';
 import { BrixDataPoint } from '../../types';
 import { supabase } from '../../integrations/supabase/client'; // Import supabase client needed here!
 
@@ -173,7 +173,7 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
           <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
             <MapPin className="w-5 h-5 text-gray-600" />
             <div>
-              <p className className="text-sm text-gray-600">Location</p>
+              <p className="text-sm text-gray-600">Location</p>
               <p className="font-medium">{dataPoint.locationName}</p>
               <p className="text-xs text-gray-500">
                 {dataPoint.latitude?.toFixed(4)}, {dataPoint.longitude?.toFixed(4)}
