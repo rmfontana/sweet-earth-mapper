@@ -1,10 +1,10 @@
 // src/lib/fetchSubmissions.ts
 
 import { supabase } from '../integrations/supabase/client';
-import { QueryData } from '@supabase/supabase-js'; // **CORRECTED: Import QueryData from Supabase**
-import { BrixDataPoint } from '../types'; // Import your local BrixDataPoint interface
+import { QueryData } from '@supabase/supabase-js'; // Correctly imported from Supabase
+import { BrixDataPoint } from '../types'; // Your local BrixDataPoint interface
 
-// The select query string. Ensure it's clean for QueryData inference.
+// Define the base Supabase query string cleanly outside the function to avoid re-creation
 const baseQuery = supabase.from('submissions').select(`
   id,
   assessment_date,
@@ -22,17 +22,21 @@ const baseQuery = supabase.from('submissions').select(`
   submission_images(id,image_url)
 `);
 
-// Infer the type of the data returned by the Supabase query
+// Infer the type of the data returned by the Supabase query using the clean baseQuery
 type SubmissionsWithJoins = QueryData<typeof baseQuery>;
 
-// Helper function to format the fetched data into BrixDataPoint interface
+/**
+ * Helper function to format raw Supabase submission data into the BrixDataPoint interface.
+ * @param item The raw data object from Supabase.
+ * @returns Formatted BrixDataPoint object.
+ */
 function formatSubmissionData(item: SubmissionsWithJoins[number]): BrixDataPoint {
-  const formatted: BrixDataPoint = {
+  return {
     id: item.id,
     brixLevel: item.brix_value,
     verified: item.verified,
     verifiedAt: item.verified_at,
-    variety: item.crop_variety ?? '', // Directly mapped from crop_variety
+    variety: item.crop_variety ?? '',
     cropType: item.crop?.name ?? 'Unknown',
     category: item.crop?.category ?? '',
     latitude: item.location?.latitude,
@@ -43,31 +47,49 @@ function formatSubmissionData(item: SubmissionsWithJoins[number]): BrixDataPoint
     submittedBy: item.user?.display_name ?? 'Anonymous',
     verifiedBy: item.verifier?.display_name ?? '',
     submittedAt: item.assessment_date,
-    outlier_notes: item.outlier_notes ?? '', // Directly mapped from outlier_notes
+    outlier_notes: item.outlier_notes ?? '',
     images: item.submission_images?.map(img => img.image_url) ?? [],
     poorBrix: item.crop?.poor_brix,
     averageBrix: item.crop?.average_brix,
     goodBrix: item.crop?.good_brix,
     excellentBrix: item.crop?.excellent_brix,
   };
-  return formatted;
 }
 
+/**
+ * Fetches and formats all submissions, applying data cleaning and authentication checks.
+ * @returns A promise that resolves to an array of BrixDataPoint.
+ */
 export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
-  // Apply sorting directly to the query for consistency
+  // --- START AUTHENTICATION DEBUGGING LOGS ---
+  // Get the current user session *before* making the data query
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  console.groupCollapsed('Debugging fetchFormattedSubmissions (Auth Status)');
+  console.log('Current authenticated user:', user);
+  console.log('Auth error (if any):', authError);
+  console.groupEnd();
+  // --- END AUTHENTICATION DEBUGGING LOGS ---
+
+  // Perform the Supabase query with ordering
   const { data, error } = await baseQuery.order('assessment_date', { ascending: false });
+
+  // --- START SUPABASE RESPONSE DEBUGGING LOGS ---
+  console.groupCollapsed('Debugging fetchFormattedSubmissions (Supabase Data Response)');
+  console.log('Raw Supabase data (before validation):', data);
+  console.log('Raw Supabase error (if any):', error);
+  console.groupEnd();
+  // --- END SUPABASE RESPONSE DEBUGGING LOGS ---
+
   if (error) {
-    console.error('Error fetching submissions:', error);
-    // Return an empty array on error to prevent .map() crash
-    return [];
+    console.error('Error fetching submissions from Supabase:', error);
+    return []; // Return an empty array on error to prevent further crashes
   }
 
-  // **IMPROVED FIX: Explicitly ensure data is an array before mapping**
-  // If data is not an array, default to an empty array
+  // Ensure data is an array before mapping and filtering. This is a crucial safeguard.
   const submissionsToFormat = Array.isArray(data) ? data : [];
-  console.log(`Fetched ${submissionsToFormat.length} total submissions from database`);
+  console.log(`Prepared ${submissionsToFormat.length} submissions for formatting (after Array.isArray check).`);
 
-  const formattedData = (submissionsToFormat as SubmissionsWithJoins).map(formatSubmissionData);
+  const formattedData = submissionsToFormat.map(formatSubmissionData);
 
   // Filter out submissions with invalid coordinates
   const validSubmissions = formattedData.filter(item => {
@@ -81,22 +103,27 @@ export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
                            item.longitude >= -180 && item.longitude <= 180;
 
     if (!hasValidCoords) {
-      console.warn(`Submission ${item.id} has invalid coordinates:`, {
+      console.warn(`Submission ${item.id} has invalid coordinates and will be filtered out:`, {
         latitude: item.latitude,
         longitude: item.longitude,
-        locationData: item
+        locationName: item.locationName,
+        fullItem: item
       });
     }
     return hasValidCoords;
   });
 
-  console.log(`${validSubmissions.length} out of ${formattedData.length} submissions have valid coordinates`);
-  console.log('Sample valid submission:', validSubmissions[0]);
+  console.log(`${validSubmissions.length} out of ${formattedData.length} submissions have valid coordinates.`);
+  console.log('Sample valid submission (if any):', validSubmissions[0]);
 
   return validSubmissions;
 }
 
-// Function to fetch a single submission by ID
+/**
+ * Fetches a single submission by its ID.
+ * @param id The ID of the submission to fetch.
+ * @returns A promise that resolves to a BrixDataPoint object or null if not found.
+ */
 export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | null> {
   const { data, error } = await baseQuery.eq('id', id).single();
   if (error) {
@@ -104,9 +131,8 @@ export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | n
       console.warn(`No submission found with ID: ${id}`);
       return null;
     }
-    console.error(`Error fetching submission with ID ${id}:`, error);
+    console.error(`Error fetching single submission with ID ${id}:`, error);
     throw error;
   }
-  // Ensure data is cast correctly before formatting
   return data ? formatSubmissionData(data as SubmissionsWithJoins[number]) : null;
 }
