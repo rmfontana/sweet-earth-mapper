@@ -484,7 +484,7 @@ const DataEntry = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <Header />
-      <main className="max-w-5xl mx-auto p-6 lg:p-8 pb-24"> {/* Added pb-24 here */}
+      <main className="max-w-5xl mx-auto p-6 lg:p-8 pb-24">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             Submit BRIX Measurement
@@ -887,7 +887,8 @@ const DataEntry = () => {
                     accept="image/jpeg,image/png,image/webp"
                     multiple
                     onChange={handleImageUpload}
-                    className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    // Adjusted height for better visibility of native file input button
+                    className="h-14 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                   />
                   {errors.images && (
                     <p className="text-red-600 text-sm mt-2 flex items-center">
@@ -897,7 +898,7 @@ const DataEntry = () => {
                   )}
                   <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {formData.images.map((file, index) => (
-                      <div key={index} className="relative aspect-w-1 aspect-h-1"> {/* Added aspect ratio for consistent height */}
+                      <div key={index} className="relative aspect-w-1 aspect-h-1">
                         <img
                           src={URL.createObjectURL(file)}
                           alt={`Upload preview ${index + 1}`}
