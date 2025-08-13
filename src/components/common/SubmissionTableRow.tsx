@@ -1,115 +1,86 @@
-// src/components/SubmissionTableRow.tsx
-
 import React from 'react';
 import { TableCell, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
+import { format } from 'date-fns';
+import { CheckCircle, Clock, ExternalLink, Trash2, Edit } from 'lucide-react';
 import { Button } from '../ui/button';
-import { MapPin, Calendar, CheckCircle, Edit, Trash2, Eye, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { BrixDataPoint } from '../../types';
-import { useBrixColorFromContext } from '../../lib/getBrixColor'; // Assuming this utility is correctly fetching thresholds
+import { BrixDataPoint } from '../../types'; // Ensure this path is correct based on your project structure
 
 interface SubmissionTableRowProps {
   submission: BrixDataPoint;
   onDelete: (id: string) => void;
-  isOwner?: boolean;
+  isOwner: boolean; // Indicates if the current user is the owner
+  // New prop: indicates if the current user (who is the owner) can delete this specific submission.
+  // This will be true if isOwner is true AND submission is NOT verified.
+  canDeleteByOwner: boolean;
 }
 
-const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onDelete, isOwner = false }) => {
-  const brixColorClass = useBrixColorFromContext(
-    submission.cropType?.toLowerCase().trim() || '',
-    submission.brixLevel
-  );
-
+const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({
+  submission,
+  onDelete,
+  isOwner,
+  canDeleteByOwner, // Use the new prop
+}) => {
   return (
-    <TableRow
-      key={submission.id}
-      className="hover:bg-gray-100 transition-colors duration-200 cursor-pointer"
-    >
-      <TableCell className="whitespace-nowrap">
-        <div>
-          <div className="font-semibold text-gray-900">{submission.cropType}</div>
-
-          {submission.variety && (
-            <div className="text-xs text-gray-500">{submission.variety}</div>
-          )}
-
-          {submission.brandName && (
-            <div className="text-xs text-indigo-600 mt-1">Brand: {submission.brandName}</div>
-          )}
-
-          {submission.storeName && (
-            <div className="text-xs text-green-600 flex items-center space-x-1 mt-1">
-              <MapPin className="w-3 h-3" />
-              <span>{submission.storeName}</span>
-            </div>
-          )}
-        </div>
+    <TableRow key={submission.id}>
+      <TableCell className="font-medium">
+        <p className="text-gray-900 font-semibold">{submission.cropType}</p>
+        {submission.variety && (
+          <p className="text-sm text-gray-600 italic">{submission.variety}</p>
+        )}
+        <p className="text-sm text-gray-700">{submission.brandName}</p>
+        <p className="text-xs text-gray-500">{submission.storeName}</p>
       </TableCell>
-
-      <TableCell className="text-center">
-        <Badge className={`${brixColorClass} text-white px-3 py-1 rounded-full`}>
-          {brixColorClass === 'bg-gray-300' ? '...' : submission.brixLevel}
-        </Badge>
+      <TableCell className="text-center font-bold text-lg">
+        {submission.brixLevel.toFixed(1)}
       </TableCell>
-
       <TableCell>
-        <div className="flex items-center space-x-1 text-sm text-gray-700">
-          <MapPin className="w-4 h-4" />
-          <span>{submission.locationName}</span>
-        </div>
+        <p className="text-gray-900">{submission.locationName}</p>
         {submission.outlier_notes && (
-          <div className="flex items-center space-x-1 text-xs text-gray-500 mt-1">
-            <MessageSquare className="w-3 h-3" />
-            <span>Notes added</span>
-          </div>
+          <p className="text-sm text-gray-600 italic line-clamp-2">
+            Notes: {submission.outlier_notes}
+          </p>
         )}
       </TableCell>
-
-      <TableCell className="whitespace-nowrap">
-        <div className="flex items-center space-x-1 text-sm text-gray-700">
-          <Calendar className="w-4 h-4" />
-          <span>{new Date(submission.submittedAt).toLocaleDateString()}</span>
-        </div>
+      <TableCell>
+        {format(new Date(submission.submittedAt), 'MMM dd, yyyy')}
       </TableCell>
-
       <TableCell className="text-center">
         {submission.verified ? (
-          <Badge variant="secondary" className="flex items-center space-x-1 px-2 py-1 rounded-full bg-green-100 text-green-800">
-            <CheckCircle className="w-4 h-4" />
-            <span className="text-sm font-medium">Verified</span>
+          <Badge className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs">
+            <CheckCircle className="w-3 h-3 mr-1" /> Verified
           </Badge>
         ) : (
-          <Badge variant="outline" className="text-sm font-medium px-2 py-1 rounded-full">
-            Pending
+          <Badge className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs">
+            <Clock className="w-3 h-3 mr-1" /> Pending
           </Badge>
         )}
       </TableCell>
-
       <TableCell className="text-center">
-        <div className="flex justify-center space-x-2">
+        <div className="flex items-center justify-center space-x-1">
           <Link to={`/data-point/${submission.id}`}>
-            <Button variant="ghost" size="sm" aria-label="View submission">
-              <Eye className="w-5 h-5" />
+            <Button variant="ghost" size="sm">
+              <ExternalLink className="h-4 w-4" />
             </Button>
           </Link>
           {isOwner && (
-            <>
-              <Link to={`/data-point/${submission.id}?edit=true`} state={{ from: '/your-data' }}>
-                <Button variant="ghost" size="sm" aria-label="Edit submission">
-                  <Edit className="w-5 h-5" />
-                </Button>
-              </Link>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onDelete(submission.id)}
-                className="text-red-600 hover:text-red-800"
-                aria-label="Delete submission"
-              >
-                <Trash2 className="w-5 h-5" />
+            <Link to={`/data-point/edit/${submission.id}`}>
+              <Button variant="ghost" size="sm">
+                <Edit className="h-4 w-4" />
               </Button>
-            </>
+            </Link>
+          )}
+          {/* Delete button: Only show if isOwner AND canDeleteByOwner */}
+          {isOwner && canDeleteByOwner && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-red-500 hover:text-red-700"
+              onClick={() => onDelete(submission.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           )}
         </div>
       </TableCell>

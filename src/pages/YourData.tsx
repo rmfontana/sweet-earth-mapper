@@ -11,7 +11,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchFormattedSubmissions, deleteSubmission } from '../lib/fetchSubmissions';
 import SubmissionTableRow from '../components/common/SubmissionTableRow';
-import { BrixDataPoint } from '../types'; // Corrected: Changed '=>' to 'from'
+import { BrixDataPoint } from '../types';
 import { useToast } from '../hooks/use-toast';
 
 const YourData = () => {
@@ -36,8 +36,7 @@ const YourData = () => {
       setLoading(true);
       try {
         const submissions = await fetchFormattedSubmissions();
-        // Filter by user's actual ID from auth, now using sub.userId
-        const filtered = submissions.filter(sub => sub.userId === user.id);
+        const filtered = submissions.filter(sub => sub.userId === user.id); // Filter by user's actual ID
         setUserSubmissions(filtered);
       } catch (e) {
         console.error("Failed to load user submissions:", e);
@@ -62,10 +61,26 @@ const YourData = () => {
 
     setIsDeleting(true);
     try {
+      // Find the submission to check its verified status *before* attempting delete
+      const submission = userSubmissions.find(s => s.id === submissionToDeleteId);
+      const isAdmin = user?.role === 'admin';
+
+      // Client-side check based on RLS for non-admins
+      if (!isAdmin && submission?.verified) {
+        toast({
+          title: 'Deletion Restricted',
+          description: 'You cannot delete verified submissions as a regular user.',
+          variant: 'destructive',
+        });
+        setShowConfirmDeleteModal(false);
+        setIsDeleting(false); // Ensure loading state is reset
+        setSubmissionToDeleteId(null);
+        return;
+      }
+
       const success = await deleteSubmission(submissionToDeleteId);
       if (success) {
         toast({ title: 'Submission deleted successfully!', variant: 'default' });
-        // Optimistically update the UI by filtering out the deleted submission
         setUserSubmissions(prev => prev.filter(sub => sub.id !== submissionToDeleteId));
       } else {
         toast({ title: 'Failed to delete submission.', description: 'Please try again.', variant: 'destructive' });
@@ -180,7 +195,9 @@ const YourData = () => {
                             key={submission.id}
                             submission={submission}
                             onDelete={handleDeleteClick}
-                            isOwner={true}
+                            isOwner={true} // For 'YourData', the user is always the owner
+                            // Pass canDeleteByOwner prop based on verified status
+                            canDeleteByOwner={!submission.verified}
                           />
                         ))}
                       </TableBody>

@@ -25,6 +25,7 @@ import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext';
 import { applyFilters, getFilterSummary } from '../../lib/filterUtils';
 import SubmissionTableRow from '../common/SubmissionTableRow';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext'; // NEW: Import useAuth
 
 // New imports for the expanded filter UI (from shadcn/ui and react-range)
 import { Command, CommandInput, CommandItem, CommandList, CommandEmpty } from "@/components/ui/command";
@@ -104,6 +105,7 @@ import { fetchCropCategories } from '../../lib/fetchCropCategories';
 
 const DataTable: React.FC = () => {
   const { filters, setFilters, isAdmin, setFilteredCount } = useFilters();
+  const { user } = useAuth(); // NEW: Get the current user from auth context
 
   const [data, setData] = useState<BrixDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -295,10 +297,18 @@ const DataTable: React.FC = () => {
   const filterSummary = getFilterSummary(filters, isAdmin);
 
 
+  // The handleDelete function here is just a placeholder.
+  // In a real application, you'd likely want to lift this state up
+  // or use a global state management solution if deletions from
+  // this general browser should also optimistically update the main data.
+  // For now, it will just log. If you want full deletion from here,
+  // we'd need to expand this, possibly introducing a confirmation modal here as well.
   const handleDelete = (id: string) => {
     console.log('Delete submission from DataTable:', id);
-    // TODO: Implement actual delete functionality and refresh data
+    // You would typically refetch data or remove from local state after a successful delete
+    // For now, it's a placeholder. If you need full delete functionality here, let me know!
   };
+
 
   if (loading) {
     return (
@@ -335,7 +345,7 @@ const DataTable: React.FC = () => {
           <Filter className="w-4 h-4" />
           <span>{showFilters ? 'Hide Filters' : 'Show Filters'}</span>
         </Button>
-        {filterSummary !== 'No active filters' && ( // Only show clear button if there are active filters
+        {filterSummary !== 'No active filters' && (
           <Button variant="ghost" onClick={clearFilters} className="text-red-600">
             Clear Filters ({filterSummary.split(', ').filter(f => f !== 'None').length})
           </Button>
@@ -344,7 +354,7 @@ const DataTable: React.FC = () => {
 
       {showFilters && (
         <Card className="mb-6">
-          <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"> {/* Expanded grid */}
+          <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {/* Crop Types Filter */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Crop Types</Label>
@@ -680,14 +690,23 @@ const DataTable: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  currentItems.map((submission) => (
-                    <SubmissionTableRow
-                      key={submission.id}
-                      submission={submission}
-                      onDelete={handleDelete}
-                      isOwner={false}
-                    />
-                  ))
+                  currentItems.map((submission) => {
+                    // Determine if the current user is the owner of THIS submission
+                    const isOwner = user?.id === submission.userId;
+                    // Determine if the current user (owner) can delete this submission based on RLS
+                    // An admin can delete any, a regular user can only delete unverified owned submissions
+                    const canDeleteByOwner = (isOwner && !submission.verified) || isAdmin;
+
+                    return (
+                      <SubmissionTableRow
+                        key={submission.id}
+                        submission={submission}
+                        onDelete={handleDelete} // Placeholder for now, can be wired up later
+                        isOwner={isOwner}
+                        canDeleteByOwner={canDeleteByOwner} // Pass the newly calculated prop
+                      />
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

@@ -5,25 +5,25 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Layout/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { ArrowLeft, AlertCircle, Edit, Trash2, MapPin, Loader2 } from 'lucide-react'; // Added Loader2 for loading state
+import { ArrowLeft, AlertCircle, Edit, Trash2, MapPin, Loader2, Lock } from 'lucide-react'; // Added Lock icon
 import { useAuth } from '../contexts/AuthContext';
-import { fetchSubmissionById, deleteSubmission } from '../lib/fetchSubmissions'; // Imported deleteSubmission
+import { fetchSubmissionById, deleteSubmission } from '../lib/fetchSubmissions';
 import { fetchCropCategoryByName } from '../lib/fetchCropCategories';
 import SubmissionDetails from '../components/common/SubmissionDetails';
 import { BrixDataPoint } from '../types';
-import { useToast } from '../hooks/use-toast'; // Imported useToast for feedback
+import { useToast } from '../hooks/use-toast';
 
 const DataPointDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { toast } = useToast(); // Initialize toast
+  const { toast } = useToast();
 
   const [category, setCategory] = useState<string | null>(null);
   const [dataPoint, setDataPoint] = useState<BrixDataPoint | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false); // State for delete confirmation modal
-  const [isDeleting, setIsDeleting] = useState(false); // State for delete loading indicator
+  const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Load a single data point directly by ID
   useEffect(() => {
@@ -79,7 +79,14 @@ const DataPointDetail = () => {
     };
   }, [dataPoint?.cropType]);
 
-  const isOwner = user?.display_name === dataPoint?.submittedBy; // Added null check for dataPoint
+  // Check if the current user is the owner of the submission
+  const isOwner = user?.id === dataPoint?.userId; 
+  // Determine if the submission can be deleted by a non-admin owner:
+  // - It must be owned by the current user
+  // - It must NOT be verified (according to RLS)
+  const canOwnerDelete = isOwner && dataPoint && !dataPoint.verified;
+  // Determine if the user is an admin (assuming user.role is available and correctly set)
+  const isAdmin = user?.role === 'admin';
 
   // Handle delete button click (opens confirmation modal)
   const handleDeleteClick = () => {
@@ -88,15 +95,28 @@ const DataPointDetail = () => {
 
   // Handle confirmation of deletion
   const handleConfirmDelete = async () => {
-    if (!dataPoint || !id) return; // Should not happen if button is shown
+    if (!dataPoint || !id) return;
     
+    // Additional client-side check for non-admin attempting to delete verified
+    if (!isAdmin && dataPoint.verified) {
+      toast({ 
+        title: 'Deletion Restricted', 
+        description: 'You cannot delete verified submissions as a regular user.', 
+        variant: 'destructive' 
+      });
+      setShowConfirmDeleteModal(false);
+      return;
+    }
+
     setIsDeleting(true);
     try {
       const success = await deleteSubmission(id);
       if (success) {
         toast({ title: 'Submission deleted successfully!', variant: 'default' });
-        navigate('/your-data'); // Navigate back to the user's data list after successful deletion
+        navigate('/your-data');
       } else {
+        // This 'else' path is for unhandled backend errors, or if RLS silently blocked it
+        // despite our client-side check (e.g., if isAdmin check is flawed)
         toast({ title: 'Failed to delete submission.', description: 'Please try again.', variant: 'destructive' });
       }
     } catch (error) {
@@ -104,7 +124,7 @@ const DataPointDetail = () => {
       toast({ title: 'An error occurred.', description: 'Could not delete submission.', variant: 'destructive' });
     } finally {
       setIsDeleting(false);
-      setShowConfirmDeleteModal(false); // Close modal regardless
+      setShowConfirmDeleteModal(false);
     }
   };
 
@@ -157,10 +177,10 @@ const DataPointDetail = () => {
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Details (using the new SubmissionDetails component) */}
+          {/* Main Details */}
           <div className="lg:col-span-2">
             <SubmissionDetails dataPoint={dataPoint} showImages={true} />
-            {isOwner && (
+            {(isOwner || isAdmin) && ( // Show edit/delete options if owner OR admin
               <div className="flex space-x-2 mt-4">
                 <Button
                   variant="outline"
@@ -170,20 +190,51 @@ const DataPointDetail = () => {
                   <Edit className="w-4 h-4 mr-1" />
                   Edit
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-red-600 hover:text-red-700"
-                  onClick={handleDeleteClick} // Calls the function to open confirmation modal
-                  disabled={isDeleting} // Disable button while deleting
-                >
-                  {isDeleting ? (
-                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                
+                {/* Visual Indicators for Delete Button */}
+                {isAdmin ? (
+                  // Admin sees the delete button always
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                    onClick={handleDeleteClick}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4 mr-1" />
+                    )}
+                    {isDeleting ? 'Deleting...' : 'Delete'}
+                  </Button>
+                ) : (
+                  // Regular user has conditional delete or explanatory message
+                  canOwnerDelete ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                      onClick={handleDeleteClick}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4 mr-1" />
+                      )}
+                      {isDeleting ? 'Deleting...' : 'Delete'}
+                    </Button>
                   ) : (
-                    <Trash2 className="w-4 h-4 mr-1" />
-                  )}
-                  {isDeleting ? 'Deleting...' : 'Delete'}
-                </Button>
+                    // Message for non-admin owner of a verified submission
+                    isOwner && dataPoint.verified && (
+                      <span className="inline-flex items-center space-x-1 px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm italic border border-gray-200">
+                        <Lock className="w-4 h-4" />
+                        <span>Verified submissions cannot be deleted.</span>
+                      </span>
+                    )
+                  )
+                )}
               </div>
             )}
           </div>
@@ -210,7 +261,7 @@ const DataPointDetail = () => {
               </CardContent>
             </Card>
 
-            {/* Data Quality Info (remains here as it uses `category` and dataPoint's thresholds) */}
+            {/* Data Quality Info */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">BRIX Scale Reference</CardTitle>
