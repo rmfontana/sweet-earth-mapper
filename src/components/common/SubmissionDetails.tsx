@@ -4,11 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { MapPin, Calendar, User, CheckCircle, AlertCircle, MessageSquare, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { useCropThresholds } from '../../contexts/CropThresholdContext';
+import { useCropThresholds } from '../../contexts/CropThresholdContext'; // Corrected import path for context
 import { getBrixColor } from '../../lib/getBrixColor';
 import { getBrixQuality } from '../../lib/getBrixQuality';
 import { BrixDataPoint } from '../../types';
-import { supabase } from '../../integrations/supabase/client'; // Import supabase client
+// No longer need to import supabase directly here if `dataPoint.images` already contains public URLs
 
 interface SubmissionDetailsProps {
   dataPoint: BrixDataPoint;
@@ -17,57 +17,36 @@ interface SubmissionDetailsProps {
 
 const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showImages = true }) => {
   const { cache: thresholdsCache } = useCropThresholds();
-  const cropThresholds = dataPoint.cropType ? thresholdsCache[dataPoint.cropType] : undefined;
+  // Fallback to dataPoint's own brix thresholds if not found in cache
+  const cropThresholds = dataPoint.cropType ? (thresholdsCache[dataPoint.cropType] || {
+    poor: dataPoint.poorBrix,
+    average: dataPoint.averageBrix,
+    good: dataPoint.goodBrix,
+    excellent: dataPoint.excellentBrix,
+  }) : undefined;
+
   const colorClass = getBrixColor(dataPoint.brixLevel, cropThresholds, 'bg');
   const qualityText = getBrixQuality(dataPoint.brixLevel, cropThresholds);
 
-  const [imagePublicUrls, setImagePublicUrls] = useState<string[]>([]);
-  const [imagesLoading, setImagesLoading] = useState(true);
+  // We are now assuming dataPoint.images already contains the public URLs.
+  // The state and effect for fetching public URLs is no longer needed.
+  // We'll use a local state for imagesError to report issues with the provided URLs.
+  const [imagesLoading, setImagesLoading] = useState(false); // No loading state needed for pre-fetched URLs
   const [imagesError, setImagesError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchImageUrls = async () => {
-      // Only proceed if showImages is true and there are image paths
-      if (!showImages || !dataPoint.images || dataPoint.images.length === 0) {
-        setImagePublicUrls([]);
-        setImagesLoading(false);
-        return;
+    // Check if images array exists and if any URL is problematic
+    if (showImages && dataPoint.images && dataPoint.images.length > 0) {
+      const hasInvalidUrl = dataPoint.images.some(url => !url || typeof url !== 'string' || !url.startsWith('http'));
+      if (hasInvalidUrl) {
+        setImagesError("Some image URLs are missing or invalid. Check the data source.");
+      } else {
+        setImagesError(null); // Clear any previous errors if URLs look good
       }
-
-      setImagesLoading(true);
-      setImagesError(null);
-      const urls: string[] = [];
-
-      try {
-        for (const imagePath of dataPoint.images) {
-          // IMPORTANT: Ensure 'submission-images-bucket' is the exact name of your Supabase Storage bucket.
-          // The imagePath itself should include any subfolders (e.g., 'user_id/submission_id/image.jpg').
-          // Explicitly cast the response to ensure TypeScript understands the 'error' property
-          const { data, error } = (await supabase.storage
-            .from('submission-images-bucket')
-            .getPublicUrl(imagePath)) as { data: { publicUrl: string } | null; error: Error | null; };
-
-          if (error) { // Now TypeScript correctly recognizes 'error' here
-            console.error(`Error getting public URL for ${imagePath}:`, error);
-            urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Error+Loading+Image`); // Fallback placeholder
-          } else if (data?.publicUrl) { // Check if data and publicUrl exist
-            urls.push(data.publicUrl);
-          } else {
-            console.warn(`No public URL returned for ${imagePath} (data or publicUrl missing).`);
-            urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Missing+URL`);
-          }
-        }
-        setImagePublicUrls(urls);
-      } catch (err) {
-        console.error("Failed to fetch image public URLs (unexpected error):", err);
-        setImagesError("Failed to load some images. Please check your Supabase bucket configuration and paths.");
-      } finally {
-        setImagesLoading(false);
-      }
-    };
-
-    fetchImageUrls();
-    // Re-run this effect if the image paths change or if showImages preference changes
+    } else if (showImages && (!dataPoint.images || dataPoint.images.length === 0)) {
+      setImagesError(null); // No error, just no images
+    }
+    setImagesLoading(false); // Always false as we're not fetching here
   }, [dataPoint.images, showImages]);
 
 
@@ -198,23 +177,23 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
           <div className="pt-4 border-t border-gray-100">
             <h3 className="flex items-center space-x-2 text-lg font-bold text-gray-900 mb-4">
               <ImageIcon className="w-6 h-6 text-gray-600" />
-              <span>Reference Images ({imagePublicUrls.length})</span>
+              <span>Reference Images ({dataPoint.images?.length || 0})</span>
             </h3>
-            {imagesLoading ? (
+            {imagesLoading ? ( // This will likely always be false now
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
                 <span className="ml-3 text-gray-600">Loading images...</span>
               </div>
             ) : imagesError ? (
               <div className="text-red-600 text-center py-8">{imagesError}</div>
-            ) : imagePublicUrls.length === 0 ? (
+            ) : (dataPoint.images?.length === 0 || !dataPoint.images) ? (
               <p className="text-gray-500 italic">No images available for this submission.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {imagePublicUrls.map((url, index) => (
+                {dataPoint.images.map((url: string, index: number) => (
                   <div key={index} className="relative w-full pb-[75%] rounded-lg overflow-hidden shadow-md group">
                     <img
-                      src={url}
+                      src={url} // Directly use the URL from dataPoint.images
                       alt={`Submission image ${index + 1}`}
                       className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                       onError={(e) => {
