@@ -1,9 +1,10 @@
 // src/lib/fetchSubmissions.ts
 
 import { supabase } from '../integrations/supabase/client';
-import { QueryData } from '@supabase/supabase-js';
+import { QueryData } from '@supabase/supabase-js'; 
+import { BrixDataPoint } from '../types'; 
 
-// The select query string. Ensure no comments or extraneous characters inside template literal.
+// The select query string. Ensure it's clean for QueryData inference.
 const baseQuery = supabase.from('submissions').select(`
   id,
   assessment_date,
@@ -57,13 +58,16 @@ export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
   const { data, error } = await baseQuery.order('assessment_date', { ascending: false });
   if (error) {
     console.error('Error fetching submissions:', error);
-    throw error;
+    // Return an empty array on error to prevent .map() crash
+    return [];
   }
 
-  console.log(`Fetched ${data.length} total submissions from database`);
+  // **CRUCIAL FIX: Ensure data is an array before mapping**
+  // If data is null or undefined, default to an empty array
+  const submissionsToFormat = data || [];
+  console.log(`Fetched ${submissionsToFormat.length} total submissions from database`);
 
-  // Ensure data is cast correctly before mapping
-  const formattedData = (data as SubmissionsWithJoins).map(formatSubmissionData);
+  const formattedData = (submissionsToFormat as SubmissionsWithJoins).map(formatSubmissionData);
 
   // Filter out submissions with invalid coordinates
   const validSubmissions = formattedData.filter(item => {

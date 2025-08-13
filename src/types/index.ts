@@ -5,7 +5,7 @@ export interface BrixDataPoint {
   brixLevel: number; // Mapped from brix_value
   verified: boolean;
   verifiedAt?: string; // Mapped from verified_at
-  variety: string; // This property is crucial for your errors
+  variety: string;
   cropType: string; // Mapped from crop.name
   category?: string; // Mapped from crop.category
   latitude: number; // Mapped from location.latitude
@@ -16,7 +16,7 @@ export interface BrixDataPoint {
   submittedBy: string; // Mapped from user.display_name
   verifiedBy?: string; // Mapped from verifier.display_name
   submittedAt: string; // Mapped from assessment_date
-  outlier_notes?: string; // This property is also crucial for your errors
+  outlier_notes?: string;
   images: string[]; // Array of image URLs, mapped from submission_images.image_url
 
   // Direct properties from `crop` join for Brix thresholds, making them directly available
@@ -61,8 +61,7 @@ export interface AuthState {
 }
 
 export interface MapFilter {
-  cropTypes: string[]; // For multi-select scenarios (e.g., MapFilters.tsx)
-  selectedCropType?: string; // For single-select scenarios (e.g., DataTable.tsx)
+  cropTypes: string[]; // Consistent array for selected crop types
   brixRange: [number, number];
   dateRange: [string, string];
   verifiedOnly: boolean;

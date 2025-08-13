@@ -6,22 +6,101 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
+import { Label } from '../ui/label'; // Added Label for new filter inputs
+import { Badge } from '../ui/badge'; // Added Badge for selected crop types
+import { Switch } from '../ui/switch'; // Added Switch for boolean filters
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import {
   Calendar,
   User,
-  CheckCircle,
   Filter,
   Search,
   ChevronLeft,
   ChevronRight,
-  Eye, Edit, Trash2
+  Eye, Edit, Trash2, // Existing imports
+  Check, ChevronDown, X // **ADDED THESE ICONS**
 } from 'lucide-react';
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
-import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext'; // Import DEFAULT_MAP_FILTERS
+import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext';
 import { applyFilters, getFilterSummary } from '../../lib/filterUtils';
-import SubmissionTableRow from '../common/SubmissionTableRow'; 
+import SubmissionTableRow from '../common/SubmissionTableRow';
 import { Link } from 'react-router-dom';
+
+// New imports for the expanded filter UI (from shadcn/ui and react-range)
+import { Command, CommandInput, CommandItem, CommandList, CommandEmpty } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Range, getTrackBackground } from 'react-range'; // For Brix Range Slider
+
+// Constants for Brix Range Slider
+const STEP = 0.5;
+const MIN_BRIX = 0;
+const MAX_BRIX = 100;
+
+// Re-defining BrixRangeSlider component locally for DataTable or import it from MapFilters.tsx if it's generic enough
+const BrixRangeSlider = ({
+  brixRange,
+  onChange,
+}: {
+  brixRange: [number, number];
+  onChange: (range: [number, number]) => void;
+}) => {
+  return (
+    <Range
+      values={brixRange}
+      step={STEP}
+      min={MIN_BRIX}
+      max={MAX_BRIX}
+      onChange={(values) => onChange([values[0], values[1]])}
+      renderTrack={({ props, children }) => (
+        <div
+          {...props}
+          style={{
+            ...props.style,
+            height: '6px',
+            width: '100%',
+            background: getTrackBackground({
+              values: brixRange,
+              colors: ['#ccc', '#3b82f6', '#ccc'],
+              min: MIN_BRIX,
+              max: MAX_BRIX,
+            }),
+            borderRadius: '4px',
+          }}
+        >
+          {children}
+        </div>
+      )}
+      renderThumb={({ props, index }) => (
+        <div
+          {...props}
+          style={{
+            ...props.style,
+            height: '24px',
+            width: '24px',
+            backgroundColor: '#3b82f6',
+            borderRadius: '50%',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            boxShadow: '0 0 2px #00000044',
+          }}
+        >
+          <span style={{ color: '#fff', fontSize: '12px' }}>
+            {brixRange[index].toFixed(1)}
+          </span>
+        </div>
+      )}
+    />
+  );
+};
+
+
+// Assuming these fetch functions exist and are correct paths:
+import { fetchCropTypes } from '../../lib/fetchCropTypes';
+import { fetchBrands } from '../../lib/fetchBrands';
+import { fetchStores } from '../../lib/fetchStores';
+import { fetchCropCategories } from '../../lib/fetchCropCategories';
+
 
 const DataTable: React.FC = () => {
   const { filters, setFilters, isAdmin, setFilteredCount } = useFilters();
@@ -38,34 +117,54 @@ const DataTable: React.FC = () => {
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  const [cropTypes, setCropTypes] = useState<string[]>([]);
+  // States for filter dropdown search queries
+  const [cropCategoryQuery, setCropCategoryQuery] = useState('');
+  const [brandQuery, setBrandQuery] = useState('');
+  const [storeQuery, setStoreQuery] = useState('');
+  const [cropQuery, setCropQuery] = useState('');
 
-  // Fetch submissions on mount
+
+  // Data options for dropdowns, similar to MapFilters
+  const [availableCrops, setAvailableCrops] = useState<string[]>([]);
+  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
+  const [availableStores, setAvailableStores] = useState<string[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+
+
+  // Fetch submissions and filter options on mount
   useEffect(() => {
-    const loadData = async () => {
+    const loadDataAndFilters = async () => {
       setLoading(true);
       try {
         const submissions = await fetchFormattedSubmissions();
         setData(submissions);
 
-        const uniqueCropTypes = Array.from(
-          new Set(submissions.map((s) => s.cropType).filter(Boolean))
-        ).sort();
-
-        setCropTypes(uniqueCropTypes);
+        const [crops, brands, stores, categories] = await Promise.all([
+          fetchCropTypes(),
+          fetchBrands(),
+          fetchStores(),
+          fetchCropCategories()
+        ]);
+        setAvailableCrops(crops);
+        setAvailableBrands(brands);
+        setAvailableStores(stores);
+        setAvailableCategories(categories);
 
         setError(null);
       } catch (err) {
-        console.error('Error fetching submissions:', err);
-        setError('Failed to load data');
+        console.error('Error fetching submissions or filter options:', err);
+        setError('Failed to load data or filter options');
         setData([]);
-        setCropTypes([]);
+        setAvailableCrops([]);
+        setAvailableBrands([]);
+        setAvailableStores([]);
+        setAvailableCategories([]);
       } finally {
         setLoading(false);
       }
     };
 
-    loadData();
+    loadDataAndFilters();
   }, []);
 
   // Reset to page 1 when filters or search changes
@@ -74,20 +173,8 @@ const DataTable: React.FC = () => {
   }, [filters, searchTerm]);
 
   const filteredAndSortedData = useMemo(() => {
-    // `applyFilters` expects MapFilter, and it handles `selectedCropType` if present
-    let appliedFilters: MapFilter = { ...filters };
-    if (filters.selectedCropType) {
-      // If a single crop type is selected in the DataTable's dropdown,
-      // override cropTypes array for filtering purposes here.
-      // This allows MapFilters.tsx to use cropTypes[] for multi-select,
-      // while DataTable.tsx uses selectedCropType for single-select.
-      appliedFilters.cropTypes = [filters.selectedCropType];
-    } else {
-      appliedFilters.cropTypes = []; // Ensure empty if no single crop selected
-    }
-
-
-    let filtered = applyFilters(data, appliedFilters, isAdmin);
+    // The `applyFilters` utility should be smart enough to handle all properties of MapFilter
+    let filtered = applyFilters(data, filters, isAdmin);
 
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -149,16 +236,64 @@ const DataTable: React.FC = () => {
     }
   };
 
+  // Generic handler for filter changes
   const handleFilterChange = (filterName: keyof MapFilter, value: any) => {
-    setFilters(prev => ({ ...prev, [filterName]: value })); // Correctly use updater function
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  // Crop type add/remove helpers (for multi-select dropdown)
+  const addCropType = (crop: string) => {
+    setFilters(prev => {
+      if (!prev.cropTypes.includes(crop)) {
+        return { ...prev, cropTypes: [...prev.cropTypes, crop] };
+      }
+      return prev;
+    });
+  };
+  const removeCropType = (crop: string) => {
+    setFilters(prev => ({
+      ...prev,
+      cropTypes: prev.cropTypes.filter(c => c !== crop)
+    }));
   };
 
   const clearFilters = () => {
     setFilters(DEFAULT_MAP_FILTERS); // Reset to predefined defaults
     setSearchTerm('');
+    // Also clear internal search queries for dropdowns
+    setCropCategoryQuery('');
+    setBrandQuery('');
+    setStoreQuery('');
+    setCropQuery('');
   };
 
+  // Memoized filtered dropdown items for performance
+  const filteredCategories = useMemo(() =>
+    availableCategories.filter(cat =>
+      cat.toLowerCase().includes(cropCategoryQuery.toLowerCase())
+    ), [availableCategories, cropCategoryQuery]);
+
+  const filteredBrands = useMemo(() =>
+    availableBrands.filter(brand =>
+      brand.toLowerCase().includes(brandQuery.toLowerCase())
+    ), [availableBrands, brandQuery]);
+
+  const filteredStores = useMemo(() =>
+    availableStores.filter(store =>
+      store.toLowerCase().includes(storeQuery.toLowerCase())
+    ), [availableStores, storeQuery]);
+
+  const filteredCrops = useMemo(() =>
+    availableCrops.filter(crop =>
+      crop.toLowerCase().includes(cropQuery.toLowerCase())
+    ), [availableCrops, cropQuery]);
+
+
+  // Helper for filter summary: IMPORTANT to correctly show active vs. default
+  // This assumes getFilterSummary in ../../lib/filterUtils.ts is updated
+  // to compare current filters against DEFAULT_MAP_FILTERS
   const filterSummary = getFilterSummary(filters, isAdmin);
+
 
   const handleDelete = (id: string) => {
     console.log('Delete submission from DataTable:', id);
@@ -200,58 +335,300 @@ const DataTable: React.FC = () => {
           <Filter className="w-4 h-4" />
           <span>{showFilters ? 'Hide Filters' : 'Show Filters'}</span>
         </Button>
-        {Object.keys(filters).length > 0 || searchTerm ? (
+        {filterSummary !== 'No active filters' && ( // Only show clear button if there are active filters
           <Button variant="ghost" onClick={clearFilters} className="text-red-600">
-            Clear Filters ({Object.keys(filters).length + (searchTerm ? 1 : 0)})
+            Clear Filters ({filterSummary.split(', ').filter(f => f !== 'None').length})
           </Button>
-        ) : null}
+        )}
       </div>
 
       {showFilters && (
         <Card className="mb-6">
-          <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Filter by Crop Type */}
+          <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"> {/* Expanded grid */}
+            {/* Crop Types Filter */}
             <div>
-              <label htmlFor="cropTypeFilter" className="block text-sm font-medium text-gray-700 mb-2">
-                Filter by Crop Type
-              </label>
-              <select
-                id="cropTypeFilter"
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                value={filters.selectedCropType || ''} // Use selectedCropType
-                onChange={(e) => handleFilterChange('selectedCropType', e.target.value || undefined)} // Update selectedCropType
-              >
-                <option value="">All Crop Types</option>
-                {cropTypes.map((crop) => (
-                  <option key={crop} value={crop}>
-                    {crop}
-                  </option>
-                ))}
-              </select>
+              <Label className="text-sm font-medium mb-2 block">Crop Types</Label>
+              {filters.cropTypes.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3" aria-label="Selected crop types">
+                  {filters.cropTypes.map((crop) => (
+                    <Badge
+                      key={crop}
+                      variant="secondary"
+                      className="flex items-center gap-1 px-2 py-1 text-xs rounded-full"
+                    >
+                      <span>{crop}</span>
+                      <X
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Remove crop type ${crop}`}
+                        className="w-3 h-3 cursor-pointer"
+                        onClick={() => removeCropType(crop)}
+                        onKeyDown={(e) => e.key === 'Enter' && removeCropType(crop)}
+                      />
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between text-sm" aria-haspopup="listbox">
+                    Select Crops
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search crops..."
+                      className="h-9"
+                      value={cropQuery}
+                      onValueChange={setCropQuery}
+                      aria-label="Search crops"
+                    />
+                    <CommandList>
+                      <CommandEmpty>No crops found.</CommandEmpty>
+                      {filteredCrops.map((crop) => {
+                        const selected = filters.cropTypes.includes(crop);
+                        return (
+                          <CommandItem
+                            key={crop}
+                            onSelect={() => {
+                              selected ? removeCropType(crop) : addCropType(crop);
+                              setCropQuery('');
+                            }}
+                            className="flex justify-between items-center"
+                            aria-selected={selected}
+                            role="option"
+                          >
+                            <span>{crop}</span>
+                            {selected && <Check className="h-4 w-4" />}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
-            {/* Filter by Verified Status (if admin) */}
+            {/* Brix Range Filter */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">BRIX Range</Label>
+              <BrixRangeSlider
+                brixRange={filters.brixRange}
+                onChange={(newRange) => {
+                  if (newRange[0] <= newRange[1]) {
+                    handleFilterChange('brixRange', newRange);
+                  }
+                }}
+              />
+            </div>
+
+            {/* Date Range Filter */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block flex items-center gap-1">
+                <Calendar className="w-4 h-4" />
+                Date Range
+              </Label>
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="start-date-data" className="text-xs">From</Label>
+                  <Input
+                    id="start-date-data"
+                    type="date"
+                    value={filters.dateRange[0]}
+                    onChange={(e) =>
+                      handleFilterChange('dateRange', [e.target.value, filters.dateRange[1]])
+                    }
+                    className="text-sm"
+                    aria-label="Start date"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="end-date-data" className="text-xs">To</Label>
+                  <Input
+                    id="end-date-data"
+                    type="date"
+                    value={filters.dateRange[1]}
+                    onChange={(e) =>
+                      handleFilterChange('dateRange', [filters.dateRange[0], e.target.value])
+                    }
+                    className="text-sm"
+                    aria-label="End date"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Crop Category Filter */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Crop Category</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between text-sm"
+                    aria-haspopup="listbox"
+                  >
+                    {filters.category || 'Select Category'}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search category..."
+                      className="h-9"
+                      value={cropCategoryQuery}
+                      onValueChange={setCropCategoryQuery}
+                      aria-label="Search crop categories"
+                    />
+                    <CommandList role="listbox" aria-label="Crop categories">
+                      <CommandEmpty>No category found.</CommandEmpty>
+                      {filteredCategories.map((category) => (
+                        <CommandItem
+                          key={category}
+                          onSelect={() => {
+                            handleFilterChange('category', category);
+                            setCropCategoryQuery('');
+                          }}
+                          aria-selected={filters.category === category}
+                          role="option"
+                          className="flex justify-between items-center"
+                        >
+                          <span>{category}</span>
+                          {filters.category === category && <Check className="h-4 w-4" />}
+                        </CommandItem>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Brand Name Filter */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Brand Name</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between text-sm"
+                    aria-haspopup="listbox"
+                  >
+                    {filters.brand || 'Select Brand'}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search brand..."
+                      className="h-9"
+                      value={brandQuery}
+                      onValueChange={setBrandQuery}
+                      aria-label="Search brand"
+                    />
+                    <CommandList role="listbox" aria-label="Brands">
+                      <CommandEmpty>No brands found.</CommandEmpty>
+                      {filteredBrands.map((brand) => (
+                        <CommandItem
+                          key={brand}
+                          onSelect={() => {
+                            handleFilterChange('brand', brand === filters.brand ? '' : brand);
+                            setBrandQuery('');
+                          }}
+                          aria-selected={filters.brand === brand}
+                          role="option"
+                          className="flex justify-between items-center"
+                        >
+                          <span>{brand}</span>
+                          {filters.brand === brand && <Check className="h-4 w-4" />}
+                        </CommandItem>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Store Name Filter */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Store Name</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between text-sm"
+                    aria-haspopup="listbox"
+                  >
+                    {filters.store || 'Select Store'}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search store..."
+                      className="h-9"
+                      value={storeQuery}
+                      onValueChange={setStoreQuery}
+                      aria-label="Search store"
+                    />
+                    <CommandList role="listbox" aria-label="Stores">
+                      <CommandEmpty>No stores found.</CommandEmpty>
+                      {filteredStores.map((store) => (
+                        <CommandItem
+                          key={store}
+                          onSelect={() => {
+                            handleFilterChange('store', store === filters.store ? '' : store);
+                            setStoreQuery('');
+                          }}
+                          aria-selected={filters.store === store}
+                          role="option"
+                          className="flex justify-between items-center"
+                        >
+                          <span>{store}</span>
+                          {filters.store === store && <Check className="h-4 w-4" />}
+                        </CommandItem>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Has Image Filter */}
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Has Image</Label>
+              <Switch
+                checked={filters.hasImage}
+                onCheckedChange={(val) => handleFilterChange('hasImage', val)}
+                aria-checked={filters.hasImage}
+                role="switch"
+                aria-label="Filter by measurements with images"
+              />
+            </div>
+
+            {/* Verified Only Filter - only for admins */}
             {isAdmin && (
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="verifiedFilter"
-                  checked={filters.verifiedOnly === true} // Use verifiedOnly
-                  onCheckedChange={(checked) => handleFilterChange('verifiedOnly', checked === true ? true : undefined)} // Update verifiedOnly
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Verified Only</Label>
+                <Switch
+                  checked={filters.verifiedOnly}
+                  onCheckedChange={(val) => handleFilterChange('verifiedOnly', val)}
+                  aria-checked={filters.verifiedOnly}
+                  role="switch"
+                  aria-label="Show only verified measurements"
                 />
-                <label
-                  htmlFor="verifiedFilter"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  Show Only Verified
-                </label>
               </div>
             )}
-            {/* Add more filters here as needed */}
           </CardContent>
         </Card>
       )}
 
-      {filterSummary && (
+      {/* Changed conditional rendering to check if filterSummary is not "No active filters" */}
+      {filterSummary !== 'No active filters' && (
         <p className="text-sm text-gray-600 mb-4">
           Applying filters: <span className="font-semibold">{filterSummary}</span>
         </p>

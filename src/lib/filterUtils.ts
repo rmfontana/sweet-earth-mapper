@@ -1,4 +1,7 @@
-import { BrixDataPoint, MapFilter } from '../types';
+// src/lib/filterUtils.ts
+
+import { BrixDataPoint, MapFilter } from '../types'; // Removed QueryData from here
+import { DEFAULT_MAP_FILTERS } from '../contexts/FilterContext'; // Import DEFAULT_MAP_FILTERS
 
 export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin: boolean = false): BrixDataPoint[] {
   console.log(`Applying filters to ${data.length} submissions:`, {
@@ -9,10 +12,16 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
 
   const filtered = data.filter((point) => {
     // Verified filter - for non-admin users, always filter to verified only
-    if (!isAdmin || filters.verifiedOnly) {
-      if (!point.verified) {
-        return false;
-      }
+    // If isAdmin is false, filters.verifiedOnly is automatically true via context logic.
+    // So, this condition effectively means: if not admin, or if admin AND verifiedOnly is true.
+    if (!isAdmin && DEFAULT_MAP_FILTERS.verifiedOnly) { // If not admin, always enforce verified only
+        if (!point.verified) {
+            return false;
+        }
+    } else if (isAdmin && filters.verifiedOnly) { // If admin, and they explicitly selected verifiedOnly
+        if (!point.verified) {
+            return false;
+        }
     }
 
     // Crop types filter
@@ -21,27 +30,36 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
     }
 
     // Category filter
-    if (filters.category && point.category !== filters.category) {
+    // Check if a category is set AND it's different from the default (empty string)
+    if (filters.category && filters.category !== DEFAULT_MAP_FILTERS.category && point.category !== filters.category) {
       return false;
     }
 
     // Brand filter
-    if (filters.brand && point.brandName !== filters.brand) {
+    // Check if a brand is set AND it's different from the default (empty string)
+    if (filters.brand && filters.brand !== DEFAULT_MAP_FILTERS.brand && point.brandName !== filters.brand) {
       return false;
     }
 
     // Store filter
-    if (filters.store && point.storeName !== filters.store) {
+    // Check if a store is set AND it's different from the default (empty string)
+    if (filters.store && filters.store !== DEFAULT_MAP_FILTERS.store && point.storeName !== filters.store) {
       return false;
     }
 
     // Brix range filter
-    if (point.brixLevel < filters.brixRange[0] || point.brixLevel > filters.brixRange[1]) {
-      return false;
+    // Check if the range is different from the default [0, 30]
+    const defaultBrixRange = DEFAULT_MAP_FILTERS.brixRange;
+    if (filters.brixRange[0] !== defaultBrixRange[0] || filters.brixRange[1] !== defaultBrixRange[1]) {
+        if (point.brixLevel < filters.brixRange[0] || point.brixLevel > filters.brixRange[1]) {
+            return false;
+        }
     }
 
     // Date range filter
-    if (filters.dateRange[0] || filters.dateRange[1]) {
+    // Check if either start or end date is set and different from default empty string
+    const defaultDateRange = DEFAULT_MAP_FILTERS.dateRange;
+    if ((filters.dateRange[0] && filters.dateRange[0] !== defaultDateRange[0]) || (filters.dateRange[1] && filters.dateRange[1] !== defaultDateRange[1])) {
       const submittedDate = new Date(point.submittedAt);
       
       if (filters.dateRange[0]) {
@@ -61,12 +79,14 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
     }
 
     // Has image filter
-    if (filters.hasImage && (!point.images || point.images.length === 0)) {
+    // Check if hasImage is true AND it's different from the default (false)
+    if (filters.hasImage && filters.hasImage !== DEFAULT_MAP_FILTERS.hasImage && (!point.images || point.images.length === 0)) {
       return false;
     }
 
     // Submitted by filter
-    if (filters.submittedBy && !point.submittedBy.toLowerCase().includes(filters.submittedBy.toLowerCase())) {
+    // Check if submittedBy is set AND it's different from the default (empty string)
+    if (filters.submittedBy && filters.submittedBy !== DEFAULT_MAP_FILTERS.submittedBy && !point.submittedBy.toLowerCase().includes(filters.submittedBy.toLowerCase())) {
       return false;
     }
 
@@ -90,43 +110,49 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
 export function getFilterSummary(filters: MapFilter, isAdmin: boolean): string {
   const activeFilters: string[] = [];
   
-  if (!isAdmin || filters.verifiedOnly) {
-    activeFilters.push('verified only');
+  // Compare against DEFAULT_MAP_FILTERS for accuracy
+  // Verified filter: only add if admin changed it OR if not admin (it's implicitly always true then)
+  if (isAdmin && filters.verifiedOnly !== DEFAULT_MAP_FILTERS.verifiedOnly) {
+    activeFilters.push(`verified: ${filters.verifiedOnly ? 'only' : 'any'}`);
+  } else if (!isAdmin && DEFAULT_MAP_FILTERS.verifiedOnly) {
+    activeFilters.push('verified only'); // This means it's always applied for non-admins
   }
   
   if (filters.cropTypes.length > 0) {
     activeFilters.push(`${filters.cropTypes.length} crop type${filters.cropTypes.length > 1 ? 's' : ''}`);
   }
   
-  if (filters.category) {
+  if (filters.category && filters.category !== DEFAULT_MAP_FILTERS.category) {
     activeFilters.push(`category: ${filters.category}`);
   }
   
-  if (filters.brand) {
+  if (filters.brand && filters.brand !== DEFAULT_MAP_FILTERS.brand) {
     activeFilters.push(`brand: ${filters.brand}`);
   }
   
-  if (filters.store) {
+  if (filters.store && filters.store !== DEFAULT_MAP_FILTERS.store) {
     activeFilters.push(`store: ${filters.store}`);
   }
   
-  if (filters.brixRange[0] > 0 || filters.brixRange[1] < 30) {
-    activeFilters.push(`BRIX: ${filters.brixRange[0]}-${filters.brixRange[1]}`);
+  // Brix range: check if either bound is different from default
+  if (filters.brixRange[0] !== DEFAULT_MAP_FILTERS.brixRange[0] || filters.brixRange[1] !== DEFAULT_MAP_FILTERS.brixRange[1]) {
+    activeFilters.push(`BRIX: ${filters.brixRange[0].toFixed(1)}-${filters.brixRange[1].toFixed(1)}`);
   }
   
-  if (filters.dateRange[0] || filters.dateRange[1]) {
+  // Date range: check if either start or end date is set and different from default
+  if ((filters.dateRange[0] && filters.dateRange[0] !== DEFAULT_MAP_FILTERS.dateRange[0]) || (filters.dateRange[1] && filters.dateRange[1] !== DEFAULT_MAP_FILTERS.dateRange[1])) {
     const start = filters.dateRange[0] || 'start';
     const end = filters.dateRange[1] || 'end';
     activeFilters.push(`dates: ${start} to ${end}`);
   }
   
-  if (filters.hasImage) {
+  if (filters.hasImage && filters.hasImage !== DEFAULT_MAP_FILTERS.hasImage) {
     activeFilters.push('with images');
   }
   
-  if (filters.submittedBy) {
+  if (filters.submittedBy && filters.submittedBy !== DEFAULT_MAP_FILTERS.submittedBy) {
     activeFilters.push(`by: ${filters.submittedBy}`);
   }
 
-  return activeFilters.length > 0 ? activeFilters.join(', ') : 'no filters';
+  return activeFilters.length > 0 ? activeFilters.join(', ') : 'No active filters';
 }

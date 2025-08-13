@@ -4,8 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 // Define default filter values for consistency
 export const DEFAULT_MAP_FILTERS: MapFilter = {
-  cropTypes: [],
-  selectedCropType: '', // Default for new field
+  cropTypes: [], // Always an array now
   brixRange: [0, 30],
   dateRange: ['', ''],
   verifiedOnly: true,
@@ -18,7 +17,6 @@ export const DEFAULT_MAP_FILTERS: MapFilter = {
 
 interface FilterContextType {
   filters: MapFilter;
-  // Use React's standard Dispatch type for the setter
   setFilters: React.Dispatch<React.SetStateAction<MapFilter>>;
   isAdmin: boolean;
   totalSubmissions: number;
@@ -58,7 +56,6 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
   }, []);
 
   // For non-admin users, always enforce verifiedOnly = true
-  // This function now correctly accepts React.SetStateAction to handle both direct objects and updater functions
   const updateFilters: React.Dispatch<React.SetStateAction<MapFilter>> = (action) => {
     setFilters(prevFilters => {
       const newFilters = typeof action === 'function' ? action(prevFilters) : action;
