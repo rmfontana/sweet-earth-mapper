@@ -61,24 +61,24 @@ function formatSubmissionData(item: SubmissionsWithJoins[number]): BrixDataPoint
  * @returns A promise that resolves to an array of BrixDataPoint.
  */
 export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
-  // --- START AUTHENTICATION DEBUGGING LOGS ---
-  // Get the current user session *before* making the data query
+  // --- START PROMINENT AUTHENTICATION DEBUGGING LOGS ---
+  // These logs are now un-grouped and directly visible in the console
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  console.groupCollapsed('Debugging fetchFormattedSubmissions (Auth Status)');
-  console.log('Current authenticated user:', user);
-  console.log('Auth error (if any):', authError);
-  console.groupEnd();
-  // --- END AUTHENTICATION DEBUGGING LOGS ---
+  console.log('--- FETCH SUBMISSIONS AUTH STATUS ---');
+  console.log('Auth Status: Current authenticated user:', user);
+  console.log('Auth Status: Auth error (if any):', authError);
+  console.log('-----------------------------------');
+  // --- END PROMINENT AUTHENTICATION DEBUGGING LOGS ---
 
   // Perform the Supabase query with ordering
   const { data, error } = await baseQuery.order('assessment_date', { ascending: false });
 
-  // --- START SUPABASE RESPONSE DEBUGGING LOGS ---
-  console.groupCollapsed('Debugging fetchFormattedSubmissions (Supabase Data Response)');
+  // --- START PROMINENT SUPABASE RESPONSE DEBUGGING LOGS ---
+  console.log('--- FETCH SUBMISSIONS RAW SUPABASE RESPONSE ---');
   console.log('Raw Supabase data (before validation):', data);
   console.log('Raw Supabase error (if any):', error);
-  console.groupEnd();
-  // --- END SUPABASE RESPONSE DEBUGGING LOGS ---
+  console.log('-----------------------------------');
+  // --- END PROMINENT SUPABASE RESPONSE DEBUGGING LOGS ---
 
   if (error) {
     console.error('Error fetching submissions from Supabase:', error);
