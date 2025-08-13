@@ -24,15 +24,24 @@ const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  const { register, authError } = useAuth();
+  const { register, authError, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Redirect if already authenticated
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard'); // or wherever you want authenticated users to go
+    }
+  }, [isAuthenticated, navigate]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.display_name.trim()) {
       newErrors.display_name = 'Display name is required';
+    } else if (formData.display_name.trim().length < 2) {
+      newErrors.display_name = 'Display name must be at least 2 characters';
     }
 
     if (!formData.email.trim()) {
@@ -63,8 +72,14 @@ const Register = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
 
+    // Clear specific field error when user starts typing
     if (formErrors[name]) {
       setFormErrors(prev => ({ ...prev, [name]: '' }));
+    }
+    
+    // Clear general error too
+    if (formErrors.general) {
+      setFormErrors(prev => ({ ...prev, general: '' }));
     }
   };
 
@@ -78,24 +93,55 @@ const Register = () => {
       return;
     }
 
-    const success = await register(
-      formData.email,
-      formData.password,
-      formData.display_name
-    );
-    setIsLoading(false);
+    try {
+      const success = await register(
+        formData.email.trim(),
+        formData.password,
+        formData.display_name.trim()
+      );
 
-    if (success) {
-      toast({
-        title: 'Welcome to BRIX!',
-        description: 'Your account has been created successfully.',
-      });
-      navigate('/verify-email');
-    } else {
+      if (success) {
+        // Check if there's an auth error indicating email confirmation needed
+        if (authError && (authError.includes('email') || authError.includes('confirm'))) {
+          toast({
+            title: 'Registration Successful!',
+            description: 'Please check your email to confirm your account before signing in.',
+          });
+          navigate('/verify-email', { 
+            state: { email: formData.email.trim() } 
+          });
+        } else if (isAuthenticated) {
+          // User was immediately logged in
+          toast({
+            title: 'Welcome to BRIX!',
+            description: `Account created successfully! Welcome, ${formData.display_name.trim()}!`,
+          });
+          navigate('/dashboard');
+        } else {
+          // Registration successful but not logged in yet
+          toast({
+            title: 'Registration Successful!',
+            description: 'Your account has been created. You can now sign in.',
+          });
+          navigate('/login', { 
+            state: { email: formData.email.trim() } 
+          });
+        }
+      } else {
+        // Registration failed
+        setFormErrors(prev => ({
+          ...prev,
+          general: authError || 'Registration failed. Please try again.',
+        }));
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
       setFormErrors(prev => ({
         ...prev,
-        general: authError || 'Registration failed. Please try again.',
+        general: 'An unexpected error occurred. Please try again.',
       }));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -127,7 +173,7 @@ const Register = () => {
                 </Alert>
               )}
 
-              {/* display name */}
+              {/* Display name */}
               <div>
                 <Label htmlFor="display_name">Display Name</Label>
                 <div className="mt-1 relative">
@@ -141,8 +187,9 @@ const Register = () => {
                     value={formData.display_name}
                     onChange={handleInputChange}
                     required
-                    className={`pl-10 ${formErrors.display_name ? 'border-red-300' : ''}`}
+                    className={`pl-10 ${formErrors.display_name ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
                     placeholder="Choose a display name"
+                    disabled={isLoading}
                   />
                 </div>
                 {formErrors.display_name && (
@@ -150,7 +197,7 @@ const Register = () => {
                 )}
               </div>
 
-              {/* email */}
+              {/* Email */}
               <div>
                 <Label htmlFor="email">Email address</Label>
                 <div className="mt-1 relative">
@@ -165,8 +212,9 @@ const Register = () => {
                     required
                     value={formData.email}
                     onChange={handleInputChange}
-                    className={`pl-10 ${formErrors.email ? 'border-red-300' : ''}`}
+                    className={`pl-10 ${formErrors.email ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
                     placeholder="Enter your email address"
+                    disabled={isLoading}
                   />
                 </div>
                 {formErrors.email && (
@@ -174,7 +222,7 @@ const Register = () => {
                 )}
               </div>
 
-              {/* password */}
+              {/* Password */}
               <div>
                 <Label htmlFor="password">Password</Label>
                 <div className="mt-1 relative">
@@ -189,13 +237,15 @@ const Register = () => {
                     required
                     value={formData.password}
                     onChange={handleInputChange}
-                    className={`pl-10 pr-10 ${formErrors.password ? 'border-red-300' : ''}`}
+                    className={`pl-10 pr-10 ${formErrors.password ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
                     placeholder="Create a password"
+                    disabled={isLoading}
                   />
                   <button
                     type="button"
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     onClick={() => setShowPassword(!showPassword)}
+                    disabled={isLoading}
                   >
                     {showPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
                   </button>
@@ -205,7 +255,7 @@ const Register = () => {
                 )}
               </div>
 
-              {/* confirm password */}
+              {/* Confirm password */}
               <div>
                 <Label htmlFor="confirmPassword">Confirm password</Label>
                 <div className="mt-1 relative">
@@ -220,13 +270,15 @@ const Register = () => {
                     required
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
-                    className={`pl-10 pr-10 ${formErrors.confirmPassword ? 'border-red-300' : ''}`}
+                    className={`pl-10 pr-10 ${formErrors.confirmPassword ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
                     placeholder="Confirm your password"
+                    disabled={isLoading}
                   />
                   <button
                     type="button"
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    disabled={isLoading}
                   >
                     {showConfirmPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
                   </button>
@@ -236,8 +288,8 @@ const Register = () => {
                 )}
               </div>
 
-              {/* terms */}
-              <div className="flex items-center space-x-2">
+              {/* Terms */}
+              <div className="flex items-start space-x-2">
                 <Checkbox
                   id="terms"
                   checked={agreedToTerms}
@@ -247,13 +299,21 @@ const Register = () => {
                       setFormErrors(prev => ({ ...prev, terms: '' }));
                     }
                   }}
+                  disabled={isLoading}
+                  className={formErrors.terms ? 'border-red-300' : ''}
                 />
-                <Label htmlFor="terms" className="text-sm text-gray-600">
-                  I agree to the{' '}
-                  <Link to="/terms" className="text-green-600 hover:text-green-500">Terms and Conditions</Link>{' '}
-                  and{' '}
-                  <Link to="/privacy" className="text-green-600 hover:text-green-500">Privacy Policy</Link>
-                </Label>
+                <div className="grid gap-1.5 leading-none">
+                  <Label htmlFor="terms" className="text-sm text-gray-600 leading-normal">
+                    I agree to the{' '}
+                    <Link to="/terms" className="text-green-600 hover:text-green-500 underline">
+                      Terms and Conditions
+                    </Link>{' '}
+                    and{' '}
+                    <Link to="/privacy" className="text-green-600 hover:text-green-500 underline">
+                      Privacy Policy
+                    </Link>
+                  </Label>
+                </div>
               </div>
               {formErrors.terms && (
                 <p className="text-sm text-red-600">{formErrors.terms}</p>
@@ -262,9 +322,19 @@ const Register = () => {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-green-600 hover:bg-green-700"
+                className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? 'Creating account...' : 'Create account'}
+                {isLoading ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Creating account...
+                  </span>
+                ) : (
+                  'Create account'
+                )}
               </Button>
             </form>
 

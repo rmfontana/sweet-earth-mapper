@@ -179,47 +179,60 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const register = async (email: string, password: string, displayName: string): Promise<boolean> => {
     setAuthError(null);
-  
-    const supabaseUrl = getSupabaseUrl();
-    const emailRedirectTo = `${supabaseUrl}/login`;
-  
+    
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo,
+          data: {
+            display_name: displayName.trim() || email.split('@')[0], // Pass display_name in metadata
+          }
         },
       });
-  
+
       if (error) {
         console.error('[REGISTER] Error:', error.message);
         setAuthError(error.message);
         return false;
       }
-  
-      const user = data.user;
-  
-      // Insert into public.users table
-      if (user) {
-        const { error: insertError } = await supabase.from('users').insert({
-          id: user.id,
-          email,
-          display_name: displayName,
-        });
-  
-        if (insertError) {
-          console.error('[REGISTER] Failed to insert user profile:', insertError.message);
-          setAuthError(insertError.message);
+
+      // If email confirmation is required, user won't be logged in immediately
+      if (data.user && !data.session) {
+        // Registration successful, needs email confirmation
+        return true;
+      }
+
+      // If user is immediately logged in (email confirmation disabled)
+      if (data.user && data.session) {
+        // Wait a moment for the trigger/hook to create the profile
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Try to fetch the profile a few times in case of timing issues
+        let profile = null;
+        let attempts = 0;
+        const maxAttempts = 3;
+        
+        while (!profile && attempts < maxAttempts) {
+          profile = await fetchUserProfile(data.user.id);
+          if (!profile) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            attempts++;
+          }
+        }
+        
+        if (profile) {
+          profile.email = data.user.email;
+          setUser(profile);
+          setIsAuthenticated(true);
+          return true;
+        } else {
+          console.warn('[REGISTER] Profile not found after multiple attempts');
+          setAuthError('Account created but profile setup is still in progress. Please try refreshing or logging in again.');
           return false;
         }
       }
-  
-      if (!user && !data.session) {
-        setAuthError('Account created, but you must verify your email.');
-        return false;
-      }
-  
+
       return true;
     } catch (err: any) {
       console.error('[REGISTER] Unexpected error:', err.message || err);
