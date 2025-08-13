@@ -1,8 +1,8 @@
 // src/lib/fetchSubmissions.ts
 
 import { supabase } from '../integrations/supabase/client';
-import { QueryData } from '@supabase/supabase-js'; 
-import { BrixDataPoint } from '../types'; 
+import { QueryData } from '@supabase/supabase-js'; // **CORRECTED: Import QueryData from Supabase**
+import { BrixDataPoint } from '../types'; // Import your local BrixDataPoint interface
 
 // The select query string. Ensure it's clean for QueryData inference.
 const baseQuery = supabase.from('submissions').select(`
@@ -62,9 +62,9 @@ export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
     return [];
   }
 
-  // **CRUCIAL FIX: Ensure data is an array before mapping**
-  // If data is null or undefined, default to an empty array
-  const submissionsToFormat = data || [];
+  // **IMPROVED FIX: Explicitly ensure data is an array before mapping**
+  // If data is not an array, default to an empty array
+  const submissionsToFormat = Array.isArray(data) ? data : [];
   console.log(`Fetched ${submissionsToFormat.length} total submissions from database`);
 
   const formattedData = (submissionsToFormat as SubmissionsWithJoins).map(formatSubmissionData);
