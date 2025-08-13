@@ -5,21 +5,25 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Layout/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { ArrowLeft, AlertCircle, Edit, Trash2, MapPin } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Edit, Trash2, MapPin, Loader2 } from 'lucide-react'; // Added Loader2 for loading state
 import { useAuth } from '../contexts/AuthContext';
-import { fetchSubmissionById } from '../lib/fetchSubmissions'; // Use the new function from your existing file
-import { fetchCropCategoryByName } from '../lib/fetchCropCategories'; // Assuming this utility exists
+import { fetchSubmissionById, deleteSubmission } from '../lib/fetchSubmissions'; // Imported deleteSubmission
+import { fetchCropCategoryByName } from '../lib/fetchCropCategories';
 import SubmissionDetails from '../components/common/SubmissionDetails';
 import { BrixDataPoint } from '../types';
+import { useToast } from '../hooks/use-toast'; // Imported useToast for feedback
 
 const DataPointDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast(); // Initialize toast
 
-  const [category, setCategory] = useState<string | null>(null); // Still used for sidebar 'BRIX Scale Reference'
+  const [category, setCategory] = useState<string | null>(null);
   const [dataPoint, setDataPoint] = useState<BrixDataPoint | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false); // State for delete confirmation modal
+  const [isDeleting, setIsDeleting] = useState(false); // State for delete loading indicator
 
   // Load a single data point directly by ID
   useEffect(() => {
@@ -36,7 +40,7 @@ const DataPointDetail = () => {
       if (isMounted) setLoading(true);
 
       try {
-        const found = await fetchSubmissionById(id); // Use the new function
+        const found = await fetchSubmissionById(id);
         if (isMounted) setDataPoint(found || null);
       } catch (error) {
         console.error('Failed to load data point:', error);
@@ -75,6 +79,34 @@ const DataPointDetail = () => {
     };
   }, [dataPoint?.cropType]);
 
+  const isOwner = user?.display_name === dataPoint?.submittedBy; // Added null check for dataPoint
+
+  // Handle delete button click (opens confirmation modal)
+  const handleDeleteClick = () => {
+    setShowConfirmDeleteModal(true);
+  };
+
+  // Handle confirmation of deletion
+  const handleConfirmDelete = async () => {
+    if (!dataPoint || !id) return; // Should not happen if button is shown
+    
+    setIsDeleting(true);
+    try {
+      const success = await deleteSubmission(id);
+      if (success) {
+        toast({ title: 'Submission deleted successfully!', variant: 'default' });
+        navigate('/your-data'); // Navigate back to the user's data list after successful deletion
+      } else {
+        toast({ title: 'Failed to delete submission.', description: 'Please try again.', variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error('Error during deletion process:', error);
+      toast({ title: 'An error occurred.', description: 'Could not delete submission.', variant: 'destructive' });
+    } finally {
+      setIsDeleting(false);
+      setShowConfirmDeleteModal(false); // Close modal regardless
+    }
+  };
 
   if (loading) {
     return (
@@ -107,8 +139,6 @@ const DataPointDetail = () => {
     );
   }
 
-  const isOwner = user?.display_name === dataPoint.submittedBy;
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -140,9 +170,19 @@ const DataPointDetail = () => {
                   <Edit className="w-4 h-4 mr-1" />
                   Edit
                 </Button>
-                <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Delete {/* TODO: Implement actual delete logic */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600 hover:text-red-700"
+                  onClick={handleDeleteClick} // Calls the function to open confirmation modal
+                  disabled={isDeleting} // Disable button while deleting
+                >
+                  {isDeleting ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 mr-1" />
+                  )}
+                  {isDeleting ? 'Deleting...' : 'Delete'}
                 </Button>
               </div>
             )}
@@ -202,6 +242,42 @@ const DataPointDetail = () => {
             </Card>
           </div>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {showConfirmDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md p-6 bg-white rounded-xl shadow-lg">
+              <CardHeader className="border-b pb-4 mb-4">
+                <CardTitle className="text-xl font-bold text-red-600">Confirm Deletion</CardTitle>
+              </CardHeader>
+              <CardContent className="text-gray-700 mb-6">
+                <p className="mb-4">Are you sure you want to delete this BRIX measurement?</p>
+                <p className="font-semibold">This action cannot be undone.</p>
+              </CardContent>
+              <div className="flex justify-end space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowConfirmDeleteModal(false)}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 mr-2" />
+                  )}
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
       </main>
     </div>
   );

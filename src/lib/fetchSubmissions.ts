@@ -1,8 +1,7 @@
 // src/lib/fetchSubmissions.ts
 
 import { supabase } from '../integrations/supabase/client';
-// Removed QueryData import as we're defining the row type manually
-import { BrixDataPoint } from '../types'; // Your local BrixDataPoint interface
+import { BrixDataPoint } from '../types';
 
 // Define the base SELECT string cleanly
 const SUBMISSIONS_SELECT_QUERY_STRING = `
@@ -23,7 +22,6 @@ const SUBMISSIONS_SELECT_QUERY_STRING = `
 `;
 
 // Manually define the interface that matches the exact shape of data returned by the Supabase select query
-// This bypasses complex QueryData inference issues if full Supabase types are not generated.
 interface SupabaseSubmissionRow {
   id: string;
   assessment_date: string;
@@ -192,4 +190,47 @@ export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | n
   }
   // Data from .single() is an object or null, so cast it before formatting
   return data ? formatSubmissionData(data as SupabaseSubmissionRow) : null;
+}
+
+/**
+ * Deletes a submission and its associated image metadata from the database.
+ * NOTE: This function does NOT delete the actual image files from Supabase Storage bucket.
+ * This should be handled separately, typically via Supabase Storage's RLS policies or a server-side function.
+ * @param submissionId The ID of the submission to delete.
+ * @returns A promise that resolves to true if deletion was successful, false otherwise.
+ */
+export async function deleteSubmission(submissionId: string): Promise<boolean> {
+  try {
+    // 1. Delete associated image records from the 'submission_images' table first.
+    // This is crucial to avoid foreign key constraint violations if 'submission_images'
+    // has a foreign key to 'submissions' and 'ON DELETE CASCADE' is NOT set up for metadata.
+    // If 'ON DELETE CASCADE' IS set up in your database for submission_images to submissions,
+    // this step might be redundant for database records, but safer to explicitly handle.
+    const { error: deleteImagesError } = await supabase
+      .from('submission_images')
+      .delete()
+      .eq('submission_id', submissionId);
+
+    if (deleteImagesError) {
+      console.error('Error deleting submission image metadata:', deleteImagesError);
+      // Decide if you want to abort here or proceed. For now, we'll log and proceed
+      // as the primary goal is deleting the main submission record.
+    }
+
+    // 2. Delete the main submission record from the 'submissions' table.
+    const { error: deleteSubmissionError } = await supabase
+      .from('submissions')
+      .delete()
+      .eq('id', submissionId);
+
+    if (deleteSubmissionError) {
+      console.error('Error deleting submission:', deleteSubmissionError);
+      return false; // Indicate failure
+    }
+
+    return true; // Deletion successful
+  } catch (error) {
+    console.error('Unhandled error during submission deletion:', error);
+    return false; // Indicate failure
+  }
 }
