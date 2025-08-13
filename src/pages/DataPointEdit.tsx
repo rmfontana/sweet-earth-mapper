@@ -140,7 +140,7 @@ const DataPointEdit = () => {
             verified: (data as SupabaseData).verified,
             verifiedAt: (data as SupabaseData).verified_at,
             label: (data as SupabaseData).crop_variety ?? '',
-            notes: null, // Notes will be null since it's not in the query
+            notes: (data as any).outlier_notes ?? '', 
             location: (data as SupabaseData).location,
             crop: (data as SupabaseData).crop,
             store: (data as SupabaseData).store,
@@ -220,7 +220,7 @@ const DataPointEdit = () => {
         crop_id: cropId || null,
         store_id: storeId || null,
         brand_id: brandId || null,
-        notes: notes || null,
+        outlier_notes: notes || null,
         brix_value: brixLevel === '' ? null : Number(brixLevel),
       };
 
