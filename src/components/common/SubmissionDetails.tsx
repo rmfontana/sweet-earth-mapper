@@ -6,18 +6,18 @@ import { Badge } from '../ui/badge';
 import { MapPin, Calendar, User, CheckCircle, AlertCircle, MessageSquare, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor } from '../../lib/getBrixColor';
-import { getBrixQuality } from '../../lib/getBrixQuality';
+import { getBrixQuality } from '../../lib/getBrixQuality'; // Corrected this line!
 import { BrixDataPoint } from '../../types';
 import { supabase } from '../../integrations/supabase/client'; // Import supabase client needed here!
 
 
-// Explicitly define the type for the Supabase Storage getPublicUrl response
-// This helps TypeScript recognize both 'data' and 'error' properties.
-interface SupabaseStorageResponse {
+// Define a local interface to explicitly type the Supabase Storage getPublicUrl response.
+// This ensures TypeScript recognizes both 'data' and 'error' properties.
+interface SupabasePublicUrlResponse {
   data: {
     publicUrl: string;
   } | null;
-  error: Error | null;
+  error: Error | null; // Explicitly includes the Error object
 }
 
 interface SubmissionDetailsProps {
@@ -51,41 +51,41 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
       }
 
       setImagesLoading(true);
-      setImagesError(null);
+      setImagesError(null); // Clear previous errors
       const urls: string[] = [];
-      let hasError = false;
+      let hasOverallError = false; // Track if any image failed
 
-      try {
-        for (const imagePath of dataPoint.images) {
-          // IMPORTANT: Ensure 'submission-images-bucket' is the exact name of your Supabase Storage bucket.
-          // The imagePath itself should include any subfolders (e.g., 'user_id/submission_id/image.jpg').
-          // Explicitly cast the response to our defined interface
+      for (const imagePath of dataPoint.images) {
+        try {
+          // CORRECTED: Generate public URL from the path using Supabase client
+          // Explicitly cast the response to our defined SupabasePublicUrlResponse interface
           const response = await supabase.storage
-            .from('submission-images-bucket') // THIS MUST MATCH YOUR BUCKET NAME
-            .getPublicUrl(imagePath) as SupabaseStorageResponse; // <-- Explicit cast here
+            .from('submission-images-bucket') // IMPORTANT: This must match your actual Supabase Storage bucket name!
+            .getPublicUrl(imagePath) as SupabasePublicUrlResponse; // <-- Explicit cast here
 
-          if (response.error) { // TypeScript now knows 'error' exists
+          if (response.error) { // TypeScript now correctly recognizes 'error' here
             console.error(`Error getting public URL for ${imagePath}:`, response.error);
             urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Error+Loading+Image`); // Fallback placeholder
-            hasError = true;
+            hasOverallError = true;
           } else if (response.data?.publicUrl) {
             urls.push(response.data.publicUrl);
           } else {
             console.warn(`No public URL returned for ${imagePath} (data or publicUrl missing).`);
             urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Missing+URL`);
-            hasError = true;
+            hasOverallError = true;
           }
+        } catch (err: any) { // Catch any unexpected errors from the await call itself
+          console.error(`Unexpected error fetching public URL for ${imagePath}:`, err);
+          urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Unhandled+Error`);
+          hasOverallError = true;
         }
-        setImagePublicUrls(urls);
-        if (hasError) {
-          setImagesError("Some images failed to load. Check console for details.");
-        }
-      } catch (err) {
-        console.error("Failed to fetch image public URLs (unexpected error):", err);
-        setImagesError("An unexpected error occurred while loading images.");
-      } finally {
-        setImagesLoading(false);
       }
+
+      setImagePublicUrls(urls);
+      if (hasOverallError) {
+        setImagesError("Some images failed to load. Check console for details.");
+      }
+      setImagesLoading(false);
     };
 
     fetchImageUrls();
@@ -142,7 +142,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
             <div>
               <p className="text-sm text-gray-600">Submitted By</p>
               <p className="font-medium">{dataPoint.submittedBy}</p>
-              {/* Note: userId is not used directly here, but it's part of BrixDataPoint */}
             </div>
           </div>
 
@@ -174,7 +173,7 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
           <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
             <MapPin className="w-5 h-5 text-gray-600" />
             <div>
-              <p className="text-sm text-gray-600">Location</p>
+              <p className className="text-sm text-gray-600">Location</p>
               <p className="font-medium">{dataPoint.locationName}</p>
               <p className="text-xs text-gray-500">
                 {dataPoint.latitude?.toFixed(4)}, {dataPoint.longitude?.toFixed(4)}
