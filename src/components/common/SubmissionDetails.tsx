@@ -1,17 +1,18 @@
 // src/components/SubmissionDetails.tsx
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';;
-import { Badge } from  '../ui/badge';;
-import { MapPin, Calendar, User, CheckCircle, AlertCircle, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { MapPin, Calendar, User, CheckCircle, AlertCircle, MessageSquare, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor } from '../../lib/getBrixColor';
 import { getBrixQuality } from '../../lib/getBrixQuality';
 import { BrixDataPoint } from '../../types';
+import { supabase } from '../../integrations/supabase/client'; // Import supabase client
 
 interface SubmissionDetailsProps {
   dataPoint: BrixDataPoint;
-  showImages?: boolean;
+  showImages?: boolean; // Prop to control image section visibility
 }
 
 const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showImages = true }) => {
@@ -19,6 +20,56 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
   const cropThresholds = dataPoint.cropType ? thresholdsCache[dataPoint.cropType] : undefined;
   const colorClass = getBrixColor(dataPoint.brixLevel, cropThresholds, 'bg');
   const qualityText = getBrixQuality(dataPoint.brixLevel, cropThresholds);
+
+  const [imagePublicUrls, setImagePublicUrls] = useState<string[]>([]);
+  const [imagesLoading, setImagesLoading] = useState(true);
+  const [imagesError, setImagesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchImageUrls = async () => {
+      // Only proceed if showImages is true and there are image paths
+      if (!showImages || !dataPoint.images || dataPoint.images.length === 0) {
+        setImagePublicUrls([]);
+        setImagesLoading(false);
+        return;
+      }
+
+      setImagesLoading(true);
+      setImagesError(null);
+      const urls: string[] = [];
+
+      try {
+        for (const imagePath of dataPoint.images) {
+          // IMPORTANT: Ensure 'submission-images-bucket' is the exact name of your Supabase Storage bucket.
+          // The imagePath itself should include any subfolders (e.g., 'user_id/submission_id/image.jpg').
+          // Explicitly cast the response to ensure TypeScript understands the 'error' property
+          const { data, error } = (await supabase.storage
+            .from('submission-images-bucket')
+            .getPublicUrl(imagePath)) as { data: { publicUrl: string } | null; error: Error | null; };
+
+          if (error) { // Now TypeScript correctly recognizes 'error' here
+            console.error(`Error getting public URL for ${imagePath}:`, error);
+            urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Error+Loading+Image`); // Fallback placeholder
+          } else if (data?.publicUrl) { // Check if data and publicUrl exist
+            urls.push(data.publicUrl);
+          } else {
+            console.warn(`No public URL returned for ${imagePath} (data or publicUrl missing).`);
+            urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Missing+URL`);
+          }
+        }
+        setImagePublicUrls(urls);
+      } catch (err) {
+        console.error("Failed to fetch image public URLs (unexpected error):", err);
+        setImagesError("Failed to load some images. Please check your Supabase bucket configuration and paths.");
+      } finally {
+        setImagesLoading(false);
+      }
+    };
+
+    fetchImageUrls();
+    // Re-run this effect if the image paths change or if showImages preference changes
+  }, [dataPoint.images, showImages]);
+
 
   return (
     <Card>
@@ -103,7 +154,7 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               <p className="text-sm text-gray-600">Location</p>
               <p className="font-medium">{dataPoint.locationName}</p>
               <p className="text-xs text-gray-500">
-                {dataPoint.latitude.toFixed(4)}, {dataPoint.longitude.toFixed(4)}
+                {dataPoint.latitude?.toFixed(4)}, {dataPoint.longitude?.toFixed(4)}
               </p>
             </div>
           </div>
@@ -131,7 +182,7 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
           )}
         </div>
 
-        {/* Outlier Notes Section - NEW! */}
+        {/* Outlier Notes Section */}
         {dataPoint.outlier_notes && (
           <div className="bg-gray-50 rounded-lg p-4">
             <h3 className="font-semibold text-gray-900 mb-2 flex items-center space-x-2">
@@ -142,21 +193,39 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
           </div>
         )}
 
-        {/* Submission Images (Conditional) */}
-        {showImages && dataPoint.images && dataPoint.images.length > 0 && (
-          <div>
-            <h3 className="font-semibold mb-2 mt-8">Submission Images</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {dataPoint.images.map((url: string, idx: number) => (
-                <img
-                  key={idx}
-                  src={url}
-                  alt={`Submission Image ${idx + 1}`}
-                  className="rounded-lg shadow-md object-cover w-full h-32 sm:h-40"
-                  loading="lazy"
-                />
-              ))}
-            </div>
+        {/* Image Section (Conditional) */}
+        {showImages && (
+          <div className="pt-4 border-t border-gray-100">
+            <h3 className="flex items-center space-x-2 text-lg font-bold text-gray-900 mb-4">
+              <ImageIcon className="w-6 h-6 text-gray-600" />
+              <span>Reference Images ({imagePublicUrls.length})</span>
+            </h3>
+            {imagesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                <span className="ml-3 text-gray-600">Loading images...</span>
+              </div>
+            ) : imagesError ? (
+              <div className="text-red-600 text-center py-8">{imagesError}</div>
+            ) : imagePublicUrls.length === 0 ? (
+              <p className="text-gray-500 italic">No images available for this submission.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {imagePublicUrls.map((url, index) => (
+                  <div key={index} className="relative w-full pb-[75%] rounded-lg overflow-hidden shadow-md group">
+                    <img
+                      src={url}
+                      alt={`Submission image ${index + 1}`}
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      onError={(e) => {
+                        e.currentTarget.src = `https://placehold.co/400x300/CCCCCC/333333?text=Image+Error`;
+                        e.currentTarget.alt = "Error loading image";
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </CardContent>
