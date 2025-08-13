@@ -82,15 +82,15 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
         </div>
       </TableCell>
 
-      {/* Verified Status Cell - uses distinct, strong colors */}
+      {/* Verified Status Cell - uses distinct, softer colors */}
       <TableCell className="text-center py-3 px-4">
         {submission.verified ? (
-          <Badge className="flex items-center space-x-1 px-3 py-1 rounded-full bg-green-700 text-white font-semibold text-sm shadow-sm">
+          <Badge className="flex items-center space-x-1 px-3 py-1 rounded-full bg-green-100 text-green-700 font-semibold text-sm shadow-sm"> {/* Softer green */}
             <CheckCircle className="w-4 h-4" />
             <span>Verified</span>
           </Badge>
         ) : (
-          <Badge className="flex items-center space-x-1 px-3 py-1 rounded-full bg-orange-500 text-white font-semibold text-sm shadow-sm">
+          <Badge className="flex items-center space-x-1 px-3 py-1 rounded-full bg-orange-100 text-orange-700 font-semibold text-sm shadow-sm"> {/* Softer orange */}
             <Clock className="w-4 h-4" />
             <span>Pending</span>
           </Badge>
@@ -101,14 +101,14 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
       <TableCell className="text-center py-3 px-4">
         <div className="flex justify-center items-center space-x-1">
           <Link to={`/data-point/${submission.id}`}>
-            <Button variant="ghost" size="sm" aria-label="View submission details" className="text-blue-600 hover:text-blue-800">
+            <Button variant="ghost" size="sm" aria-label="View submission details"> {/* No explicit text color */}
               <Eye className="w-5 h-5" />
             </Button>
           </Link>
 
           {canEdit && (
             <Link to={`/data-point/edit/${submission.id}`} state={{ from: '/your-data' }}>
-              <Button variant="ghost" size="sm" aria-label="Edit submission" className="text-purple-600 hover:text-purple-800">
+              <Button variant="ghost" size="sm" aria-label="Edit submission"> {/* No explicit text color */}
                 <Edit className="w-5 h-5" />
               </Button>
             </Link>
@@ -120,7 +120,7 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
               variant="ghost"
               size="sm"
               onClick={() => onDelete(submission.id)}
-              className="text-red-600 hover:text-red-800"
+              className="text-red-600 hover:text-red-800" // Kept red for delete as it's a destructive action
               aria-label="Delete submission"
             >
               <Trash2 className="w-5 h-5" />
