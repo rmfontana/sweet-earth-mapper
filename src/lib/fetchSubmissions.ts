@@ -1,12 +1,10 @@
 // src/lib/fetchSubmissions.ts
 
 import { supabase } from '../integrations/supabase/client';
-import { QueryData } from '@supabase/supabase-js'; // Correctly imported from Supabase
+// Removed QueryData import as we're defining the row type manually
 import { BrixDataPoint } from '../types'; // Your local BrixDataPoint interface
 
-// NOTE: The base SELECT string is now defined here, but the actual Supabase query
-// builder (supabase.from('submissions').select(...)) will be called *inside* each fetch function
-// to ensure a fresh, unmutated query instance for every fetch.
+// Define the base SELECT string cleanly
 const SUBMISSIONS_SELECT_QUERY_STRING = `
   id,
   assessment_date,
@@ -24,17 +22,64 @@ const SUBMISSIONS_SELECT_QUERY_STRING = `
   submission_images(id,image_url)
 `;
 
-// Infer the type of the data returned by a sample Supabase query using the string
-// This is for type inference only, not for actual query execution
-type SampleSubmissionsQuery = ReturnType<typeof supabase.from<'submissions'>['select']>;
-type SubmissionsWithJoins = QueryData<SampleSubmissionsQuery>;
+// Manually define the interface that matches the exact shape of data returned by the Supabase select query
+// This bypasses complex QueryData inference issues if full Supabase types are not generated.
+interface SupabaseSubmissionRow {
+  id: string;
+  assessment_date: string;
+  brix_value: number;
+  verified: boolean;
+  verified_at: string | null;
+  crop_variety: string | null;
+  outlier_notes: string | null;
+  location: {
+    id: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    place_id: string | null;
+  } | null;
+  crop: {
+    id: string;
+    name: string;
+    poor_brix: number | null;
+    average_brix: number | null;
+    good_brix: number | null;
+    excellent_brix: number | null;
+    category: string | null;
+  } | null;
+  store: {
+    id: string;
+    name: string;
+    location_id: string;
+  } | null;
+  brand: {
+    id: string;
+    name: string;
+  } | null;
+  user: {
+    id: string;
+    display_name: string;
+  } | null;
+  verifier: {
+    id: string;
+    display_name: string;
+  } | null;
+  submission_images: {
+    id: string;
+    image_url: string;
+  }[];
+}
+
+// Now, SubmissionsWithJoins directly uses this manually defined interface
+type SubmissionsWithJoins = SupabaseSubmissionRow;
 
 /**
  * Helper function to format raw Supabase submission data into the BrixDataPoint interface.
  * @param item The raw data object from Supabase.
  * @returns Formatted BrixDataPoint object.
  */
-function formatSubmissionData(item: SubmissionsWithJoins[number]): BrixDataPoint {
+function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
   return {
     id: item.id,
     brixLevel: item.brix_value,
@@ -73,7 +118,7 @@ export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
   console.log('-----------------------------------');
   // --- END PROMINENT AUTHENTICATION DEBUGGING LOGS ---
 
-  // **CRITICAL FIX: Create a fresh query instance here**
+  // Create a fresh query instance without generic on .from()
   const { data, error } = await supabase.from('submissions')
     .select(SUBMISSIONS_SELECT_QUERY_STRING) // Use the defined string
     .order('assessment_date', { ascending: false });
@@ -94,7 +139,8 @@ export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
   const submissionsToFormat = Array.isArray(data) ? data : [];
   console.log(`Prepared ${submissionsToFormat.length} submissions for formatting (after Array.isArray check).`);
 
-  const formattedData = submissionsToFormat.map(formatSubmissionData);
+  // Cast `submissionsToFormat` to `SupabaseSubmissionRow[]` for the map function
+  const formattedData = (submissionsToFormat as SupabaseSubmissionRow[]).map(formatSubmissionData);
 
   // Filter out submissions with invalid coordinates (retains previous logic)
   const validSubmissions = formattedData.filter(item => {
@@ -130,7 +176,7 @@ export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
  * @returns A promise that resolves to a BrixDataPoint object or null if not found.
  */
 export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | null> {
-  // **CRITICAL FIX: Create a fresh query instance here too**
+  // Create a fresh query instance without generic on .from()
   const { data, error } = await supabase.from('submissions')
     .select(SUBMISSIONS_SELECT_QUERY_STRING) // Use the defined string
     .eq('id', id)
@@ -144,7 +190,6 @@ export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | n
     console.error(`Error fetching single submission with ID ${id}:`, error);
     throw error;
   }
-  // If data is a single object (expected from .single()), format it.
-  // The Array.isArray check isn't strictly needed here as .single() always returns object or null
-  return data ? formatSubmissionData(data as SubmissionsWithJoins[number]) : null;
+  // Data from .single() is an object or null, so cast it before formatting
+  return data ? formatSubmissionData(data as SupabaseSubmissionRow) : null;
 }

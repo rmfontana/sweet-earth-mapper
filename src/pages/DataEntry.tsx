@@ -367,9 +367,9 @@ const DataEntry = () => {
       toast({ title: 'Please fix the errors in the form', variant: 'destructive' });
       return;
     }
-  
+    
     setIsLoading(true);
-  
+    
     try {
       const cropName = sanitizeInput(formData.cropType);
       const brandName = sanitizeInput(formData.brand);
@@ -397,7 +397,7 @@ const DataEntry = () => {
         locationName,
         userId: user?.id, 
       };
-  
+      
       const supabaseUrl = getSupabaseUrl();
       const publishKey = getPublishableKey();
       const response = await fetch(`${supabaseUrl}/functions/v1/auto-verify-submission`, {
@@ -408,24 +408,24 @@ const DataEntry = () => {
         },
         body: JSON.stringify(payload),
       });
-  
+      
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.details || errorData.error || 'Failed to submit data via Edge Function.');
       }
-  
+      
       const result = await response.json();
       const { verified, submission_id } = result;
-  
+      
       if (!submission_id) {
         throw new Error('Submission ID was not returned by the server.');
       }
-  
+      
       // --- Image Upload and Database Insertion ---
       if (formData.images.length > 0) {
         const userId = user?.id;
         if (!userId) throw new Error('User not authenticated for image upload.');
-  
+        
         for (let i = 0; i < formData.images.length; i++) {
           const file = formData.images[i];
           const fileExtension = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
@@ -435,7 +435,7 @@ const DataEntry = () => {
           const { error: uploadError } = await supabase.storage
             .from('submission-images-bucket')
             .upload(filePath, file);
-  
+          
           if (uploadError) {
             console.error('Image upload failed:', uploadError);
             toast({
@@ -463,13 +463,13 @@ const DataEntry = () => {
           }
         }
       }
-  
+      
       if (verified) {
         toast({ title: 'BRIX measurement automatically verified!', description: 'Thank you for your contribution!' });
       } else {
         toast({ title: 'BRIX measurement submitted for review.', description: 'An admin will review your entry shortly.' });
       }
-  
+      
       navigate('/your-data');
     } catch (err: any) {
       console.error(err);
@@ -484,7 +484,7 @@ const DataEntry = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <Header />
-      <main className="max-w-5xl mx-auto p-6 lg:p-8">
+      <main className="max-w-5xl mx-auto p-6 lg:p-8 pb-24"> {/* Added pb-24 here */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             Submit BRIX Measurement
@@ -791,35 +791,33 @@ const DataEntry = () => {
               </div>
 
               {/* Optional Fields Section */}
-              <div className="border-l-4 border-gray-300 pl-6 mt-12">
+              <div className="border-l-4 border-purple-500 pl-6 pt-8">
                 <div className="flex items-center space-x-2 mb-6">
                   <h3 className="text-xl font-bold text-gray-900">Optional Information</h3>
-                  <div className="px-3 py-1 bg-gray-100 text-gray-800 text-sm font-medium rounded-full">
+                  <div className="px-3 py-1 bg-purple-100 text-purple-800 text-sm font-medium rounded-full">
                     Optional
                   </div>
                 </div>
 
                 {/* Row 5: Variety and Farm Location */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                  {/* Crop Variety */}
+                  {/* Variety */}
                   <div>
                     <Label htmlFor="variety" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
                       <Package className="inline w-4 h-4 mr-2" />
-                      Crop Variety
+                      Variety
                     </Label>
                     <Input
                       id="variety"
                       type="text"
-                      placeholder="e.g., Roma, Heirloom"
+                      placeholder="e.g., Roma, Honeycrisp"
                       value={formData.variety}
                       onChange={e => handleInputChange('variety', e.target.value)}
-                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
-                        focus:outline-none focus:ring-4 focus:ring-gray-200 hover:border-gray-300
-                        ${errors.variety ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-gray-400 bg-white'}`}
+                      className="w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-purple-200 hover:border-gray-300 border-gray-200 focus:border-purple-500 bg-white"
                     />
                   </div>
 
-                  {/* Farm Location (Text) */}
+                  {/* Farm Location */}
                   <div>
                     <Label htmlFor="farmLocation" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
                       <MapPin className="inline w-4 h-4 mr-2" />
@@ -828,12 +826,10 @@ const DataEntry = () => {
                     <Input
                       id="farmLocation"
                       type="text"
-                      placeholder="e.g., California, USA"
+                      placeholder="e.g., Local farm in Springfield"
                       value={formData.farmLocation}
                       onChange={e => handleInputChange('farmLocation', e.target.value)}
-                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
-                        focus:outline-none focus:ring-4 focus:ring-gray-200 hover:border-gray-300
-                        ${errors.farmLocation ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-gray-400 bg-white'}`}
+                      className="w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-purple-200 hover:border-gray-300 border-gray-200 focus:border-purple-500 bg-white"
                     />
                   </div>
                 </div>
@@ -844,17 +840,15 @@ const DataEntry = () => {
                   <div>
                     <Label htmlFor="harvestTime" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
                       <Clock className="inline w-4 h-4 mr-2" />
-                      Harvest Time (if known)
+                      Harvest Time (e.g., "early season", "late fall")
                     </Label>
                     <Input
                       id="harvestTime"
                       type="text"
-                      placeholder="e.g., Fall 2024"
+                      placeholder="e.g., Early Summer"
                       value={formData.harvestTime}
                       onChange={e => handleInputChange('harvestTime', e.target.value)}
-                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
-                        focus:outline-none focus:ring-4 focus:ring-gray-200 hover:border-gray-300
-                        ${errors.harvestTime ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-gray-400 bg-white'}`}
+                      className="w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-purple-200 hover:border-gray-300 border-gray-200 focus:border-purple-500 bg-white"
                     />
                   </div>
 
@@ -862,17 +856,15 @@ const DataEntry = () => {
                   <div>
                     <Label htmlFor="outlierNotes" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
                       <FileText className="inline w-4 h-4 mr-2" />
-                      Outlier Notes (e.g., 'sample was bruised', 'refractometer was dirty')
+                      Outlier Notes (e.g., "unusually high reading")
                     </Label>
                     <Textarea
                       id="outlierNotes"
-                      placeholder="Add any notes about the sample or measurement process."
+                      placeholder="Any observations about this measurement..."
                       value={formData.outlierNotes}
                       onChange={e => handleInputChange('outlierNotes', e.target.value)}
-                      className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
-                        focus:outline-none focus:ring-4 focus:ring-gray-200 hover:border-gray-300
-                        ${errors.outlierNotes ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-gray-400 bg-white'}`}
-                      rows={4}
+                      rows={3}
+                      className="w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-purple-200 hover:border-gray-300 border-gray-200 focus:border-purple-500 bg-white resize-y"
                     />
                     {errors.outlierNotes && (
                       <p className="text-red-600 text-sm mt-2 flex items-center">
@@ -883,22 +875,19 @@ const DataEntry = () => {
                   </div>
                 </div>
 
-                {/* Row 7: Images */}
-                <div>
+                {/* Image Upload */}
+                <div className="mb-8">
                   <Label htmlFor="images" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
                     <Camera className="inline w-4 h-4 mr-2" />
-                    Upload Photos (max 3)
+                    Upload Photos (Max 3)
                   </Label>
                   <Input
                     id="images"
                     type="file"
+                    accept="image/jpeg,image/png,image/webp"
                     multiple
-                    accept="image/jpeg, image/png, image/webp"
                     onChange={handleImageUpload}
-                    className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200
-                      file:bg-blue-50 file:text-blue-700 file:font-medium file:rounded-xl file:px-4 file:py-2 file:border-0 file:cursor-pointer file:mr-4
-                      focus:outline-none focus:ring-4 focus:ring-gray-200 hover:border-gray-300
-                      ${errors.images ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-gray-400 bg-white'}`}
+                    className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                   />
                   {errors.images && (
                     <p className="text-red-600 text-sm mt-2 flex items-center">
@@ -906,41 +895,40 @@ const DataEntry = () => {
                       {errors.images}
                     </p>
                   )}
-                  {formData.images.length > 0 && (
-                    <div className="flex flex-wrap mt-4 space-x-4">
-                      {formData.images.map((file, index) => (
-                        <div key={index} className="relative w-24 h-24 border rounded-xl overflow-hidden">
-                          <img src={URL.createObjectURL(file)} alt={`preview-${index}`} className="object-cover w-full h-full" />
-                          <button
-                            type="button"
-                            onClick={() => removeImage(index)}
-                            className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {formData.images.map((file, index) => (
+                      <div key={index} className="relative aspect-w-1 aspect-h-1"> {/* Added aspect ratio for consistent height */}
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={`Upload preview ${index + 1}`}
+                          className="w-full h-full object-cover rounded-lg shadow"
+                        />
+                        <Button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 h-6 w-6 flex items-center justify-center"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-              {errors.general && (
-                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl relative text-center" role="alert">
-                      <span className="block sm:inline">{errors.general}</span>
-                  </div>
-              )}
 
+              {/* Submit Button */}
+              {errors.general && (
+                <p className="text-red-600 text-sm mb-4 text-center font-medium">
+                  {errors.general}
+                </p>
+              )}
               <Button
                 type="submit"
-                disabled={isLoading || locationLoading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl text-lg transition-colors duration-200"
+                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white text-lg font-bold rounded-xl shadow-lg transition-all duration-300 flex items-center justify-center space-x-2"
+                disabled={isLoading}
               >
-                {isLoading ? (
-                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                ) : (
-                  <Upload className="h-6 w-6 mr-2" />
-                )}
-                {isLoading ? 'Submitting...' : 'Submit Measurement'}
+                {isLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                <span>{isLoading ? 'Submitting...' : 'Submit Measurement'}</span>
               </Button>
             </form>
           </CardContent>
