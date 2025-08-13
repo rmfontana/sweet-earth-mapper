@@ -1,9 +1,10 @@
 // src/lib/fetchSubmissions.ts
 
 import { supabase } from '../integrations/supabase/client';
-import { BrixDataPoint } from '../types';
+import { BrixDataPoint } from '../types'; // Your local BrixDataPoint interface
 
 // Define the base SELECT string cleanly
+// Removed SQL-style comment from inside the string literal
 const SUBMISSIONS_SELECT_QUERY_STRING = `
   id,
   assessment_date,
@@ -16,7 +17,7 @@ const SUBMISSIONS_SELECT_QUERY_STRING = `
   crop:crop_id(id,name,poor_brix,average_brix,good_brix,excellent_brix,category),
   store:store_id(id,name,location_id),
   brand:brand_id(id,name),
-  user:users!user_id(id,display_name),
+  user:users!user_id(id,display_name,id),
   verifier:users!verified_by(id,display_name),
   submission_images(id,image_url)
 `;
@@ -55,7 +56,7 @@ interface SupabaseSubmissionRow {
     id: string;
     name: string;
   } | null;
-  user: {
+  user: { // Now explicitly includes 'id' as it's selected in the query string
     id: string;
     display_name: string;
   } | null;
@@ -69,7 +70,6 @@ interface SupabaseSubmissionRow {
   }[];
 }
 
-// Now, SubmissionsWithJoins directly uses this manually defined interface
 type SubmissionsWithJoins = SupabaseSubmissionRow;
 
 /**
@@ -92,6 +92,7 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     storeName: item.store?.name ?? '',
     brandName: item.brand?.name ?? '',
     submittedBy: item.user?.display_name ?? 'Anonymous',
+    userId: item.user?.id ?? undefined, // NEW: Map the user's ID
     verifiedBy: item.verifier?.display_name ?? '',
     submittedAt: item.assessment_date,
     outlier_notes: item.outlier_notes ?? '',
@@ -118,7 +119,7 @@ export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
 
   // Create a fresh query instance without generic on .from()
   const { data, error } = await supabase.from('submissions')
-    .select(SUBMISSIONS_SELECT_QUERY_STRING) // Use the defined string
+    .select(SUBMISSIONS_SELECT_QUERY_STRING)
     .order('assessment_date', { ascending: false });
 
   // --- START PROMINENT SUPABASE RESPONSE DEBUGGING LOGS ---
@@ -174,9 +175,8 @@ export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
  * @returns A promise that resolves to a BrixDataPoint object or null if not found.
  */
 export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | null> {
-  // Create a fresh query instance without generic on .from()
   const { data, error } = await supabase.from('submissions')
-    .select(SUBMISSIONS_SELECT_QUERY_STRING) // Use the defined string
+    .select(SUBMISSIONS_SELECT_QUERY_STRING)
     .eq('id', id)
     .single();
 
@@ -188,7 +188,6 @@ export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | n
     console.error(`Error fetching single submission with ID ${id}:`, error);
     throw error;
   }
-  // Data from .single() is an object or null, so cast it before formatting
   return data ? formatSubmissionData(data as SupabaseSubmissionRow) : null;
 }
 
@@ -202,10 +201,6 @@ export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | n
 export async function deleteSubmission(submissionId: string): Promise<boolean> {
   try {
     // 1. Delete associated image records from the 'submission_images' table first.
-    // This is crucial to avoid foreign key constraint violations if 'submission_images'
-    // has a foreign key to 'submissions' and 'ON DELETE CASCADE' is NOT set up for metadata.
-    // If 'ON DELETE CASCADE' IS set up in your database for submission_images to submissions,
-    // this step might be redundant for database records, but safer to explicitly handle.
     const { error: deleteImagesError } = await supabase
       .from('submission_images')
       .delete()
@@ -213,8 +208,6 @@ export async function deleteSubmission(submissionId: string): Promise<boolean> {
 
     if (deleteImagesError) {
       console.error('Error deleting submission image metadata:', deleteImagesError);
-      // Decide if you want to abort here or proceed. For now, we'll log and proceed
-      // as the primary goal is deleting the main submission record.
     }
 
     // 2. Delete the main submission record from the 'submissions' table.

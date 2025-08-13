@@ -2,28 +2,27 @@
 // Core TypeScript interfaces for the BRIX platform
 export interface BrixDataPoint {
   id: string;
-  brixLevel: number; // Mapped from brix_value
+  brixLevel: number;
   verified: boolean;
-  verifiedAt?: string; // Mapped from verified_at
-  variety: string;
-  cropType: string; // Mapped from crop.name
-  category?: string; // Mapped from crop.category
-  latitude: number; // Mapped from location.latitude
-  longitude: number; // Mapped from location.longitude
-  locationName: string; // Mapped from location.name
-  storeName?: string; // Mapped from store.name
-  brandName?: string; // Mapped from brand.name
-  submittedBy: string; // Mapped from user.display_name
-  verifiedBy?: string; // Mapped from verifier.display_name
-  submittedAt: string; // Mapped from assessment_date
-  outlier_notes?: string;
-  images: string[]; // Array of image URLs, mapped from submission_images.image_url
-
-  // Direct properties from `crop` join for Brix thresholds, making them directly available
-  poorBrix?: number;
-  averageBrix?: number;
-  goodBrix?: number;
-  excellentBrix?: number;
+  verifiedAt: string | null; // ISO timestamp
+  variety: string; // Specific variety of the crop (e.g., Roma for Tomato)
+  cropType: string; // General crop type (e.g., Tomato)
+  category: string; // Category of the crop (e.g., vegetable, fruit)
+  latitude: number | null;
+  longitude: number | null;
+  locationName: string; // Human-readable location
+  storeName: string;
+  brandName: string;
+  submittedBy: string; // Display name of the user who submitted it
+  userId?: string; // Add userId for internal filtering/linking to users
+  verifiedBy: string; // Display name of the user who verified it
+  submittedAt: string; // ISO timestamp of assessment date
+  outlier_notes: string;
+  images: string[]; // Array of image URLs/paths
+  poorBrix: number | null;
+  averageBrix: number | null;
+  goodBrix: number | null;
+  excellentBrix: number | null;
 }
 
 export interface BrixThresholds {
