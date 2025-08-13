@@ -4,7 +4,7 @@ import React from 'react';
 import { TableCell, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { MapPin, Calendar, CheckCircle, Edit, Trash2, Eye, MessageSquare, Clock, Lock } from 'lucide-react';
+import { MapPin, Calendar, CheckCircle, Edit, Trash2, Eye, MessageSquare, Clock, Lock, User } from 'lucide-react'; // Added User icon
 import { Link } from 'react-router-dom';
 import { BrixDataPoint } from '../../types';
 import { useBrixColorFromContext } from '../../lib/getBrixColor';
@@ -50,12 +50,22 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
               <span>{submission.storeName}</span>
             </div>
           )}
+
+          {/* NEW: Visual indicator for owned submissions */}
+          {isOwner && (
+            <Badge className="flex items-center space-x-1 px-2 py-1 rounded-md bg-blue-50 text-blue-700 font-medium text-xs mt-2">
+              <User className="w-3 h-3" />
+              <span>Your Submission</span>
+            </Badge>
+          )}
         </div>
       </TableCell>
 
       {/* BRIX Level Cell - uses dynamic color from useBrixColorFromContext */}
       <TableCell className="text-center py-3 px-4">
-        <Badge className={`${brixColorClass} text-white px-4 py-2 rounded-full font-bold text-base shadow-sm`}>
+        <Badge
+          className={`${brixColorClass} text-white px-3 py-1 rounded-lg font-bold text-base shadow-sm`}
+        >
           {brixColorClass === 'bg-gray-300' ? 'N/A' : submission.brixLevel}
         </Badge>
       </TableCell>
@@ -85,12 +95,12 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
       {/* Verified Status Cell - uses distinct, softer colors */}
       <TableCell className="text-center py-3 px-4">
         {submission.verified ? (
-          <Badge className="flex items-center space-x-1 px-3 py-1 rounded-full bg-green-100 text-green-700 font-semibold text-sm shadow-sm"> {/* Softer green */}
+          <Badge className="flex items-center space-x-1 px-3 py-1 rounded-full bg-green-100 text-green-700 font-semibold text-sm shadow-sm">
             <CheckCircle className="w-4 h-4" />
             <span>Verified</span>
           </Badge>
         ) : (
-          <Badge className="flex items-center space-x-1 px-3 py-1 rounded-full bg-orange-100 text-orange-700 font-semibold text-sm shadow-sm"> {/* Softer orange */}
+          <Badge className="flex items-center space-x-1 px-3 py-1 rounded-full bg-orange-100 text-orange-700 font-semibold text-sm shadow-sm">
             <Clock className="w-4 h-4" />
             <span>Pending</span>
           </Badge>
@@ -101,14 +111,14 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
       <TableCell className="text-center py-3 px-4">
         <div className="flex justify-center items-center space-x-1">
           <Link to={`/data-point/${submission.id}`}>
-            <Button variant="ghost" size="sm" aria-label="View submission details"> {/* No explicit text color */}
+            <Button variant="ghost" size="sm" aria-label="View submission details">
               <Eye className="w-5 h-5" />
             </Button>
           </Link>
 
           {canEdit && (
             <Link to={`/data-point/edit/${submission.id}`} state={{ from: '/your-data' }}>
-              <Button variant="ghost" size="sm" aria-label="Edit submission"> {/* No explicit text color */}
+              <Button variant="ghost" size="sm" aria-label="Edit submission">
                 <Edit className="w-5 h-5" />
               </Button>
             </Link>
@@ -120,7 +130,7 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
               variant="ghost"
               size="sm"
               onClick={() => onDelete(submission.id)}
-              className="text-red-600 hover:text-red-800" // Kept red for delete as it's a destructive action
+              className="text-red-600 hover:text-red-800"
               aria-label="Delete submission"
             >
               <Trash2 className="w-5 h-5" />
