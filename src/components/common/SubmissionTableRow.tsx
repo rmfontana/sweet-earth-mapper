@@ -1,86 +1,139 @@
+// src/components/common/SubmissionTableRow.tsx
+
 import React from 'react';
 import { TableCell, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
-import { format } from 'date-fns';
-import { CheckCircle, Clock, ExternalLink, Trash2, Edit } from 'lucide-react';
 import { Button } from '../ui/button';
+import { MapPin, Calendar, CheckCircle, Edit, Trash2, Eye, MessageSquare, Clock, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { BrixDataPoint } from '../../types'; // Ensure this path is correct based on your project structure
+import { BrixDataPoint } from '../../types';
+import { useBrixColorFromContext } from '../../lib/getBrixColor';
 
 interface SubmissionTableRowProps {
   submission: BrixDataPoint;
   onDelete: (id: string) => void;
-  isOwner: boolean; // Indicates if the current user is the owner
-  // New prop: indicates if the current user (who is the owner) can delete this specific submission.
-  // This will be true if isOwner is true AND submission is NOT verified.
-  canDeleteByOwner: boolean;
+  isOwner: boolean; // Indicates if the current user is the owner (passed from parent)
+  canDeleteByOwner: boolean; // Indicates if owner can delete (based on RLS and verified status, passed from parent)
 }
 
-const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({
-  submission,
-  onDelete,
-  isOwner,
-  canDeleteByOwner, // Use the new prop
-}) => {
+const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onDelete, isOwner, canDeleteByOwner }) => {
+  // Use the useBrixColorFromContext to get the background color class
+  const brixColorClass = useBrixColorFromContext(
+    submission.cropType?.toLowerCase().trim() || '',
+    submission.brixLevel
+  );
+
+  // Determine if the edit button should be visible (only owner can edit)
+  const canEdit = isOwner;
+
   return (
-    <TableRow key={submission.id}>
-      <TableCell className="font-medium">
-        <p className="text-gray-900 font-semibold">{submission.cropType}</p>
-        {submission.variety && (
-          <p className="text-sm text-gray-600 italic">{submission.variety}</p>
-        )}
-        <p className="text-sm text-gray-700">{submission.brandName}</p>
-        <p className="text-xs text-gray-500">{submission.storeName}</p>
+    <TableRow
+      key={submission.id}
+      className="hover:bg-gray-100 transition-colors duration-200"
+    >
+      {/* Crop / Variety / Brand / Store Cell */}
+      <TableCell className="whitespace-nowrap py-3 px-4">
+        <div>
+          <div className="font-semibold text-gray-900">{submission.cropType}</div>
+
+          {submission.variety && (
+            <div className="text-xs text-gray-500">{submission.variety}</div>
+          )}
+
+          {submission.brandName && (
+            <div className="text-xs text-gray-800 mt-1">Brand: {submission.brandName}</div>
+          )}
+
+          {submission.storeName && (
+            <div className="text-xs text-gray-700 flex items-center space-x-1 mt-1">
+              <MapPin className="w-3 h-3 text-gray-500" />
+              <span>{submission.storeName}</span>
+            </div>
+          )}
+        </div>
       </TableCell>
-      <TableCell className="text-center font-bold text-lg">
-        {submission.brixLevel.toFixed(1)}
+
+      {/* BRIX Level Cell - uses dynamic color from useBrixColorFromContext */}
+      <TableCell className="text-center py-3 px-4">
+        <Badge className={`${brixColorClass} text-white px-4 py-2 rounded-full font-bold text-base shadow-sm`}>
+          {brixColorClass === 'bg-gray-300' ? 'N/A' : submission.brixLevel}
+        </Badge>
       </TableCell>
-      <TableCell>
-        <p className="text-gray-900">{submission.locationName}</p>
+
+      {/* Location / Notes Cell */}
+      <TableCell className="py-3 px-4">
+        <div className="flex items-center space-x-1 text-sm text-gray-700">
+          <MapPin className="w-4 h-4 text-gray-500" />
+          <span>{submission.locationName}</span>
+        </div>
         {submission.outlier_notes && (
-          <p className="text-sm text-gray-600 italic line-clamp-2">
-            Notes: {submission.outlier_notes}
-          </p>
+          <div className="flex items-center space-x-1 text-xs text-gray-500 mt-1 line-clamp-2">
+            <MessageSquare className="w-3 h-3 flex-shrink-0 text-gray-400" />
+            <span className="truncate">{submission.outlier_notes}</span>
+          </div>
         )}
       </TableCell>
-      <TableCell>
-        {format(new Date(submission.submittedAt), 'MMM dd, yyyy')}
+
+      {/* Assessment Date Cell */}
+      <TableCell className="whitespace-nowrap py-3 px-4">
+        <div className="flex items-center space-x-1 text-sm text-gray-700">
+          <Calendar className="w-4 h-4 text-gray-500" />
+          <span>{new Date(submission.submittedAt).toLocaleDateString()}</span>
+        </div>
       </TableCell>
-      <TableCell className="text-center">
+
+      {/* Verified Status Cell - uses distinct, strong colors */}
+      <TableCell className="text-center py-3 px-4">
         {submission.verified ? (
-          <Badge className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs">
-            <CheckCircle className="w-3 h-3 mr-1" /> Verified
+          <Badge className="flex items-center space-x-1 px-3 py-1 rounded-full bg-green-700 text-white font-semibold text-sm shadow-sm">
+            <CheckCircle className="w-4 h-4" />
+            <span>Verified</span>
           </Badge>
         ) : (
-          <Badge className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs">
-            <Clock className="w-3 h-3 mr-1" /> Pending
+          <Badge className="flex items-center space-x-1 px-3 py-1 rounded-full bg-orange-500 text-white font-semibold text-sm shadow-sm">
+            <Clock className="w-4 h-4" />
+            <span>Pending</span>
           </Badge>
         )}
       </TableCell>
-      <TableCell className="text-center">
-        <div className="flex items-center justify-center space-x-1">
+
+      {/* Actions Cell */}
+      <TableCell className="text-center py-3 px-4">
+        <div className="flex justify-center items-center space-x-1">
           <Link to={`/data-point/${submission.id}`}>
-            <Button variant="ghost" size="sm">
-              <ExternalLink className="h-4 w-4" />
+            <Button variant="ghost" size="sm" aria-label="View submission details" className="text-blue-600 hover:text-blue-800">
+              <Eye className="w-5 h-5" />
             </Button>
           </Link>
-          {isOwner && (
-            <Link to={`/data-point/edit/${submission.id}`}>
-              <Button variant="ghost" size="sm">
-                <Edit className="h-4 w-4" />
+
+          {canEdit && (
+            <Link to={`/data-point/edit/${submission.id}`} state={{ from: '/your-data' }}>
+              <Button variant="ghost" size="sm" aria-label="Edit submission" className="text-purple-600 hover:text-purple-800">
+                <Edit className="w-5 h-5" />
               </Button>
             </Link>
           )}
-          {/* Delete button: Only show if isOwner AND canDeleteByOwner */}
-          {isOwner && canDeleteByOwner && (
+
+          {/* Delete Button / Locked Indicator */}
+          {canDeleteByOwner ? (
             <Button
               variant="ghost"
               size="sm"
-              className="text-red-500 hover:text-red-700"
               onClick={() => onDelete(submission.id)}
+              className="text-red-600 hover:text-red-800"
+              aria-label="Delete submission"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="w-5 h-5" />
             </Button>
+          ) : (
+            // If the owner cannot delete (i.e., it's verified and they are not an admin)
+            isOwner && submission.verified && (
+              <span title="Verified submissions cannot be deleted by non-admins." className="cursor-not-allowed">
+                <Button variant="ghost" size="sm" className="text-gray-400 opacity-70 cursor-not-allowed" disabled>
+                  <Lock className="w-5 h-5" />
+                </Button>
+              </span>
+            )
           )}
         </div>
       </TableCell>
