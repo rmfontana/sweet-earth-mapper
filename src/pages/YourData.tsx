@@ -1,25 +1,22 @@
+// src/pages/YourData.tsx
+
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Layout/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Plus, Edit, Trash2, Eye, MapPin, Calendar, Beaker, CheckCircle } from 'lucide-react';
+import { Plus, Beaker, CheckCircle, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchFormattedSubmissions } from '../lib/fetchSubmissions';
-import { fetchBrixByCrop } from '../lib/fetchBrixByCrop'; 
-import { BrixThresholds } from '../lib/getBrixQuality';
-import { useBrixColorFromContext } from '../lib/getBrixColor';
-
+import SubmissionTableRow from '../components/common/SubmissionTableRow';
+import { BrixDataPoint } from '../types';
 
 const YourData = () => {
   const { user } = useAuth();
-  const [userSubmissions, setUserSubmissions] = useState<any[]>([]);
+  const [userSubmissions, setUserSubmissions] = useState<BrixDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [brixThresholdsByCrop, setBrixThresholdsByCrop] = useState<Record<string, BrixThresholds>>({});
 
   useEffect(() => {
     const loadSubmissions = async () => {
@@ -33,38 +30,21 @@ const YourData = () => {
         const submissions = await fetchFormattedSubmissions();
         const filtered = submissions.filter(sub => sub.submittedBy === user.display_name);
         setUserSubmissions(filtered);
-  
-        // Get unique crop types
-        const uniqueCrops = [...new Set(filtered.map(sub => sub.cropType?.toLowerCase()).filter(Boolean))];
-  
-        const thresholdsEntries = await Promise.all(
-          uniqueCrops.map(async (crop) => {
-            const result = await fetchBrixByCrop(crop);
-            return result ? [crop, result.brixLevels] : null;
-          })
-        );
-  
-        const thresholdMap = Object.fromEntries(
-          thresholdsEntries.filter(Boolean) as [string, BrixThresholds][]
-        );
-  
-        console.log('Threshold map:', thresholdMap);
-        setBrixThresholdsByCrop(thresholdMap);
       } catch (e) {
-        console.error(e);
+        console.error("Failed to load user submissions:", e);
         setUserSubmissions([]);
       } finally {
         setLoading(false);
       }
     };
-
     loadSubmissions();
   }, [user?.display_name]);
 
   const handleDelete = (id: string) => {
     console.log('Delete submission:', id);
-    // Mock delete functionality
-    // TODO Handle delete!
+    // TODO: Implement actual delete functionality here, e.g.:
+    // await deleteSubmissionFromSupabase(id);
+    // setUserSubmissions(prev => prev.filter(sub => sub.id !== id));
   };
 
   if (!user) {
@@ -102,7 +82,7 @@ const YourData = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
@@ -113,7 +93,7 @@ const YourData = () => {
               Manage and track your BRIX measurement submissions
             </p>
           </div>
-          
+
           <Link to="/data-entry">
             <Button className="flex items-center space-x-2 bg-green-600 hover:bg-green-700">
               <Plus className="w-4 h-4" />
@@ -151,110 +131,26 @@ const YourData = () => {
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Crop / Variety / Brand / Store</TableHead>
-                        <TableHead className="text-center">BRIX</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Assessment Date</TableHead>
-                        <TableHead className="text-center">Verified?</TableHead>
-                        <TableHead className="text-center">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {userSubmissions.map((submission) => (
-                        <TableRow 
-                          key={submission.id} 
-                          className="hover:bg-gray-100 transition-colors duration-200 cursor-pointer"
-                        >
-                          <TableCell className="whitespace-nowrap">
-                            <div>
-                              <div className="font-semibold text-gray-900">{submission.cropType}</div>
-
-                              {submission.label && (
-                                <div className="text-xs text-gray-500">{submission.label}</div>
-                              )}
-
-                              {submission.brandName && (
-                                <div className="text-xs text-indigo-600 mt-1">Brand: {submission.brandName}</div>
-                              )}
-
-                              {submission.storeName && (
-                                <div className="text-xs text-green-600 flex items-center space-x-1 mt-1">
-                                  <MapPin className="w-3 h-3" />
-                                  <span>{submission.storeName}</span>
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-
-                          <TableCell className="text-center">
-                            {(() => {
-                              const colorClass = useBrixColorFromContext(
-                                submission.cropType?.toLowerCase().trim() || '',
-                                submission.brixLevel
-                              );
-                              return (
-                                <Badge className={`${colorClass} text-white px-3 py-1 rounded-full`}>
-                                  {colorClass === 'bg-gray-300' ? '...' : submission.brixLevel}
-                                </Badge>
-                              );
-                            })()}
-                          </TableCell>
-
-                          <TableCell>
-                            <div className="flex items-center space-x-1 text-sm text-gray-700">
-                              <MapPin className="w-4 h-4" />
-                              <span>{submission.locationName}</span>
-                            </div>
-                          </TableCell>
-
-                          <TableCell className="whitespace-nowrap">
-                            <div className="flex items-center space-x-1 text-sm text-gray-700">
-                              <Calendar className="w-4 h-4" />
-                              <span>{new Date(submission.submittedAt).toLocaleDateString()}</span>
-                            </div>
-                          </TableCell>
-
-                          <TableCell className="text-center">
-                            {submission.verified ? (
-                              <Badge variant="secondary" className="flex items-center space-x-1 px-2 py-1 rounded-full bg-green-100 text-green-800">
-                                <CheckCircle className="w-4 h-4" />
-                                <span className="text-sm font-medium">Verified</span>
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-sm font-medium px-2 py-1 rounded-full">
-                                Pending
-                              </Badge>
-                            )}
-                          </TableCell>
-
-                          <TableCell className="text-center">
-                            <div className="flex justify-center space-x-2">
-                              <Link to={`/data-point/${submission.id}`}>
-                                <Button variant="ghost" size="sm" aria-label="View submission">
-                                  <Eye className="w-5 h-5" />
-                                </Button>
-                              </Link>
-                              <Link to={`/data-point/${submission.id}?edit=true`} state={{ from: '/your-data' }}>
-                                <Button variant="ghost" size="sm" aria-label="Edit submission">
-                                  <Edit className="w-5 h-5" />
-                                </Button>
-                              </Link>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(submission.id)}
-                                className="text-red-600 hover:text-red-800"
-                                aria-label="Delete submission"
-                              >
-                                <Trash2 className="w-5 h-5" />
-                              </Button>
-                            </div>
-                          </TableCell>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Crop / Variety / Brand / Store</TableHead>
+                          <TableHead className="text-center">BRIX</TableHead>
+                          <TableHead>Location / Notes</TableHead>
+                          <TableHead>Assessment Date</TableHead>
+                          <TableHead className="text-center">Verified?</TableHead>
+                          <TableHead className="text-center">Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
+                      </TableHeader>
+                      <TableBody>
+                        {userSubmissions.map((submission) => (
+                          <SubmissionTableRow
+                            key={submission.id}
+                            submission={submission}
+                            onDelete={handleDelete}
+                            isOwner={true} // For 'YourData', the user is always the owner
+                          />
+                        ))}
+                      </TableBody>
                     </Table>
                   </div>
                 )}

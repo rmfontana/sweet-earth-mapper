@@ -11,7 +11,7 @@ import { fetchBrands } from '@/lib/fetchBrands';
 import { fetchStores } from '@/lib/fetchStores';
 import { fetchCropCategories } from '@/lib/fetchCropCategories';
 import { Range, getTrackBackground } from 'react-range';
-import { useFilters } from '../../contexts/FilterContext';
+import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext'; // Import DEFAULT_MAP_FILTERS
 
 import {
   Command,
@@ -144,33 +144,30 @@ const MapFilters: React.FC = () => {
     ), [availableCrops, cropQuery]);
 
   // Update filters helper
+  // This now accepts a partial update or full MapFilter as an updater function
   const updateFilters = (key: keyof typeof filters, value: any) => {
-    setFilters({ ...filters, [key]: value });
+    setFilters(prev => ({ ...prev, [key]: value }));
   };
 
   // Crop type add/remove helpers
   const addCropType = (crop: string) => {
-    if (!filters.cropTypes.includes(crop)) {
-      updateFilters('cropTypes', [...filters.cropTypes, crop]);
-    }
+    setFilters(prev => {
+      if (!prev.cropTypes.includes(crop)) {
+        return { ...prev, cropTypes: [...prev.cropTypes, crop] };
+      }
+      return prev;
+    });
   };
   const removeCropType = (crop: string) => {
-    updateFilters('cropTypes', filters.cropTypes.filter(c => c !== crop));
+    setFilters(prev => ({
+      ...prev,
+      cropTypes: prev.cropTypes.filter(c => c !== crop)
+    }));
   };
 
   const clearAllFilters = () => {
-    setFilters({
-      cropTypes: [],
-      brixRange: [0, 30],
-      dateRange: ['', ''],
-      brand: '',
-      store: '',
-      category: '',
-      hasImage: false,
-      submittedBy: '',
-      verifiedOnly: true,
-      nearbyOnly: false,
-    });
+    // Reset filters to the predefined default from the context
+    setFilters(DEFAULT_MAP_FILTERS);
     // Clear search queries too
     setCropCategoryQuery('');
     setBrandQuery('');
@@ -273,7 +270,7 @@ const MapFilters: React.FC = () => {
             onChange={(newRange) => {
               // Enforce valid range and update filters
               if (newRange[0] <= newRange[1]) {
-                setFilters({ ...filters, brixRange: newRange });
+                updateFilters('brixRange', newRange);
               }
             }}
           />
@@ -385,7 +382,7 @@ const MapFilters: React.FC = () => {
                   className="h-9"
                   value={brandQuery}
                   onValueChange={setBrandQuery}
-                  aria-label="Search brands"
+                  aria-label="Search brand"
                 />
                 <CommandList role="listbox" aria-label="Brands">
                   <CommandEmpty>No brands found.</CommandEmpty>
@@ -432,7 +429,7 @@ const MapFilters: React.FC = () => {
                   className="h-9"
                   value={storeQuery}
                   onValueChange={setStoreQuery}
-                  aria-label="Search stores"
+                  aria-label="Search store"
                 />
                 <CommandList role="listbox" aria-label="Stores">
                   <CommandEmpty>No stores found.</CommandEmpty>

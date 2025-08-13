@@ -1,10 +1,12 @@
+// src/components/DataBrowser/DataTable.tsx
+
 import React, { useState, useMemo, useEffect } from 'react';
-import { BrixDataPoint } from '../../types';
+import { BrixDataPoint, MapFilter } from '../../types'; // Import MapFilter
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
-import { Badge } from '../ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import {
   Calendar,
   User,
@@ -13,11 +15,13 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Eye, Edit, Trash2
 } from 'lucide-react';
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
-import { useFilters } from '../../contexts/FilterContext';
+import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext'; // Import DEFAULT_MAP_FILTERS
 import { applyFilters, getFilterSummary } from '../../lib/filterUtils';
-import { useBrixColorFromContext } from '../../lib/getBrixColor';
+import SubmissionTableRow from '../common/SubmissionTableRow'; 
+import { Link } from 'react-router-dom';
 
 const DataTable: React.FC = () => {
   const { filters, setFilters, isAdmin, setFilteredCount } = useFilters();
@@ -35,11 +39,6 @@ const DataTable: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
 
   const [cropTypes, setCropTypes] = useState<string[]>([]);
-
-  type BrixColorBadgeProps = {
-    cropType: string;
-    brixLevel: number;
-  };
 
   // Fetch submissions on mount
   useEffect(() => {
@@ -74,8 +73,21 @@ const DataTable: React.FC = () => {
     setCurrentPage(1);
   }, [filters, searchTerm]);
 
-  const filteredData = useMemo(() => {
-    let filtered = applyFilters(data, filters, isAdmin);
+  const filteredAndSortedData = useMemo(() => {
+    // `applyFilters` expects MapFilter, and it handles `selectedCropType` if present
+    let appliedFilters: MapFilter = { ...filters };
+    if (filters.selectedCropType) {
+      // If a single crop type is selected in the DataTable's dropdown,
+      // override cropTypes array for filtering purposes here.
+      // This allows MapFilters.tsx to use cropTypes[] for multi-select,
+      // while DataTable.tsx uses selectedCropType for single-select.
+      appliedFilters.cropTypes = [filters.selectedCropType];
+    } else {
+      appliedFilters.cropTypes = []; // Ensure empty if no single crop selected
+    }
+
+
+    let filtered = applyFilters(data, appliedFilters, isAdmin);
 
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -85,7 +97,8 @@ const DataTable: React.FC = () => {
           (point.submittedBy && point.submittedBy.toLowerCase().includes(searchLower)) ||
           (point.locationName && point.locationName.toLowerCase().includes(searchLower)) ||
           (point.storeName && point.storeName.toLowerCase().includes(searchLower)) ||
-          (point.brandName && point.brandName.toLowerCase().includes(searchLower));
+          (point.brandName && point.brandName.toLowerCase().includes(searchLower)) ||
+          (point.outlier_notes && point.outlier_notes.toLowerCase().includes(searchLower));
         return matches;
       });
     }
@@ -93,389 +106,238 @@ const DataTable: React.FC = () => {
     setFilteredCount(filtered.length);
 
     filtered = [...filtered].sort((a, b) => {
-      let aValue = a[sortBy];
-      let bValue = b[sortBy];
+      let aValue: any = a[sortBy];
+      let bValue: any = b[sortBy];
 
       if (typeof aValue === 'string') {
         aValue = aValue.toLowerCase();
-        bValue = (bValue as string).toLowerCase();
+        bValue = bValue.toLowerCase();
       }
 
-      if (sortOrder === 'asc') {
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-      } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      if (aValue < bValue) {
+        return sortOrder === 'asc' ? -1 : 1;
       }
+      if (aValue > bValue) {
+        return sortOrder === 'asc' ? 1 : -1;
+      }
+      return 0;
     });
 
     return filtered;
-  }, [data, searchTerm, filters, sortBy, sortOrder, isAdmin, setFilteredCount]);
+  }, [data, filters, isAdmin, searchTerm, sortBy, sortOrder, setFilteredCount]);
 
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+  // Pagination logic
+  const totalPages = Math.ceil(filteredAndSortedData.length / itemsPerPage);
+  const currentItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredAndSortedData.slice(startIndex, endIndex);
+  }, [filteredAndSortedData, currentPage, itemsPerPage]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage > 0 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
 
   const handleSort = (column: keyof BrixDataPoint) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
       setSortBy(column);
-      setSortOrder('desc');
+      setSortOrder('desc'); // Default sort order when changing column
     }
   };
 
+  const handleFilterChange = (filterName: keyof MapFilter, value: any) => {
+    setFilters(prev => ({ ...prev, [filterName]: value })); // Correctly use updater function
+  };
+
+  const clearFilters = () => {
+    setFilters(DEFAULT_MAP_FILTERS); // Reset to predefined defaults
+    setSearchTerm('');
+  };
+
+  const filterSummary = getFilterSummary(filters, isAdmin);
+
+  const handleDelete = (id: string) => {
+    console.log('Delete submission from DataTable:', id);
+    // TODO: Implement actual delete functionality and refresh data
+  };
+
   if (loading) {
-    return <div className="py-12 text-center text-gray-600">Loading data...</div>;
+    return (
+      <div className="text-center py-12 text-gray-600">Loading data...</div>
+    );
   }
 
   if (error) {
-    return <div className="py-12 text-center text-red-600">{error}</div>;
+    return (
+      <div className="text-center py-12 text-red-600">Error: {error}</div>
+    );
   }
 
-  const BrixColorBadge: React.FC<BrixColorBadgeProps> = ({ cropType, brixLevel }) => {
-    const colorClass = useBrixColorFromContext(cropType, brixLevel, 'bg');
-
-    return <Badge className={colorClass}>{brixLevel}</Badge>;
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Search and Filter Controls */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
+    <div className="px-4 sm:px-6 lg:px-8 py-8">
+      <h2 className="text-3xl font-bold text-gray-900 mb-6">All Submissions</h2>
+
+      {/* Search and Filter Section */}
+      <div className="mb-6 flex flex-col md:flex-row gap-4 items-center">
+        <div className="relative w-full md:w-1/3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Input
+            placeholder="Search by crop, submitter, location, notes..."
+            className="pl-9 pr-3 py-2 rounded-md border"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => setShowFilters(!showFilters)}
+          className="flex items-center space-x-2"
+        >
+          <Filter className="w-4 h-4" />
+          <span>{showFilters ? 'Hide Filters' : 'Show Filters'}</span>
+        </Button>
+        {Object.keys(filters).length > 0 || searchTerm ? (
+          <Button variant="ghost" onClick={clearFilters} className="text-red-600">
+            Clear Filters ({Object.keys(filters).length + (searchTerm ? 1 : 0)})
+          </Button>
+        ) : null}
+      </div>
+
+      {showFilters && (
+        <Card className="mb-6">
+          <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Filter by Crop Type */}
             <div>
-              <CardTitle>Brix Data Browser</CardTitle>
-              <p className="text-sm text-gray-600 mt-1">
-                Showing {filteredData.length} of {data.length} submissions ({getFilterSummary(filters, isAdmin)})
-              </p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <Input
-                  placeholder="Search crops, varieties, or submitters..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-80"
-                />
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center space-x-2"
+              <label htmlFor="cropTypeFilter" className="block text-sm font-medium text-gray-700 mb-2">
+                Filter by Crop Type
+              </label>
+              <select
+                id="cropTypeFilter"
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                value={filters.selectedCropType || ''} // Use selectedCropType
+                onChange={(e) => handleFilterChange('selectedCropType', e.target.value || undefined)} // Update selectedCropType
               >
-                <Filter className="w-4 h-4" />
-                <span>Filters</span>
-              </Button>
+                <option value="">All Crop Types</option>
+                {cropTypes.map((crop) => (
+                  <option key={crop} value={crop}>
+                    {crop}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
-        </CardHeader>
 
-        {showFilters && (
-          <CardContent className="border-t bg-gray-50">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Crop Type Filter */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Crop Types</label>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {cropTypes.map((crop) => (
-                    <div key={crop} className="flex items-center space-x-2">
-                      <Checkbox
-                        checked={filters.cropTypes.includes(crop)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setFilters({
-                              ...filters,
-                              cropTypes: [...filters.cropTypes, crop],
-                            });
-                          } else {
-                            setFilters({
-                              ...filters,
-                              cropTypes: filters.cropTypes.filter((c) => c !== crop),
-                            });
-                          }
-                        }}
-                      />
-                      <label className="text-sm">{crop}</label>
-                    </div>
-                  ))}
-                </div>
+            {/* Filter by Verified Status (if admin) */}
+            {isAdmin && (
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="verifiedFilter"
+                  checked={filters.verifiedOnly === true} // Use verifiedOnly
+                  onCheckedChange={(checked) => handleFilterChange('verifiedOnly', checked === true ? true : undefined)} // Update verifiedOnly
+                />
+                <label
+                  htmlFor="verifiedFilter"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Show Only Verified
+                </label>
               </div>
-
-              {/* Brix Range Filter */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Brix Range</label>
-                <div className="space-y-2">
-                  <Input
-                    type="number"
-                    placeholder="Min Brix"
-                    value={filters.brixRange[0]}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        brixRange: [Number(e.target.value), filters.brixRange[1]],
-                      })
-                    }
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Max Brix"
-                    value={filters.brixRange[1]}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        brixRange: [filters.brixRange[0], Number(e.target.value)],
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Date Range Filter */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Date Range</label>
-                <div className="space-y-2">
-                  <Input
-                    type="date"
-                    value={filters.dateRange[0]}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        dateRange: [e.target.value, filters.dateRange[1]],
-                      })
-                    }
-                  />
-                  <Input
-                    type="date"
-                    value={filters.dateRange[1]}
-                    onChange={(e) =>
-                      setFilters({
-                        ...filters,
-                        dateRange: [filters.dateRange[0], e.target.value],
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Verified Only Filter: only visible to admins */}
-              {isAdmin && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">Options</label>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      checked={filters.verifiedOnly}
-                      onCheckedChange={(checked) =>
-                        setFilters({
-                          ...filters,
-                          verifiedOnly: !!checked,
-                        })
-                      }
-                    />
-                    <label className="text-sm">Verified only</label>
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
+            {/* Add more filters here as needed */}
           </CardContent>
-        )}
-      </Card>
+        </Card>
+      )}
 
-      {/* Data Table */}
+      {filterSummary && (
+        <p className="text-sm text-gray-600 mb-4">
+          Applying filters: <span className="font-semibold">{filterSummary}</span>
+        </p>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead
+                    className="cursor-pointer"
                     onClick={() => handleSort('cropType')}
                   >
-                    Crop Type
-                    {sortBy === 'cropType' && (
-                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    Crop / Variety / Brand / Store{' '}
+                    {sortBy === 'cropType' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead
+                    className="text-center cursor-pointer"
                     onClick={() => handleSort('brixLevel')}
                   >
-                    Brix Level
-                    {sortBy === 'brixLevel' && (
-                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    BRIX{' '}
+                    {sortBy === 'brixLevel' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer"
+                    onClick={() => handleSort('locationName')}
+                  >
+                    Location / Notes{' '}
+                    {sortBy === 'locationName' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead
+                    className="whitespace-nowrap cursor-pointer"
                     onClick={() => handleSort('submittedAt')}
                   >
-                    Date
-                    {sortBy === 'submittedAt' && (
-                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </th>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('submittedBy')}
-                  >
-                    Submitted By
-                    {sortBy === 'submittedBy' && (
-                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedData.map((point) => (
-                  <tr key={point.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{point.cropType}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <BrixColorBadge cropType={point.cropType} brixLevel={point.brixLevel} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(point.submittedAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {point.submittedBy}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {point.verified ? (
-                        <div className="flex items-center text-green-600">
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          <span className="text-sm">Verified</span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-500">Pending</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedPoint(point)}>
-                        View Details
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-            <div className="flex-1 flex justify-between sm:hidden">
-              <Button
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-                variant="outline"
-              >
-                Previous
-              </Button>
-              <Button
-                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-                variant="outline"
-              >
-                Next
-              </Button>
-            </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Showing{' '}
-                  <span className="font-medium">{startIndex + 1}</span> to{' '}
-                  <span className="font-medium">
-                    {Math.min(startIndex + itemsPerPage, filteredData.length)}
-                  </span>{' '}
-                  of <span className="font-medium">{filteredData.length}</span> results
-                </p>
-              </div>
-              <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                  <Button
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                    variant="outline"
-                    size="sm"
-                    className="rounded-l-md"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-
-                  {[...Array(totalPages)].map((_, i) => {
-                    const page = i + 1;
-                    if (
-                      page === 1 ||
-                      page === totalPages ||
-                      (page >= currentPage - 1 && page <= currentPage + 1)
-                    ) {
-                      return (
-                        <Button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          variant={page === currentPage ? 'default' : 'outline'}
-                          size="sm"
-                        >
-                          {page}
-                        </Button>
-                      );
-                    }
-                    return null;
-                  })}
-
-                  <Button
-                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                    disabled={currentPage === totalPages}
-                    variant="outline"
-                    size="sm"
-                    className="rounded-r-md"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </nav>
-              </div>
-            </div>
+                    Assessment Date{' '}
+                    {sortBy === 'submittedAt' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead className="text-center">Verified?</TableHead>
+                  <TableHead className="text-center">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {currentItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                      No data found for the current filters.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  currentItems.map((submission) => (
+                    <SubmissionTableRow
+                      key={submission.id}
+                      submission={submission}
+                      onDelete={handleDelete}
+                      isOwner={false}
+                    />
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
 
-      {/* Selected Point Modal */}
-      {selectedPoint && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full relative">
-            <button
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
-              onClick={() => setSelectedPoint(null)}
-              aria-label="Close"
-            >
-              ✕
-            </button>
-            <h2 className="text-xl font-semibold mb-4">{selectedPoint.cropType} Details</h2>
-            <p>
-              <strong>Brix Level:</strong> {selectedPoint.brixLevel}
-            </p>
-            <p>
-              <strong>Submitted By:</strong> {selectedPoint.submittedBy}
-            </p>
-            <p>
-              <strong>Date:</strong> {new Date(selectedPoint.submittedAt).toLocaleDateString()}
-            </p>
-            <p>
-              <strong>Status:</strong> {selectedPoint.verified ? 'Verified' : 'Pending Verification'}
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Pagination */}
+      <div className="flex justify-between items-center mt-6">
+        <Button
+          variant="outline"
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+        >
+          <ChevronLeft className="w-4 h-4 mr-2" /> Previous
+        </Button>
+        <span className="text-sm text-gray-700">
+          Page {currentPage} of {totalPages}
+        </span>
+        <Button
+          variant="outline"
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+        >
+          Next <ChevronRight className="w-4 h-4 ml-2" />
+        </Button>
+      </div>
     </div>
   );
 };

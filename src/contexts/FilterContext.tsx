@@ -1,10 +1,25 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { MapFilter } from '../types';
+import { MapFilter } from '../types'; // Import the updated MapFilter
 import { supabase } from '@/integrations/supabase/client';
+
+// Define default filter values for consistency
+export const DEFAULT_MAP_FILTERS: MapFilter = {
+  cropTypes: [],
+  selectedCropType: '', // Default for new field
+  brixRange: [0, 30],
+  dateRange: ['', ''],
+  verifiedOnly: true,
+  submittedBy: '',
+  store: '',
+  brand: '',
+  hasImage: false,
+  category: '',
+};
 
 interface FilterContextType {
   filters: MapFilter;
-  setFilters: (filters: MapFilter) => void;
+  // Use React's standard Dispatch type for the setter
+  setFilters: React.Dispatch<React.SetStateAction<MapFilter>>;
   isAdmin: boolean;
   totalSubmissions: number;
   filteredCount: number;
@@ -22,19 +37,8 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
   const [totalSubmissions, setTotalSubmissions] = useState(0);
   const [filteredCount, setFilteredCount] = useState(0);
 
-  // Default filters - consistent between map and table
-  const [filters, setFilters] = useState<MapFilter>({
-    cropTypes: [],
-    brixRange: [0, 30],
-    dateRange: ['', ''],
-    verifiedOnly: true, // Default to true for both admin and non-admin
-    submittedBy: '',
-    nearbyOnly: false,
-    store: '',
-    brand: '',
-    hasImage: false,
-    category: '',
-  });
+  // Initialize filters with the default values
+  const [filters, setFilters] = useState<MapFilter>(DEFAULT_MAP_FILTERS);
 
   // Load user role from Supabase on mount
   useEffect(() => {
@@ -42,31 +46,32 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-
       if (!user) {
         setIsAdmin(false);
         return;
       }
-
-      // Check if user is admin - for now, just set to false
       // TODO: Implement proper role checking when profiles table is available
+      // For now, setting to false as per previous instructions
       setIsAdmin(false);
     };
-
     getUserRole();
   }, []);
 
   // For non-admin users, always enforce verifiedOnly = true
-  const updateFilters = (newFilters: MapFilter) => {
-    if (!isAdmin) {
-      newFilters.verifiedOnly = true;
-    }
-    setFilters(newFilters);
+  // This function now correctly accepts React.SetStateAction to handle both direct objects and updater functions
+  const updateFilters: React.Dispatch<React.SetStateAction<MapFilter>> = (action) => {
+    setFilters(prevFilters => {
+      const newFilters = typeof action === 'function' ? action(prevFilters) : action;
+      if (!isAdmin) {
+        return { ...newFilters, verifiedOnly: true };
+      }
+      return newFilters;
+    });
   };
 
   const value: FilterContextType = {
     filters,
-    setFilters: updateFilters,
+    setFilters: updateFilters, // Use the wrapped updateFilters
     isAdmin,
     totalSubmissions,
     filteredCount,

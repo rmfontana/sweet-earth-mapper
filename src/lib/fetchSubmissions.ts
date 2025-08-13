@@ -1,67 +1,37 @@
-// fetchSubmissions.ts
+// src/lib/fetchSubmissions.ts
+
 import { supabase } from '../integrations/supabase/client';
 import { QueryData } from '@supabase/supabase-js';
 
-const query = supabase.from('submissions').select(`
+// The select query string. Ensure no comments or extraneous characters inside template literal.
+const baseQuery = supabase.from('submissions').select(`
   id,
   assessment_date,
   brix_value,
   verified,
   verified_at,
   crop_variety,
-  location:location_id (
-    id,
-    name,
-    latitude,
-    longitude,
-    place_id
-  ),
-  crop:crop_id (
-    id,
-    name,
-    poor_brix,
-    average_brix,
-    good_brix,
-    excellent_brix,
-    category
-  ),
-  store:store_id (
-    id,
-    name,
-    location_id
-  ),
-  brand:brand_id (
-    id,
-    name
-  ),
-  user:users!user_id (
-    id,
-    display_name
-  ),
-  verifier:users!verified_by (
-    id,
-    display_name
-  ),
-  submission_images:submission_images (
-    id,
-    image_url
-  )
-`).order('assessment_date', { ascending: false });
+  outlier_notes,
+  location:location_id(id,name,latitude,longitude,place_id),
+  crop:crop_id(id,name,poor_brix,average_brix,good_brix,excellent_brix,category),
+  store:store_id(id,name,location_id),
+  brand:brand_id(id,name),
+  user:users!user_id(id,display_name),
+  verifier:users!verified_by(id,display_name),
+  submission_images(id,image_url)
+`);
 
-type SubmissionsWithJoins = QueryData<typeof query>;
+// Infer the type of the data returned by the Supabase query
+type SubmissionsWithJoins = QueryData<typeof baseQuery>;
 
-export async function fetchFormattedSubmissions() {
-  const { data, error } = await query;
-  if (error) throw error;
-
-  console.log(`Fetched ${data.length} total submissions from database`);
-
-  const formattedData = (data as SubmissionsWithJoins).map(item => ({
+// Helper function to format the fetched data into BrixDataPoint interface
+function formatSubmissionData(item: SubmissionsWithJoins[number]): BrixDataPoint {
+  const formatted: BrixDataPoint = {
     id: item.id,
     brixLevel: item.brix_value,
     verified: item.verified,
     verifiedAt: item.verified_at,
-    label: item.crop_variety ?? '',
+    variety: item.crop_variety ?? '', // Directly mapped from crop_variety
     cropType: item.crop?.name ?? 'Unknown',
     category: item.crop?.category ?? '',
     latitude: item.location?.latitude,
@@ -72,20 +42,40 @@ export async function fetchFormattedSubmissions() {
     submittedBy: item.user?.display_name ?? 'Anonymous',
     verifiedBy: item.verifier?.display_name ?? '',
     submittedAt: item.assessment_date,
-    images: item.submission_images?.map(img => img.image_url) ?? []
-  }));
+    outlier_notes: item.outlier_notes ?? '', // Directly mapped from outlier_notes
+    images: item.submission_images?.map(img => img.image_url) ?? [],
+    poorBrix: item.crop?.poor_brix,
+    averageBrix: item.crop?.average_brix,
+    goodBrix: item.crop?.good_brix,
+    excellentBrix: item.crop?.excellent_brix,
+  };
+  return formatted;
+}
+
+export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
+  // Apply sorting directly to the query for consistency
+  const { data, error } = await baseQuery.order('assessment_date', { ascending: false });
+  if (error) {
+    console.error('Error fetching submissions:', error);
+    throw error;
+  }
+
+  console.log(`Fetched ${data.length} total submissions from database`);
+
+  // Ensure data is cast correctly before mapping
+  const formattedData = (data as SubmissionsWithJoins).map(formatSubmissionData);
 
   // Filter out submissions with invalid coordinates
   const validSubmissions = formattedData.filter(item => {
-    const hasValidCoords = item.latitude != null && 
-                          item.longitude != null && 
-                          typeof item.latitude === 'number' && 
-                          typeof item.longitude === 'number' &&
-                          !isNaN(item.latitude) && 
-                          !isNaN(item.longitude) &&
-                          item.latitude >= -90 && item.latitude <= 90 &&
-                          item.longitude >= -180 && item.longitude <= 180;
-    
+    const hasValidCoords = item.latitude != null &&
+                           item.longitude != null &&
+                           typeof item.latitude === 'number' &&
+                           typeof item.longitude === 'number' &&
+                           !isNaN(item.latitude) &&
+                           !isNaN(item.longitude) &&
+                           item.latitude >= -90 && item.latitude <= 90 &&
+                           item.longitude >= -180 && item.longitude <= 180;
+
     if (!hasValidCoords) {
       console.warn(`Submission ${item.id} has invalid coordinates:`, {
         latitude: item.latitude,
@@ -93,7 +83,6 @@ export async function fetchFormattedSubmissions() {
         locationData: item
       });
     }
-    
     return hasValidCoords;
   });
 
@@ -101,4 +90,19 @@ export async function fetchFormattedSubmissions() {
   console.log('Sample valid submission:', validSubmissions[0]);
 
   return validSubmissions;
+}
+
+// Function to fetch a single submission by ID
+export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | null> {
+  const { data, error } = await baseQuery.eq('id', id).single();
+  if (error) {
+    if (error.code === 'PGRST116') { // No rows found
+      console.warn(`No submission found with ID: ${id}`);
+      return null;
+    }
+    console.error(`Error fetching submission with ID ${id}:`, error);
+    throw error;
+  }
+  // Ensure data is cast correctly before formatting
+  return data ? formatSubmissionData(data as SubmissionsWithJoins[number]) : null;
 }
