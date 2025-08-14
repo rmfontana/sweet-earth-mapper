@@ -1,5 +1,3 @@
-// src/components/common/SubmissionTableRow.tsx
-
 import React from 'react';
 import { TableCell, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
@@ -32,7 +30,7 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
       className="hover:bg-gray-100 transition-colors duration-200"
     >
       {/* Crop / Variety / Brand / Store Cell */}
-      <TableCell className="whitespace-nowrap py-3 px-4">
+      <TableCell className="py-3 px-4 break-words">
         <div>
           <div className="font-semibold text-gray-900">{submission.cropType}</div>
 
@@ -71,7 +69,7 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
       </TableCell>
 
       {/* Location / Notes Cell */}
-      <TableCell className="py-3 px-4">
+      <TableCell className="py-3 px-4 break-words">
         <div className="flex items-center space-x-1 text-sm text-gray-700">
           <MapPin className="w-4 h-4 text-gray-500" />
           <span>{submission.locationName}</span>
@@ -85,7 +83,7 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
       </TableCell>
 
       {/* Assessment Date Cell */}
-      <TableCell className="whitespace-nowrap py-3 px-4">
+      <TableCell className="py-3 px-4">
         <div className="flex items-center space-x-1 text-sm text-gray-700">
           <Calendar className="w-4 h-4 text-gray-500" />
           <span>{new Date(submission.submittedAt).toLocaleDateString()}</span>

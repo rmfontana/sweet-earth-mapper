@@ -1,5 +1,3 @@
-// src/pages/YourData.tsx
-
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Layout/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -178,15 +176,15 @@ const YourData = () => {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <Table>
+                    <Table style={{ tableLayout: 'fixed', minWidth: '100%' }}>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Crop / Variety / Brand / Store</TableHead>
-                          <TableHead className="text-center">BRIX</TableHead>
-                          <TableHead>Location / Notes</TableHead>
-                          <TableHead>Assessment Date</TableHead>
-                          <TableHead className="text-center">Verified?</TableHead>
-                          <TableHead className="text-center">Actions</TableHead>
+                          <TableHead className="w-[28%]">Crop / Details</TableHead>
+                          <TableHead className="w-[10%] text-center">BRIX</TableHead>
+                          <TableHead className="w-[20%]">Location / Notes</TableHead>
+                          <TableHead className="w-[17%]">Assessment Date</TableHead>
+                          <TableHead className="w-[15%] text-center">Verified?</TableHead>
+                          <TableHead className="w-[10%] text-center">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -195,8 +193,7 @@ const YourData = () => {
                             key={submission.id}
                             submission={submission}
                             onDelete={handleDeleteClick}
-                            isOwner={true} // For 'YourData', the user is always the owner
-                            // Pass canDeleteByOwner prop based on verified status
+                            isOwner={true}
                             canDeleteByOwner={!submission.verified}
                           />
                         ))}
