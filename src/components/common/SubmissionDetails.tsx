@@ -1,5 +1,3 @@
-// src/components/SubmissionDetails.tsx
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -8,21 +6,19 @@ import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor } from '../../lib/getBrixColor';
 import { getBrixQuality } from '../../lib/getBrixQuality';
 import { BrixDataPoint } from '../../types';
-import { supabase } from '../../integrations/supabase/client'; // Import supabase client needed here!
-
+import { supabase } from '../../integrations/supabase/client';
 
 // Define a local interface to explicitly type the Supabase Storage getPublicUrl response.
-// This ensures TypeScript recognizes both 'data' and 'error' properties.
 interface SupabasePublicUrlResponse {
   data: {
     publicUrl: string;
   } | null;
-  error: Error | null; // Explicitly includes the Error object
+  error: Error | null;
 }
 
 interface SubmissionDetailsProps {
   dataPoint: BrixDataPoint;
-  showImages?: boolean; // Prop to control image section visibility
+  showImages?: boolean;
 }
 
 const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showImages = true }) => {
@@ -38,43 +34,46 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
   const qualityText = getBrixQuality(dataPoint.brixLevel, cropThresholds);
 
   const [imagePublicUrls, setImagePublicUrls] = useState<string[]>([]);
-  const [imagesLoading, setImagesLoading] = useState(false); // Start as false, set to true if fetching
+  const [imagesLoading, setImagesLoading] = useState(false);
   const [imagesError, setImagesError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchImageUrls = async () => {
-      // Only proceed if showImages is true and there are image paths
-      if (!showImages || !dataPoint.images || dataPoint.images.length === 0) {
+      // Ensure dataPoint.images is a valid array of strings
+      if (!showImages || !dataPoint.images || !Array.isArray(dataPoint.images) || dataPoint.images.length === 0) {
         setImagePublicUrls([]);
         setImagesLoading(false);
         return;
       }
 
       setImagesLoading(true);
-      setImagesError(null); // Clear previous errors
+      setImagesError(null);
       const urls: string[] = [];
-      let hasOverallError = false; // Track if any image failed
+      let hasOverallError = false;
 
       for (const imagePath of dataPoint.images) {
-        try {
-          // CORRECTED: Generate public URL from the path using Supabase client
-          // Explicitly cast the response to our defined SupabasePublicUrlResponse interface
-          const response = await supabase.storage
-            .from('submission-images-bucket') // IMPORTANT: This must match your actual Supabase Storage bucket name!
-            .getPublicUrl(imagePath) as SupabasePublicUrlResponse; // <-- Explicit cast here
+        if (typeof imagePath !== 'string' || imagePath === '') {
+          console.warn('Invalid image path found:', imagePath);
+          continue;
+        }
 
-          if (response.error) { // TypeScript now correctly recognizes 'error' here
+        try {
+          const response = supabase.storage
+            .from('submission-images-bucket')
+            .getPublicUrl(imagePath) as SupabasePublicUrlResponse; // <-- The key change here
+
+          if (response.error) {
             console.error(`Error getting public URL for ${imagePath}:`, response.error);
-            urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Error+Loading+Image`); // Fallback placeholder
+            urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Error`);
             hasOverallError = true;
           } else if (response.data?.publicUrl) {
             urls.push(response.data.publicUrl);
           } else {
-            console.warn(`No public URL returned for ${imagePath} (data or publicUrl missing).`);
+            console.warn(`No public URL returned for ${imagePath}.`);
             urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Missing+URL`);
             hasOverallError = true;
           }
-        } catch (err: any) { // Catch any unexpected errors from the await call itself
+        } catch (err: any) {
           console.error(`Unexpected error fetching public URL for ${imagePath}:`, err);
           urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Unhandled+Error`);
           hasOverallError = true;
@@ -89,14 +88,11 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
     };
 
     fetchImageUrls();
-    // Re-run this effect if the image paths change or if showImages prop changes
   }, [dataPoint.images, showImages]);
-
 
   return (
     <Card>
       <CardHeader>
-        {/* Title and Verified Status */}
         <CardTitle className="text-2xl flex items-center space-x-3">
           <span>{dataPoint.cropType}</span>
           {dataPoint.verified && (
@@ -107,7 +103,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
           <p className="text-gray-600 mt-1">{dataPoint.variety}</p>
         )}
       </CardHeader>
-
       <CardContent className="space-y-6">
         {/* BRIX Reading Section */}
         <div className="bg-gray-50 rounded-lg p-6 text-center">
@@ -135,7 +130,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               <p className="font-medium">{new Date(dataPoint.submittedAt).toLocaleDateString()}</p>
             </div>
           </div>
-
           {/* Submitted By */}
           <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
             <User className="w-5 h-5 text-gray-600" />
@@ -144,7 +138,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               <p className="font-medium">{dataPoint.submittedBy}</p>
             </div>
           </div>
-
           {/* Verification Status */}
           <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
             {dataPoint.verified ? (
@@ -157,7 +150,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               <p className="font-medium">{dataPoint.verified ? 'Verified' : 'Pending'}</p>
             </div>
           </div>
-
           {/* Verified By */}
           {dataPoint.verified && dataPoint.verifiedBy && (
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
@@ -168,7 +160,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               </div>
             </div>
           )}
-
           {/* Location Name & Coordinates */}
           <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
             <MapPin className="w-5 h-5 text-gray-600" />
@@ -180,7 +171,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               </p>
             </div>
           </div>
-
           {/* Store Name (Conditional) */}
           {dataPoint.storeName && (
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
@@ -191,7 +181,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               </div>
             </div>
           )}
-
           {/* Brand Name (Conditional) */}
           {dataPoint.brandName && (
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
@@ -203,8 +192,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
             </div>
           )}
         </div>
-
-        {/* Outlier Notes Section */}
         {dataPoint.outlier_notes && (
           <div className="bg-gray-50 rounded-lg p-4">
             <h3 className="font-semibold text-gray-900 mb-2 flex items-center space-x-2">
@@ -214,8 +201,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
             <p className="text-gray-700">{dataPoint.outlier_notes}</p>
           </div>
         )}
-
-        {/* Image Section (Conditional) */}
         {showImages && (
           <div className="pt-4 border-t border-gray-100">
             <h3 className="flex items-center space-x-2 text-lg font-bold text-gray-900 mb-4">
@@ -236,7 +221,7 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
                 {imagePublicUrls.map((url: string, index: number) => (
                   <div key={index} className="relative w-full pb-[75%] rounded-lg overflow-hidden shadow-md group">
                     <img
-                      src={url} // Now using the fetched public URL
+                      src={url}
                       alt={`Submission image ${index + 1}`}
                       className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                       onError={(e) => {
