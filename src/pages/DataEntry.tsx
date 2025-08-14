@@ -429,7 +429,7 @@ const DataEntry = () => {
         for (let i = 0; i < formData.images.length; i++) {
           const file = formData.images[i];
           const fileExtension = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
-          const filePath = `${userId}/${submission_id}/${Date.now()}_${i}.${fileExtension}`;
+          const filePath = [userId, submission_id, `${Date.now()}_${i}.${fileExtension}`].join('/');
           
           // 1. Upload the image file to Supabase Storage
           const { error: uploadError } = await supabase.storage

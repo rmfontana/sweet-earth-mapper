@@ -40,7 +40,8 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
       setImagesLoading(true);
       setImagesError(null);
       const urls: string[] = [];
-      let hasOverallError = false;
+      const projectRef = 'wbkzczcqlorsewoofwqe'; // Your Supabase Project Reference
+      const bucketName = 'submission-images-bucket';
 
       for (const imagePath of dataPoint.images) {
         if (typeof imagePath !== 'string' || imagePath === '') {
@@ -48,30 +49,12 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
           continue;
         }
 
-        try {
-          // Get the public URL for the image path.
-          const { data } = supabase.storage
-            .from('submission-images-bucket')
-            .getPublicUrl(imagePath);
-
-          if (data?.publicUrl) {
-            urls.push(data.publicUrl);
-          } else {
-            console.warn('No public URL returned for ${imagePath}.');
-            urls.push('https://placehold.co/400x300/CCCCCC/333333?text=Missing+URL');
-            hasOverallError = true;
-          }
-        } catch (err: any) {
-          console.error('Unexpected error fetching public URL for ${imagePath}:', err);
-          urls.push('https://placehold.co/400x300/CCCCCC/333333?text=Unhandled+Error');
-          hasOverallError = true;
-        }
+        // The key fix: Manually construct the public URL
+        const publicUrl = `https://${projectRef}.supabase.co/storage/v1/object/public/${bucketName}/${imagePath}`;
+        urls.push(publicUrl);
       }
 
       setImageUrls(urls);
-      if (hasOverallError) {
-        setImagesError('Some images failed to load. Check console for details.');
-      }
       setImagesLoading(false);
     };
 
@@ -190,8 +173,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
                 <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
                 <span className="ml-3 text-gray-600">Loading images...</span>
               </div>
-            ) : imagesError ? (
-              <div className="text-red-600 text-center py-8">{imagesError}</div>
             ) : imageUrls.length === 0 ? (
               <p className="text-gray-500 italic">No images available for this submission.</p>
             ) : (
