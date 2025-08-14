@@ -8,15 +8,6 @@ import { getBrixQuality } from '../../lib/getBrixQuality';
 import { BrixDataPoint } from '../../types';
 import { supabase } from '../../integrations/supabase/client';
 
-// The interface explicitly defines that the response object can have both 'data' and 'error'.
-// This is not needed with createSignedUrl, but we can keep it for clarity.
-interface SupabaseSignedUrlResponse {
-  data: {
-    signedUrl: string;
-  } | null;
-  error: Error | null;
-}
-
 interface SubmissionDetailsProps {
   dataPoint: BrixDataPoint;
   showImages?: boolean;
@@ -58,32 +49,28 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
         }
 
         try {
-          // Changed from getPublicUrl to createSignedUrl for private access
-          const { data, error } = await supabase.storage
+          // Get the public URL for the image path.
+          const { data } = supabase.storage
             .from('submission-images-bucket')
-            .createSignedUrl(imagePath, 600); // URL expires in 600 seconds (10 minutes)
+            .getPublicUrl(imagePath);
 
-          if (error) {
-            console.error(`Error creating signed URL for ${imagePath}:`, error);
-            urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Access+Denied`);
-            hasOverallError = true;
-          } else if (data?.signedUrl) {
-            urls.push(data.signedUrl);
+          if (data?.publicUrl) {
+            urls.push(data.publicUrl);
           } else {
-            console.warn(`No signed URL returned for ${imagePath}.`);
-            urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Missing+URL`);
+            console.warn('No public URL returned for ${imagePath}.');
+            urls.push('https://placehold.co/400x300/CCCCCC/333333?text=Missing+URL');
             hasOverallError = true;
           }
         } catch (err: any) {
-          console.error(`Unexpected error fetching signed URL for ${imagePath}:`, err);
-          urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Unhandled+Error`);
+          console.error('Unexpected error fetching public URL for ${imagePath}:', err);
+          urls.push('https://placehold.co/400x300/CCCCCC/333333?text=Unhandled+Error');
           hasOverallError = true;
         }
       }
 
       setImageUrls(urls);
       if (hasOverallError) {
-        setImagesError("Some images failed to load. Check console for details.");
+        setImagesError('Some images failed to load. Check console for details.');
       }
       setImagesLoading(false);
     };
@@ -216,8 +203,8 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
                       alt={`Submission image ${index + 1}`}
                       className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                       onError={(e) => {
-                        e.currentTarget.src = `https://placehold.co/400x300/CCCCCC/333333?text=Image+Error`;
-                        e.currentTarget.alt = "Error loading image";
+                        e.currentTarget.src = 'https://placehold.co/400x300/CCCCCC/333333?text=Image+Error';
+                        e.currentTarget.alt = 'Error loading image';
                       }}
                     />
                   </div>
