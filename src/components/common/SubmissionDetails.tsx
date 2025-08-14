@@ -8,7 +8,6 @@ import { getBrixQuality } from '../../lib/getBrixQuality';
 import { BrixDataPoint } from '../../types';
 import { supabase } from '../../integrations/supabase/client';
 
-// Define a local interface to explicitly type the Supabase Storage getPublicUrl response.
 interface SupabasePublicUrlResponse {
   data: {
     publicUrl: string;
@@ -39,8 +38,12 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
 
   useEffect(() => {
     const fetchImageUrls = async () => {
-      // Ensure dataPoint.images is a valid array of strings
+      console.log('--- FETCH IMAGE URLs STARTED ---');
+      console.log('showImages prop:', showImages);
+      console.log('dataPoint.images:', dataPoint.images);
+
       if (!showImages || !dataPoint.images || !Array.isArray(dataPoint.images) || dataPoint.images.length === 0) {
+        console.log('Condition for fetching images not met. Setting to empty array.');
         setImagePublicUrls([]);
         setImagesLoading(false);
         return;
@@ -51,7 +54,10 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
       const urls: string[] = [];
       let hasOverallError = false;
 
+      console.log(`Processing ${dataPoint.images.length} image paths.`);
+
       for (const imagePath of dataPoint.images) {
+        console.log(`Attempting to get public URL for path: "${imagePath}"`);
         if (typeof imagePath !== 'string' || imagePath === '') {
           console.warn('Invalid image path found:', imagePath);
           continue;
@@ -60,13 +66,16 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
         try {
           const response = supabase.storage
             .from('submission-images-bucket')
-            .getPublicUrl(imagePath) as SupabasePublicUrlResponse; // <-- The key change here
+            .getPublicUrl(imagePath) as SupabasePublicUrlResponse;
+
+          console.log('Supabase getPublicUrl response:', response);
 
           if (response.error) {
             console.error(`Error getting public URL for ${imagePath}:`, response.error);
             urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Error`);
             hasOverallError = true;
           } else if (response.data?.publicUrl) {
+            console.log(`Successfully got public URL: ${response.data.publicUrl}`);
             urls.push(response.data.publicUrl);
           } else {
             console.warn(`No public URL returned for ${imagePath}.`);
@@ -80,11 +89,13 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
         }
       }
 
+      console.log('Final image URLs to be set:', urls);
       setImagePublicUrls(urls);
       if (hasOverallError) {
         setImagesError("Some images failed to load. Check console for details.");
       }
       setImagesLoading(false);
+      console.log('--- FETCH IMAGE URLs FINISHED ---');
     };
 
     fetchImageUrls();
