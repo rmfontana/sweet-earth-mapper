@@ -8,6 +8,7 @@ import { getBrixQuality } from '../../lib/getBrixQuality';
 import { BrixDataPoint } from '../../types';
 import { supabase } from '../../integrations/supabase/client';
 
+// The interface explicitly defines that the response object can have both 'data' and 'error'.
 interface SupabasePublicUrlResponse {
   data: {
     publicUrl: string;
@@ -38,12 +39,7 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
 
   useEffect(() => {
     const fetchImageUrls = async () => {
-      console.log('--- FETCH IMAGE URLs STARTED ---');
-      console.log('showImages prop:', showImages);
-      console.log('dataPoint.images:', dataPoint.images);
-
       if (!showImages || !dataPoint.images || !Array.isArray(dataPoint.images) || dataPoint.images.length === 0) {
-        console.log('Condition for fetching images not met. Setting to empty array.');
         setImagePublicUrls([]);
         setImagesLoading(false);
         return;
@@ -54,28 +50,23 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
       const urls: string[] = [];
       let hasOverallError = false;
 
-      console.log(`Processing ${dataPoint.images.length} image paths.`);
-
       for (const imagePath of dataPoint.images) {
-        console.log(`Attempting to get public URL for path: "${imagePath}"`);
         if (typeof imagePath !== 'string' || imagePath === '') {
           console.warn('Invalid image path found:', imagePath);
           continue;
         }
 
         try {
+          // The key change: use a type assertion to force the compiler to recognize both data and error
           const response = supabase.storage
             .from('submission-images-bucket')
             .getPublicUrl(imagePath) as SupabasePublicUrlResponse;
-
-          console.log('Supabase getPublicUrl response:', response);
 
           if (response.error) {
             console.error(`Error getting public URL for ${imagePath}:`, response.error);
             urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Error`);
             hasOverallError = true;
           } else if (response.data?.publicUrl) {
-            console.log(`Successfully got public URL: ${response.data.publicUrl}`);
             urls.push(response.data.publicUrl);
           } else {
             console.warn(`No public URL returned for ${imagePath}.`);
@@ -89,13 +80,11 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
         }
       }
 
-      console.log('Final image URLs to be set:', urls);
       setImagePublicUrls(urls);
       if (hasOverallError) {
         setImagesError("Some images failed to load. Check console for details.");
       }
       setImagesLoading(false);
-      console.log('--- FETCH IMAGE URLs FINISHED ---');
     };
 
     fetchImageUrls();
@@ -115,7 +104,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
         )}
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* BRIX Reading Section */}
         <div className="bg-gray-50 rounded-lg p-6 text-center">
           <div className="flex items-center justify-center space-x-4 mb-4">
             <div className={`${colorClass} w-16 h-16 rounded-full flex items-center justify-center`}>
@@ -130,10 +118,7 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
             </div>
           </div>
         </div>
-
-        {/* Key Measurement & Submission Details Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Assessment Date */}
           <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
             <Calendar className="w-5 h-5 text-gray-600" />
             <div>
@@ -141,7 +126,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               <p className="font-medium">{new Date(dataPoint.submittedAt).toLocaleDateString()}</p>
             </div>
           </div>
-          {/* Submitted By */}
           <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
             <User className="w-5 h-5 text-gray-600" />
             <div>
@@ -149,7 +133,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               <p className="font-medium">{dataPoint.submittedBy}</p>
             </div>
           </div>
-          {/* Verification Status */}
           <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
             {dataPoint.verified ? (
               <CheckCircle className="w-5 h-5 text-green-600" />
@@ -161,7 +144,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               <p className="font-medium">{dataPoint.verified ? 'Verified' : 'Pending'}</p>
             </div>
           </div>
-          {/* Verified By */}
           {dataPoint.verified && dataPoint.verifiedBy && (
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
               <User className="w-5 h-5 text-gray-600" />
@@ -171,7 +153,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               </div>
             </div>
           )}
-          {/* Location Name & Coordinates */}
           <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
             <MapPin className="w-5 h-5 text-gray-600" />
             <div>
@@ -182,7 +163,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               </p>
             </div>
           </div>
-          {/* Store Name (Conditional) */}
           {dataPoint.storeName && (
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
               <MapPin className="w-5 h-5 text-gray-600" />
@@ -192,7 +172,6 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               </div>
             </div>
           )}
-          {/* Brand Name (Conditional) */}
           {dataPoint.brandName && (
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
               <User className="w-5 h-5 text-gray-600" />
