@@ -9,9 +9,10 @@ import { BrixDataPoint } from '../../types';
 import { supabase } from '../../integrations/supabase/client';
 
 // The interface explicitly defines that the response object can have both 'data' and 'error'.
-interface SupabasePublicUrlResponse {
+// This is not needed with createSignedUrl, but we can keep it for clarity.
+interface SupabaseSignedUrlResponse {
   data: {
-    publicUrl: string;
+    signedUrl: string;
   } | null;
   error: Error | null;
 }
@@ -33,14 +34,14 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
   const colorClass = getBrixColor(dataPoint.brixLevel, cropThresholds, 'bg');
   const qualityText = getBrixQuality(dataPoint.brixLevel, cropThresholds);
 
-  const [imagePublicUrls, setImagePublicUrls] = useState<string[]>([]);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [imagesLoading, setImagesLoading] = useState(false);
   const [imagesError, setImagesError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchImageUrls = async () => {
       if (!showImages || !dataPoint.images || !Array.isArray(dataPoint.images) || dataPoint.images.length === 0) {
-        setImagePublicUrls([]);
+        setImageUrls([]);
         setImagesLoading(false);
         return;
       }
@@ -57,30 +58,30 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
         }
 
         try {
-          // The key change: use a type assertion to force the compiler to recognize both data and error
-          const response = supabase.storage
+          // Changed from getPublicUrl to createSignedUrl for private access
+          const { data, error } = await supabase.storage
             .from('submission-images-bucket')
-            .getPublicUrl(imagePath) as SupabasePublicUrlResponse;
+            .createSignedUrl(imagePath, 600); // URL expires in 600 seconds (10 minutes)
 
-          if (response.error) {
-            console.error(`Error getting public URL for ${imagePath}:`, response.error);
-            urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Error`);
+          if (error) {
+            console.error(`Error creating signed URL for ${imagePath}:`, error);
+            urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Access+Denied`);
             hasOverallError = true;
-          } else if (response.data?.publicUrl) {
-            urls.push(response.data.publicUrl);
+          } else if (data?.signedUrl) {
+            urls.push(data.signedUrl);
           } else {
-            console.warn(`No public URL returned for ${imagePath}.`);
+            console.warn(`No signed URL returned for ${imagePath}.`);
             urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Missing+URL`);
             hasOverallError = true;
           }
         } catch (err: any) {
-          console.error(`Unexpected error fetching public URL for ${imagePath}:`, err);
+          console.error(`Unexpected error fetching signed URL for ${imagePath}:`, err);
           urls.push(`https://placehold.co/400x300/CCCCCC/333333?text=Unhandled+Error`);
           hasOverallError = true;
         }
       }
 
-      setImagePublicUrls(urls);
+      setImageUrls(urls);
       if (hasOverallError) {
         setImagesError("Some images failed to load. Check console for details.");
       }
@@ -195,7 +196,7 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
           <div className="pt-4 border-t border-gray-100">
             <h3 className="flex items-center space-x-2 text-lg font-bold text-gray-900 mb-4">
               <ImageIcon className="w-6 h-6 text-gray-600" />
-              <span>Reference Images ({imagePublicUrls.length})</span>
+              <span>Reference Images ({imageUrls.length})</span>
             </h3>
             {imagesLoading ? (
               <div className="flex items-center justify-center py-8">
@@ -204,11 +205,11 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
               </div>
             ) : imagesError ? (
               <div className="text-red-600 text-center py-8">{imagesError}</div>
-            ) : imagePublicUrls.length === 0 ? (
+            ) : imageUrls.length === 0 ? (
               <p className="text-gray-500 italic">No images available for this submission.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {imagePublicUrls.map((url: string, index: number) => (
+                {imageUrls.map((url: string, index: number) => (
                   <div key={index} className="relative w-full pb-[75%] rounded-lg overflow-hidden shadow-md group">
                     <img
                       src={url}
