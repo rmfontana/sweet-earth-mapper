@@ -462,7 +462,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           
           map.easeTo({
             center: coords,
-            zoom: Math.min(zoom || currentZoom + 2, 13), // Cap at zoom 13 for spiderfying
+            zoom: zoom || currentZoom + 2, 
             duration: 800,
           });
         });
