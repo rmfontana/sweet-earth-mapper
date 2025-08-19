@@ -11,21 +11,21 @@ import { Button } from '../ui/button';
 import { MapPin, Calendar, User, CheckCircle, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
-import type { Feature, Polygon } from 'geojson';
+import type { Feature } from 'geojson';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor } from '../../lib/getBrixColor';
 
 interface InteractiveMapProps {
   userLocation?: { lat: number; lng: number } | null;
   showFilters: boolean;
-  nearMeTriggered?: boolean; // Add this prop to trigger near me action
-  onNearMeHandled?: () => void; // Callback to reset the trigger
+  nearMeTriggered?: boolean;
+  onNearMeHandled?: () => void;
 }
 
 async function getMapboxToken() {
   try {
     const supabaseUrl = getSupabaseUrl();
-    const publishKey = getPublishableKey(); 
+    const publishKey = getPublishableKey();
     const response = await fetch(`${supabaseUrl}/functions/v1/mapbox-token`, {
       method: 'GET',
       headers: {
@@ -78,27 +78,19 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   useEffect(() => {
     console.log('Applying filters to', allData.length, 'submissions');
-    
-    // Apply filters directly since nearbyOnly is no longer part of the filter system
     const filtered = applyFilters(allData, filters, isAdmin);
-
     console.log('Filtered results:', filtered.length, 'submissions');
     setFilteredData(filtered);
   }, [filters, allData, isAdmin]);
 
-  // Handle "Near Me" action separately
   useEffect(() => {
     if (nearMeTriggered && userLocation && mapRef.current) {
       const map = mapRef.current;
-      
-      // Zoom to user location with a tight zoom level to show nearby area
       map.easeTo({
         center: [userLocation.lng, userLocation.lat],
-        zoom: 14, // Tight zoom to focus on nearby area
+        zoom: 14,
         duration: 1000,
       });
-
-      // Call the callback to reset the trigger
       onNearMeHandled?.();
     }
   }, [nearMeTriggered, userLocation, onNearMeHandled]);
@@ -106,51 +98,26 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.resize();
-  
-    // Optional: zoom out a bit to show expanded map area when filters hide
     if (!showFilters) {
       const currentZoom = mapRef.current.getZoom();
       mapRef.current.easeTo({
-        zoom: Math.max(currentZoom - 1, 5), // zoom out by 1, min zoom 5
+        zoom: Math.max(currentZoom - 1, 5),
         duration: 700,
       });
     }
   }, [showFilters]);
-  
-  const getDistanceInMiles = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 3959;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lon2 - lon1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  };
 
-  // Fallback color if loading or no thresholds
   const getColor = (cropType: string, brixLevel: number) => {
-    if (loading) return '#d1d5db'; // gray fallback hex
+    if (loading) return '#d1d5db';
     const thresholds = cache[cropType];
-    // Use your getBrixColor utility from your utils, which expects thresholds
     return getBrixColor(brixLevel, thresholds, 'hex');
   };
 
-  // Spiderfy cluster function
   const spiderfyCluster = (centerCoords: [number, number], points: BrixDataPoint[], map: mapboxgl.Map) => {
-    // Clear any existing spiderfied points
-    setSpiderfiedPoints([]);
-    
-    if (map.getSource('spider-points')) {
-      map.removeLayer('spider-lines');
-      map.removeLayer('spider-points');
-      map.removeSource('spider-points');
-      map.removeSource('spider-lines');
-    }
+    clearSpiderfy();
 
-     // Use spiral distribution for better spacing — works well for many points
-    const spiderRadiusBase = 60; // base radius in pixels
-    const features = points.map((point, index) => {
-      // Spiral formula for angle and distance to avoid overlap
+    const spiderRadiusBase = 60;
+    const features: Feature[] = points.map((point, index) => {
       const angle = 0.5 * index;
       const radius = spiderRadiusBase * (1 + 0.15 * angle);
 
@@ -177,8 +144,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       };
     });
 
-    // Spider lines from center to each point
-    const spiderLines = points.map((point, index) => {
+    const spiderLines: Feature[] = points.map((point, index) => {
       const angle = 0.5 * index;
       const radius = spiderRadiusBase * (1 + 0.15 * angle);
 
@@ -199,7 +165,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       };
     });
     
-    // Add spider lines
     map.addSource('spider-lines', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: spiderLines },
@@ -216,7 +181,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       },
     });
 
-    // Add spider points
     map.addSource('spider-points', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features },
@@ -235,7 +199,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       },
     });
 
-    // Add click handler for spider points
     map.on('click', 'spider-points', (e) => {
       const feature = e.features?.[0];
       if (feature?.properties?.raw) {
@@ -244,7 +207,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
     });
 
-    // Add hover effects for spider points
     map.on('mouseenter', 'spider-points', () => {
       map.getCanvas().style.cursor = 'pointer';
     });
@@ -256,21 +218,19 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     setSpiderfiedPoints(points);
   };
 
-  // Clear spiderfied points when clicking elsewhere
   const clearSpiderfy = () => {
     if (!mapRef.current) return;
     const map = mapRef.current;
     
     if (map.getSource('spider-points')) {
-      map.removeLayer('spider-lines');
-      map.removeLayer('spider-points');
-      map.removeSource('spider-points');
-      map.removeSource('spider-lines');
+      if (map.getLayer('spider-lines')) map.removeLayer('spider-lines');
+      if (map.getLayer('spider-points')) map.removeLayer('spider-points');
+      if (map.getSource('spider-points')) map.removeSource('spider-points');
+      if (map.getSource('spider-lines')) map.removeSource('spider-lines');
     }
     setSpiderfiedPoints([]);
   };
 
-  // Initialize Mapbox map once
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
   
@@ -315,7 +275,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     };
   }, []);
 
-  // Add or update source and layers after map loaded or filteredData changed
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
 
@@ -325,7 +284,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       console.log('Updating existing source with', filteredData.length, 'points');
       (map.getSource('points') as mapboxgl.GeoJSONSource).setData(toGeoJSON(filteredData));
       
-      // Fit map to show all data points
       if (filteredData.length > 0) {
         const bounds = new mapboxgl.LngLatBounds();
         filteredData.forEach(point => {
@@ -343,15 +301,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       type: 'geojson',
       data: toGeoJSON(filteredData),
       cluster: true,
-      clusterMaxZoom: 13, // Lower for better UX - individual points show sooner
-      clusterRadius: 35, // Smaller radius for less aggressive clustering
-      //clusterProperties: {
-      //  'avg_brix': ['/', ['+', ['get', 'brix']], ['get', 'point_count']],
-      //  'crop_types': ['case', ['>', ['get', 'point_count'], 1], 'mixed', ['get', 'cropType']]
-      //}
+      clusterMaxZoom: 16,
+      clusterRadius: 35,
     });
 
-    // Enhanced cluster styling with better visual hierarchy
     map.addLayer({
       id: 'clusters',
       type: 'circle',
@@ -361,16 +314,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         'circle-color': [
           'step',
           ['get', 'point_count'],
-          'hsl(220, 70%, 60%)', // Primary blue for small clusters
+          'hsl(220, 70%, 60%)',
           5,
-          'hsl(45, 80%, 55%)', // Warning yellow for medium clusters  
+          'hsl(45, 80%, 55%)',
           15,
-          'hsl(350, 70%, 60%)', // Destructive red for large clusters
+          'hsl(350, 70%, 60%)',
         ],
         'circle-radius': [
           'step',
           ['get', 'point_count'],
-          25, // Larger base size
+          25,
           5,
           35,
           15,
@@ -421,45 +374,32 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       },
     });
 
-    // Smart cluster expansion or spiderfying based on zoom level
-    map.on('click', 'clusters', async (e) => {
+    map.on('click', 'clusters', (e) => {
       const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
       const clusterId = features[0]?.properties?.cluster_id;
       const pointCount = features[0]?.properties?.point_count;
     
       if (!clusterId || features[0].geometry.type !== 'Point') return;
-    
+      
       const source = map.getSource('points') as mapboxgl.GeoJSONSource;
       const coords = features[0].geometry.coordinates as [number, number];
       const currentZoom = map.getZoom();
     
-      // If we're at high zoom or small cluster, spiderfy instead of zooming
-      if (currentZoom >= 13 || pointCount <= 5) {
-        try {
-          // Get cluster leaves for spiderfying
-          source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
-            if (err || !leaves) {
-              console.error('Error getting cluster leaves:', err);
-              return;
-            }
-            
-            const clusterPoints: BrixDataPoint[] = leaves
-              .map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null)
-              .filter(Boolean);
-            
-            spiderfyCluster(coords, clusterPoints, map);
-          });
-        } catch (error) {
-          console.error('Error during spiderfying:', error);
-        }
+      if (pointCount <= 8 || currentZoom >= 15) {
+        source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
+          if (err || !leaves) {
+            console.error('Error getting cluster leaves:', err);
+            return;
+          }
+          const clusterPoints = leaves.map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null).filter(Boolean);
+          spiderfyCluster(coords, clusterPoints, map);
+        });
       } else {
-        // Normal zoom expansion for lower zoom levels
         source.getClusterExpansionZoom(clusterId, (err, zoom) => {
           if (err) {
             console.error('Error getting cluster expansion zoom:', err);
             return;
           }
-          
           map.easeTo({
             center: coords,
             zoom: zoom || currentZoom + 2, 
@@ -469,20 +409,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
     });
 
-    // Cluster hover preview
     map.on('mouseenter', 'clusters', (e) => {
       const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
       const clusterId = features[0]?.properties?.cluster_id;
       const pointCount = features[0]?.properties?.point_count;
       
-      if (clusterId && pointCount <= 8) {  // Only show preview for smaller clusters
+      if (clusterId && pointCount <= 8) {
         const source = map.getSource('points') as mapboxgl.GeoJSONSource;
         source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
           if (!err && leaves) {
-            const points: BrixDataPoint[] = leaves
-              .map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null)
-              .filter(Boolean);
-            
+            const points: BrixDataPoint[] = leaves.map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null).filter(Boolean);
             setClusterPreview({
               points,
               position: { x: e.point.x, y: e.point.y }
@@ -502,24 +438,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       if (point) setSelectedPoint(point);
     });
 
-    // Enhanced hover effects
-    map.on('mouseenter', 'clusters', () => {
-      map.getCanvas().style.cursor = 'pointer';
-    });
+    map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
+    map.on('mouseenter', 'unclustered-point', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'unclustered-point', () => { map.getCanvas().style.cursor = ''; });
 
-    map.on('mouseleave', 'clusters', () => {
-      map.getCanvas().style.cursor = '';
-    });
-
-    map.on('mouseenter', 'unclustered-point', () => {
-      map.getCanvas().style.cursor = 'pointer';
-    });
-
-    map.on('mouseleave', 'unclustered-point', () => {
-      map.getCanvas().style.cursor = '';
-    });
-
-    // Clear spiderfied points when clicking elsewhere on map
     map.on('click', (e) => {
       const features = map.queryRenderedFeatures(e.point);
       if (!features.some(f => f.source === 'points' || f.source === 'spider-points')) {
@@ -527,7 +450,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
     });
 
-    // Fit map to show all data points initially
     if (filteredData.length > 0) {
       const bounds = new mapboxgl.LngLatBounds();
       filteredData.forEach(point => {
@@ -539,19 +461,54 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [isMapLoaded, filteredData]);
 
-  // Add user location marker (optional - could add a simple marker instead of radius)
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !isMapLoaded) return;
     const map = mapRef.current;
 
-    // Clean up any existing user location indicators
-    if (map.getLayer('user-location')) map.removeLayer('user-location');
-    if (map.getSource('user-location')) map.removeSource('user-location');
-  }, [userLocation]);
+    const handleZoomEnd = () => {
+      const currentZoom = map.getZoom();
+      
+      const SPIDERFY_ZOOM_THRESHOLD = 16; 
+
+      if (currentZoom >= SPIDERFY_ZOOM_THRESHOLD) {
+        const clusters = map.queryRenderedFeatures(
+          { layers: ['clusters'], filter: ['has', 'point_count'] }
+        );
+
+        clusters.forEach((cluster) => {
+          if (cluster.geometry.type !== 'Point') return;
+          const clusterId = cluster.properties?.cluster_id;
+          const pointCount = cluster.properties?.point_count;
+          const coords = cluster.geometry.coordinates as [number, number];
+
+          const source = map.getSource('points') as mapboxgl.GeoJSONSource;
+          
+          source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
+            if (err || !leaves) {
+              console.error('Error getting cluster leaves:', err);
+              return;
+            }
+            const clusterPoints = leaves.map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null).filter(Boolean);
+            spiderfyCluster(coords, clusterPoints, map);
+          });
+        });
+      } else {
+        clearSpiderfy();
+      }
+    };
+
+    map.on('zoomend', handleZoomEnd);
+
+    return () => {
+      // Corrected line: use mapRef.current for cleanup
+      if (mapRef.current) {
+        mapRef.current.off('zoomend', handleZoomEnd);
+      }
+    };
+  }, [isMapLoaded]);
 
   const toGeoJSON = (data: BrixDataPoint[]): GeoJSON.FeatureCollection => {
     console.log('Converting', data.length, 'data points to GeoJSON');
-    
     const features = data.map((point) => {
       if (!point.latitude || !point.longitude || isNaN(point.latitude) || isNaN(point.longitude)) {
         console.warn('Skipping point with invalid coordinates:', point);
@@ -574,7 +531,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }).filter(Boolean);
 
     console.log('Generated', features.length, 'valid GeoJSON features');
-    
     return {
       type: 'FeatureCollection',
       features: features as any[],
@@ -585,7 +541,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
 
-      {/* Cluster Preview Tooltip */}
       {clusterPreview && (
         <div 
           className="absolute pointer-events-none z-40"
@@ -622,7 +577,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 </div>
               </div>
               <div className="text-xs text-muted-foreground mt-2 italic">
-                Click to {clusterPreview.points.length <= 5 ? 'expand' : 'zoom in'}
+                Click to {clusterPreview.points.length <= 8 ? 'expand' : 'zoom in'}
               </div>
             </CardContent>
           </Card>
