@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { BrixDataPoint } from '../../types';
@@ -103,13 +103,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [showFilters]);
 
-  const getColor = (cropType: string, brixLevel: number) => {
+  // Moved helper functions inside the component and memoized them with useCallback where needed
+  const getColor = useCallback((cropType: string, brixLevel: number) => {
     if (loading) return '#d1d5db';
     const thresholds = cache[cropType];
     return getBrixColor(brixLevel, thresholds, 'hex');
-  };
+  }, [loading, cache]);
 
-  const toGeoJSON = (data: BrixDataPoint[]): GeoJSON.FeatureCollection => {
+  const toGeoJSON = useCallback((data: BrixDataPoint[]): GeoJSON.FeatureCollection => {
     const features = data.map((point) => {
       if (!point.latitude || !point.longitude || isNaN(point.latitude) || isNaN(point.longitude)) {
         return null;
@@ -134,9 +135,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       type: 'FeatureCollection',
       features: features as any[],
     };
-  };
-
-  const spiderfyCluster = (centerCoords: [number, number], points: BrixDataPoint[], map: mapboxgl.Map) => {
+  }, [getColor]);
+  
+  const spiderfyCluster = useCallback((centerCoords: [number, number], points: BrixDataPoint[], map: mapboxgl.Map) => {
     clearSpiderfy();
     
     if (map.getLayer('clusters')) {
@@ -236,7 +237,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
 
     setSpiderfiedPoints(points);
-  };
+  }, [getColor]);
 
   const clearSpiderfy = () => {
     if (!mapRef.current) return;
@@ -268,8 +269,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         }
     });
     map.fitBounds(bounds, { padding: 50, maxZoom: 15, duration: 1000 });
-};
-
+  };
+  
+  // This hook handles map initialization and all persistent event listeners. It runs only once.
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
   
@@ -470,13 +472,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         setIsMapLoaded(false);
       }
     };
-  }, [userLocation]);
+  }, [userLocation, spiderfyCluster, clearSpiderfy]);
 
+  // This hook is now for data updates only
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
-    const map = mapRef.current;
-    
-    const pointsSource = map.getSource('points') as mapboxgl.GeoJSONSource;
+    const pointsSource = mapRef.current.getSource('points') as mapboxgl.GeoJSONSource;
     if (pointsSource) {
       pointsSource.setData(toGeoJSON(filteredData));
     }
