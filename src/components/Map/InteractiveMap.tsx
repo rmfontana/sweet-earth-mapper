@@ -8,7 +8,7 @@ import { applyFilters } from '../../lib/filterUtils';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { MapPin, Calendar, User, CheckCircle, Eye } from 'lucide-react';
+import { MapPin, Calendar, User, CheckCircle, Eye, LocateIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
 import type { Feature } from 'geojson';
@@ -64,10 +64,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const { cache, loading } = useCropThresholds();
 
   useEffect(() => {
-    console.log('Fetching submissions...');
     fetchFormattedSubmissions()
       .then((data) => {
-        console.log('Successfully fetched submissions:', data.length);
         setAllData(data);
       })
       .catch((error) => {
@@ -77,9 +75,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   }, []);
 
   useEffect(() => {
-    console.log('Applying filters to', allData.length, 'submissions');
     const filtered = applyFilters(allData, filters, isAdmin);
-    console.log('Filtered results:', filtered.length, 'submissions');
     setFilteredData(filtered);
   }, [filters, allData, isAdmin]);
 
@@ -107,7 +103,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [showFilters]);
 
-  // Moved function definitions to the top
   const getColor = (cropType: string, brixLevel: number) => {
     if (loading) return '#d1d5db';
     const thresholds = cache[cropType];
@@ -115,10 +110,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   };
 
   const toGeoJSON = (data: BrixDataPoint[]): GeoJSON.FeatureCollection => {
-    console.log('Converting', data.length, 'data points to GeoJSON');
     const features = data.map((point) => {
       if (!point.latitude || !point.longitude || isNaN(point.latitude) || isNaN(point.longitude)) {
-        console.warn('Skipping point with invalid coordinates:', point);
         return null;
       }
 
@@ -137,7 +130,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       };
     }).filter(Boolean);
 
-    console.log('Generated', features.length, 'valid GeoJSON features');
     return {
       type: 'FeatureCollection',
       features: features as any[],
@@ -266,6 +258,18 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     setSpiderfiedPoints([]);
   };
 
+  const recenterMap = () => {
+    if (!mapRef.current || filteredData.length === 0) return;
+    const map = mapRef.current;
+    const bounds = new mapboxgl.LngLatBounds();
+    filteredData.forEach(point => {
+        if (point.latitude && point.longitude) {
+            bounds.extend([point.longitude, point.latitude]);
+        }
+    });
+    map.fitBounds(bounds, { padding: 50, maxZoom: 15, duration: 1000 });
+};
+
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
   
@@ -273,10 +277,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       if (!mapContainer.current) return;
   
       async function initializeMap() {
-        console.log('Initializing Mapbox map...');
         const token = await getMapboxToken();
         if (!token) {
-          console.error('Failed to retrieve Mapbox token');
           return;
         }
   
@@ -293,7 +295,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         mapRef.current = map;
   
         map.on('load', () => {
-          console.log('Map loaded');
           setIsMapLoaded(true);
           
           map.addSource('points', {
@@ -375,27 +376,23 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
           map.on('click', 'clusters', (e) => {
             const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-            const clusterId = features[0]?.properties?.cluster_id;
-            const pointCount = features[0]?.properties?.point_count;
+            if (!features.length) return;
+            
+            const clusterId = features[0].properties?.cluster_id;
+            const pointCount = features[0].properties?.point_count;
             
             if (!clusterId || features[0].geometry.type !== 'Point') return;
             
             const source = map.getSource('points') as mapboxgl.GeoJSONSource;
-            const coords = features[0].geometry.coordinates as [number, number];
+            const coords = (features[0].geometry as any).coordinates as [number, number];
             const currentZoom = map.getZoom();
             
             source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-              if (err) {
-                console.error('Error getting cluster expansion zoom:', err);
-                return;
-              }
+              if (err) return;
 
               if (zoom >= SPIDERFY_ZOOM_THRESHOLD) {
                 source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
-                  if (err || !leaves) {
-                    console.error('Error getting cluster leaves:', err);
-                    return;
-                  }
+                  if (err || !leaves) return;
                   const clusterPoints = leaves.map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null).filter(Boolean);
                   spiderfyCluster(coords, clusterPoints, map);
                 });
@@ -431,8 +428,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
           map.on('mouseenter', 'clusters', (e: any) => {
             const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-            const clusterId = features[0]?.properties?.cluster_id;
-            const pointCount = features[0]?.properties?.point_count;
+            if (!features.length) return;
+            
+            const clusterId = features[0].properties?.cluster_id;
+            const pointCount = features[0].properties?.point_count;
             
             if (clusterId && pointCount <= 8) {
               const source = map.getSource('points') as mapboxgl.GeoJSONSource;
@@ -471,7 +470,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         setIsMapLoaded(false);
       }
     };
-  }, []);
+  }, [userLocation]);
 
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
@@ -479,25 +478,22 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     
     const pointsSource = map.getSource('points') as mapboxgl.GeoJSONSource;
     if (pointsSource) {
-      console.log('Updating existing source with', filteredData.length, 'points');
       pointsSource.setData(toGeoJSON(filteredData));
     }
-    
-    if (filteredData.length > 0) {
-      const bounds = new mapboxgl.LngLatBounds();
-      filteredData.forEach(point => {
-        if (point.latitude && point.longitude) {
-          bounds.extend([point.longitude, point.latitude]);
-        }
-      });
-      map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
-    }
-  }, [isMapLoaded, filteredData, mapRef.current, toGeoJSON]);
+  }, [isMapLoaded, filteredData, toGeoJSON]);
 
 
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
+      
+      <Button 
+          variant="secondary"
+          className="absolute top-4 right-4 z-40 shadow-md"
+          onClick={recenterMap}
+      >
+        <LocateIcon className="w-4 h-4 mr-2" /> Recenter Map
+      </Button>
 
       {clusterPreview && (
         <div 
