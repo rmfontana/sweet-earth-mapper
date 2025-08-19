@@ -295,6 +295,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const map = mapRef.current;
     const SPIDERFY_ZOOM_THRESHOLD = 16;
     
+    // Define all event handlers
     const handleUnclusteredClick = (e: any) => {
       const feature = e.features?.[0];
       const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
@@ -318,7 +319,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           return;
         }
 
-        // Fix: Use the calculated expansion zoom to decide whether to spiderfy or zoom
         if (zoom >= SPIDERFY_ZOOM_THRESHOLD) {
           source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
             if (err || !leaves) {
@@ -337,6 +337,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         }
       });
     };
+    
+    // Fix: Re-add the zoomend listener to reset state
+    const handleZoomEnd = () => {
+        const currentZoom = map.getZoom();
+        if (currentZoom < SPIDERFY_ZOOM_THRESHOLD) {
+            clearSpiderfy();
+        }
+    };
 
     const handleMouseLeaveCluster = () => {
       setClusterPreview(null);
@@ -352,7 +360,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         type: 'geojson',
         data: toGeoJSON(filteredData),
         cluster: true,
-        clusterMaxZoom: SPIDERFY_ZOOM_THRESHOLD, // Use the constant
+        clusterMaxZoom: SPIDERFY_ZOOM_THRESHOLD,
         clusterRadius: 35,
       });
 
@@ -425,7 +433,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         },
       });
       
-      // Add event listeners
+      // Add all event listeners
       map.on('click', 'clusters', handleClusterClick);
       map.on('mouseenter', 'clusters', (e: any) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
@@ -447,6 +455,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
       map.on('mouseleave', 'clusters', handleMouseLeaveCluster);
       map.on('click', 'unclustered-point', handleUnclusteredClick);
+      map.on('zoomend', handleZoomEnd); // Re-added the crucial listener
     }
     
     // Update map bounds when filteredData changes
@@ -470,10 +479,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       if (map.getLayer('unclustered-point')) {
         map.off('click', 'unclustered-point', handleUnclusteredClick);
       }
+      map.off('zoomend', handleZoomEnd); // Clean up the new listener
     };
     
   }, [isMapLoaded, filteredData, spiderfyCluster]);
-
 
   const toGeoJSON = (data: BrixDataPoint[]): GeoJSON.FeatureCollection => {
     console.log('Converting', data.length, 'data points to GeoJSON');
