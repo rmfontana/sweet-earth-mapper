@@ -103,7 +103,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [showFilters]);
 
-  // Moved helper functions inside the component and memoized them with useCallback where needed
+  // All helper functions are now wrapped in useCallback to prevent re-creation
   const getColor = useCallback((cropType: string, brixLevel: number) => {
     if (loading) return '#d1d5db';
     const thresholds = cache[cropType];
@@ -136,6 +136,26 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       features: features as any[],
     };
   }, [getColor]);
+
+  const clearSpiderfy = useCallback(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    
+    if (map.getLayer('clusters')) {
+      map.setLayoutProperty('clusters', 'visibility', 'visible');
+    }
+    if (map.getLayer('cluster-count')) {
+      map.setLayoutProperty('cluster-count', 'visibility', 'visible');
+    }
+
+    if (map.getSource('spider-points')) {
+      if (map.getLayer('spider-lines')) map.removeLayer('spider-lines');
+      if (map.getLayer('spider-points')) map.removeLayer('spider-points');
+      if (map.getSource('spider-points')) map.removeSource('spider-points');
+      if (map.getSource('spider-lines')) map.removeSource('spider-lines');
+    }
+    setSpiderfiedPoints([]);
+  }, []);
   
   const spiderfyCluster = useCallback((centerCoords: [number, number], points: BrixDataPoint[], map: mapboxgl.Map) => {
     clearSpiderfy();
@@ -237,29 +257,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
 
     setSpiderfiedPoints(points);
-  }, [getColor]);
+  }, [getColor, clearSpiderfy]);
 
-  const clearSpiderfy = () => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
-    
-    if (map.getLayer('clusters')) {
-      map.setLayoutProperty('clusters', 'visibility', 'visible');
-    }
-    if (map.getLayer('cluster-count')) {
-      map.setLayoutProperty('cluster-count', 'visibility', 'visible');
-    }
-
-    if (map.getSource('spider-points')) {
-      if (map.getLayer('spider-lines')) map.removeLayer('spider-lines');
-      if (map.getLayer('spider-points')) map.removeLayer('spider-points');
-      if (map.getSource('spider-points')) map.removeSource('spider-points');
-      if (map.getSource('spider-lines')) map.removeSource('spider-lines');
-    }
-    setSpiderfiedPoints([]);
-  };
-
-  const recenterMap = () => {
+  const recenterMap = useCallback(() => {
     if (!mapRef.current || filteredData.length === 0) return;
     const map = mapRef.current;
     const bounds = new mapboxgl.LngLatBounds();
@@ -269,7 +269,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         }
     });
     map.fitBounds(bounds, { padding: 50, maxZoom: 15, duration: 1000 });
-  };
+  }, [filteredData]);
   
   // This hook handles map initialization and all persistent event listeners. It runs only once.
   useEffect(() => {
