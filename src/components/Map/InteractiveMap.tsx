@@ -115,6 +115,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   const spiderfyCluster = (centerCoords: [number, number], points: BrixDataPoint[], map: mapboxgl.Map) => {
     clearSpiderfy();
+    
+    if (map.getLayer('clusters')) {
+      map.setLayoutProperty('clusters', 'visibility', 'none');
+    }
+    if (map.getLayer('cluster-count')) {
+      map.setLayoutProperty('cluster-count', 'visibility', 'none');
+    }
 
     const spiderRadiusBase = 60;
     const features: Feature[] = points.map((point, index) => {
@@ -165,52 +172,52 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       };
     });
     
-    map.addSource('spider-lines', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: spiderLines },
-    });
+    if (!map.getSource('spider-lines')) {
+      map.addSource('spider-lines', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: spiderLines },
+      });
+      map.addLayer({
+        id: 'spider-lines',
+        type: 'line',
+        source: 'spider-lines',
+        paint: {
+          'line-color': 'rgba(0,0,0,0.3)',
+          'line-width': 2,
+          'line-dasharray': [2, 4],
+        },
+      });
+    }
 
-    map.addLayer({
-      id: 'spider-lines',
-      type: 'line',
-      source: 'spider-lines',
-      paint: {
-        'line-color': 'rgba(0,0,0,0.3)',
-        'line-width': 2,
-        'line-dasharray': [2, 4],
-      },
-    });
-
-    map.addSource('spider-points', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features },
-    });
-
-    map.addLayer({
-      id: 'spider-points',
-      type: 'circle',
-      source: 'spider-points',
-      paint: {
-        'circle-color': ['get', 'color'],
-        'circle-radius': 10,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#fff',
-        'circle-opacity': 0.9,
-      },
-    });
-
-    map.on('click', 'spider-points', (e) => {
-      const feature = e.features?.[0];
-      if (feature?.properties?.raw) {
-        const point = JSON.parse(feature.properties.raw);
-        setSelectedPoint(point);
-      }
-    });
+    if (!map.getSource('spider-points')) {
+      map.addSource('spider-points', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features },
+      });
+      map.addLayer({
+        id: 'spider-points',
+        type: 'circle',
+        source: 'spider-points',
+        paint: {
+          'circle-color': ['get', 'color'],
+          'circle-radius': 10,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#fff',
+          'circle-opacity': 0.9,
+        },
+      });
+      map.on('click', 'spider-points', (e) => {
+        const feature = e.features?.[0];
+        if (feature?.properties?.raw) {
+          const point = JSON.parse(feature.properties.raw);
+          setSelectedPoint(point);
+        }
+      });
+    }
 
     map.on('mouseenter', 'spider-points', () => {
       map.getCanvas().style.cursor = 'pointer';
     });
-
     map.on('mouseleave', 'spider-points', () => {
       map.getCanvas().style.cursor = '';
     });
@@ -222,6 +229,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (!mapRef.current) return;
     const map = mapRef.current;
     
+    if (map.getLayer('clusters')) {
+      map.setLayoutProperty('clusters', 'visibility', 'visible');
+    }
+    if (map.getLayer('cluster-count')) {
+      map.setLayoutProperty('cluster-count', 'visibility', 'visible');
+    }
+
     if (map.getSource('spider-points')) {
       if (map.getLayer('spider-lines')) map.removeLayer('spider-lines');
       if (map.getLayer('spider-points')) map.removeLayer('spider-points');
@@ -279,102 +293,15 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (!mapRef.current || !isMapLoaded) return;
 
     const map = mapRef.current;
+    const SPIDERFY_ZOOM_THRESHOLD = 16;
+    
+    const handleUnclusteredClick = (e: any) => {
+      const feature = e.features?.[0];
+      const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
+      if (point) setSelectedPoint(point);
+    };
 
-    if (map.getSource('points')) {
-      console.log('Updating existing source with', filteredData.length, 'points');
-      (map.getSource('points') as mapboxgl.GeoJSONSource).setData(toGeoJSON(filteredData));
-      
-      if (filteredData.length > 0) {
-        const bounds = new mapboxgl.LngLatBounds();
-        filteredData.forEach(point => {
-          if (point.latitude && point.longitude) {
-            bounds.extend([point.longitude, point.latitude]);
-          }
-        });
-        map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
-      }
-      return;
-    }
-
-    console.log('Adding source and layers with', filteredData.length, 'points');
-    map.addSource('points', {
-      type: 'geojson',
-      data: toGeoJSON(filteredData),
-      cluster: true,
-      clusterMaxZoom: 16,
-      clusterRadius: 35,
-    });
-
-    map.addLayer({
-      id: 'clusters',
-      type: 'circle',
-      source: 'points',
-      filter: ['has', 'point_count'],
-      paint: {
-        'circle-color': [
-          'step',
-          ['get', 'point_count'],
-          'hsl(220, 70%, 60%)',
-          5,
-          'hsl(45, 80%, 55%)',
-          15,
-          'hsl(350, 70%, 60%)',
-        ],
-        'circle-radius': [
-          'step',
-          ['get', 'point_count'],
-          25,
-          5,
-          35,
-          15,
-          45,
-        ],
-        'circle-stroke-width': 3,
-        'circle-stroke-color': 'hsl(0, 0%, 100%)',
-        'circle-stroke-opacity': 0.8,
-        'circle-opacity': 0.85,
-      },
-    });
-
-    map.addLayer({
-      id: 'cluster-count',
-      type: 'symbol',
-      source: 'points',
-      filter: ['has', 'point_count'],
-      layout: {
-        'text-field': '{point_count_abbreviated}',
-        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-        'text-size': 14,
-      },
-      paint: {
-        'text-color': 'hsl(0, 0%, 100%)',
-        'text-halo-color': 'hsl(0, 0%, 0%)',
-        'text-halo-width': 1,
-      },
-    });
-
-    map.addLayer({
-      id: 'unclustered-point',
-      type: 'circle',
-      source: 'points',
-      filter: ['!', ['has', 'point_count']],
-      paint: {
-        'circle-color': ['get', 'color'],
-        'circle-radius': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          10, 8,
-          16, 20,
-        ],
-        'circle-stroke-width': 2,
-        'circle-stroke-color': 'hsl(0, 0%, 100%)',
-        'circle-opacity': 0.9,
-        'circle-stroke-opacity': 0.8,
-      },
-    });
-
-    map.on('click', 'clusters', (e) => {
+    const handleClusterClick = (e: any) => {
       const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
       const clusterId = features[0]?.properties?.cluster_id;
       const pointCount = features[0]?.properties?.point_count;
@@ -385,71 +312,144 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const coords = features[0].geometry.coordinates as [number, number];
       const currentZoom = map.getZoom();
     
-      if (pointCount <= 8 || currentZoom >= 15) {
-        source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
-          if (err || !leaves) {
-            console.error('Error getting cluster leaves:', err);
-            return;
-          }
-          const clusterPoints = leaves.map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null).filter(Boolean);
-          spiderfyCluster(coords, clusterPoints, map);
-        });
-      } else {
-        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-          if (err) {
-            console.error('Error getting cluster expansion zoom:', err);
-            return;
-          }
+      source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+        if (err) {
+          console.error('Error getting cluster expansion zoom:', err);
+          return;
+        }
+
+        // Fix: Use the calculated expansion zoom to decide whether to spiderfy or zoom
+        if (zoom >= SPIDERFY_ZOOM_THRESHOLD) {
+          source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
+            if (err || !leaves) {
+              console.error('Error getting cluster leaves:', err);
+              return;
+            }
+            const clusterPoints = leaves.map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null).filter(Boolean);
+            spiderfyCluster(coords, clusterPoints, map);
+          });
+        } else {
           map.easeTo({
             center: coords,
             zoom: zoom || currentZoom + 2, 
             duration: 800,
           });
-        });
-      }
-    });
+        }
+      });
+    };
 
-    map.on('mouseenter', 'clusters', (e) => {
-      const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-      const clusterId = features[0]?.properties?.cluster_id;
-      const pointCount = features[0]?.properties?.point_count;
-      
-      if (clusterId && pointCount <= 8) {
-        const source = map.getSource('points') as mapboxgl.GeoJSONSource;
-        source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
-          if (!err && leaves) {
-            const points: BrixDataPoint[] = leaves.map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null).filter(Boolean);
-            setClusterPreview({
-              points,
-              position: { x: e.point.x, y: e.point.y }
-            });
-          }
-        });
-      }
-    });
-
-    map.on('mouseleave', 'clusters', () => {
+    const handleMouseLeaveCluster = () => {
       setClusterPreview(null);
-    });
+    };
+    
+    // Check if source already exists
+    if (map.getSource('points')) {
+      console.log('Updating existing source with', filteredData.length, 'points');
+      (map.getSource('points') as mapboxgl.GeoJSONSource).setData(toGeoJSON(filteredData));
+    } else {
+      console.log('Adding source and layers with', filteredData.length, 'points');
+      map.addSource('points', {
+        type: 'geojson',
+        data: toGeoJSON(filteredData),
+        cluster: true,
+        clusterMaxZoom: SPIDERFY_ZOOM_THRESHOLD, // Use the constant
+        clusterRadius: 35,
+      });
 
-    map.on('click', 'unclustered-point', (e) => {
-      const feature = e.features?.[0];
-      const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
-      if (point) setSelectedPoint(point);
-    });
+      map.addLayer({
+        id: 'clusters',
+        type: 'circle',
+        source: 'points',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': [
+            'step',
+            ['get', 'point_count'],
+            'hsl(220, 70%, 60%)',
+            5,
+            'hsl(45, 80%, 55%)',
+            15,
+            'hsl(350, 70%, 60%)',
+          ],
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            25,
+            5,
+            35,
+            15,
+            45,
+          ],
+          'circle-stroke-width': 3,
+          'circle-stroke-color': 'hsl(0, 0%, 100%)',
+          'circle-stroke-opacity': 0.8,
+          'circle-opacity': 0.85,
+        },
+      });
 
-    map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
-    map.on('mouseenter', 'unclustered-point', () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', 'unclustered-point', () => { map.getCanvas().style.cursor = ''; });
+      map.addLayer({
+        id: 'cluster-count',
+        type: 'symbol',
+        source: 'points',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': '{point_count_abbreviated}',
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 14,
+        },
+        paint: {
+          'text-color': 'hsl(0, 0%, 100%)',
+          'text-halo-color': 'hsl(0, 0%, 0%)',
+          'text-halo-width': 1,
+        },
+      });
 
-    map.on('click', (e) => {
-      const features = map.queryRenderedFeatures(e.point);
-      if (!features.some(f => f.source === 'points' || f.source === 'spider-points')) {
-        clearSpiderfy();
-      }
-    });
-
+      map.addLayer({
+        id: 'unclustered-point',
+        type: 'circle',
+        source: 'points',
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-color': ['get', 'color'],
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10, 8,
+            16, 20,
+          ],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': 'hsl(0, 0%, 100%)',
+          'circle-opacity': 0.9,
+          'circle-stroke-opacity': 0.8,
+        },
+      });
+      
+      // Add event listeners
+      map.on('click', 'clusters', handleClusterClick);
+      map.on('mouseenter', 'clusters', (e: any) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+        const clusterId = features[0]?.properties?.cluster_id;
+        const pointCount = features[0]?.properties?.point_count;
+        
+        if (clusterId && pointCount <= 8) {
+          const source = map.getSource('points') as mapboxgl.GeoJSONSource;
+          source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
+            if (!err && leaves) {
+              const points: BrixDataPoint[] = leaves.map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null).filter(Boolean);
+              setClusterPreview({
+                points,
+                position: { x: e.point.x, y: e.point.y }
+              });
+            }
+          });
+        }
+      });
+      map.on('mouseleave', 'clusters', handleMouseLeaveCluster);
+      map.on('click', 'unclustered-point', handleUnclusteredClick);
+    }
+    
+    // Update map bounds when filteredData changes
     if (filteredData.length > 0) {
       const bounds = new mapboxgl.LngLatBounds();
       filteredData.forEach(point => {
@@ -459,53 +459,21 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
       map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
     }
-  }, [isMapLoaded, filteredData]);
 
-  useEffect(() => {
-    if (!mapRef.current || !isMapLoaded) return;
-    const map = mapRef.current;
-
-    const handleZoomEnd = () => {
-      const currentZoom = map.getZoom();
-      
-      const SPIDERFY_ZOOM_THRESHOLD = 16; 
-
-      if (currentZoom >= SPIDERFY_ZOOM_THRESHOLD) {
-        const clusters = map.queryRenderedFeatures(
-          { layers: ['clusters'], filter: ['has', 'point_count'] }
-        );
-
-        clusters.forEach((cluster) => {
-          if (cluster.geometry.type !== 'Point') return;
-          const clusterId = cluster.properties?.cluster_id;
-          const pointCount = cluster.properties?.point_count;
-          const coords = cluster.geometry.coordinates as [number, number];
-
-          const source = map.getSource('points') as mapboxgl.GeoJSONSource;
-          
-          source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
-            if (err || !leaves) {
-              console.error('Error getting cluster leaves:', err);
-              return;
-            }
-            const clusterPoints = leaves.map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null).filter(Boolean);
-            spiderfyCluster(coords, clusterPoints, map);
-          });
-        });
-      } else {
-        clearSpiderfy();
-      }
-    };
-
-    map.on('zoomend', handleZoomEnd);
-
+    // Cleanup function
     return () => {
-      // Corrected line: use mapRef.current for cleanup
-      if (mapRef.current) {
-        mapRef.current.off('zoomend', handleZoomEnd);
+      if (map.getLayer('clusters')) {
+        map.off('click', 'clusters', handleClusterClick);
+        map.off('mouseenter', 'clusters', handleMouseLeaveCluster);
+        map.off('mouseleave', 'clusters', handleMouseLeaveCluster);
+      }
+      if (map.getLayer('unclustered-point')) {
+        map.off('click', 'unclustered-point', handleUnclusteredClick);
       }
     };
-  }, [isMapLoaded]);
+    
+  }, [isMapLoaded, filteredData, spiderfyCluster]);
+
 
   const toGeoJSON = (data: BrixDataPoint[]): GeoJSON.FeatureCollection => {
     console.log('Converting', data.length, 'data points to GeoJSON');
