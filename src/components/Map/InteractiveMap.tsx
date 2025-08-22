@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { BrixDataPoint } from '../../types'; // Updated to use the new BrixDataPoint interface
+import { BrixDataPoint } from '../../types'; 
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
 import { useFilters } from '../../contexts/FilterContext';
 import { applyFilters } from '../../lib/filterUtils';
@@ -99,8 +99,8 @@ const createFallbackCircleImage = (size = 30, color = '#3182CE') => {
 // Define a generic cluster icon ID
 const GENERIC_CLUSTER_ICON_ID = 'generic_cluster_icon';
 
-// Create a simple canvas for a generic cluster icon (e.g., three dots)
-const createGenericClusterImage = (size = 30, color = '#6B7280') => { // Grey color for neutrality
+// Create a more distinct generic cluster icon (e.g., two overlapping circles)
+const createGenericClusterImage = (size = 40, color = '#374151') => { // Darker grey
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
@@ -108,11 +108,17 @@ const createGenericClusterImage = (size = 30, color = '#6B7280') => { // Grey co
   if (context) {
     context.clearRect(0, 0, size, size);
     context.fillStyle = color;
+    // Main circle (background)
     context.beginPath();
-    context.arc(size * 0.3, size * 0.3, size * 0.1, 0, Math.PI * 2);
-    context.arc(size * 0.7, size * 0.3, size * 0.1, 0, Math.PI * 2);
-    context.arc(size * 0.5, size * 0.7, size * 0.1, 0, Math.PI * 2);
+    context.arc(size / 2, size / 2, size * 0.4, 0, Math.PI * 2);
     context.fill();
+
+    // Slightly offset circle to imply multiple, or a darker inner circle
+    context.fillStyle = '#1F2937'; // Even darker grey
+    context.beginPath();
+    context.arc(size * 0.6, size * 0.4, size * 0.3, 0, Math.PI * 2);
+    context.fill();
+
     context.lineWidth = 2;
     context.strokeStyle = '#FFFFFF';
     context.stroke();
@@ -202,16 +208,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (map.getSource('spider-points')) {
       map.removeLayer('spider-lines');
       map.removeLayer('spider-points-icons');
-      // Removed spider-points-circle-bg explicitly if it was somehow added
       if (map.getLayer('spider-points-circle-bg')) map.removeLayer('spider-points-circle-bg'); 
       map.removeSource('spider-points');
       map.removeSource('spider-lines');
     }
 
-    const spiderRadiusBase = 60;
+    const spiderRadiusBase = 60; // Base radius for spiderfication
     const features = points.map((point, index) => {
-      const angle = 0.5 * index;
-      const radius = spiderRadiusBase * (1 + 0.15 * angle);
+      // Distribute points in a circle
+      const angle = (Math.PI * 2 * index) / points.length; // Evenly spaced angles
+      const radius = spiderRadiusBase * (1 + 0.15 * (index % 3)); // Slightly vary radius for visual depth
 
       const pixelCenter = map.project(centerCoords);
       const offsetX = radius * Math.cos(angle);
@@ -240,8 +246,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }).filter(Boolean);
 
     const spiderLines = points.map((point, index) => {
-      const angle = 0.5 * index;
-      const radius = spiderRadiusBase * (1 + 0.15 * angle);
+      const angle = (Math.PI * 2 * index) / points.length;
+      const radius = spiderRadiusBase * (1 + 0.15 * (index % 3));
 
       const pixelCenter = map.project(centerCoords);
       const offsetX = radius * Math.cos(angle);
@@ -287,12 +293,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       source: 'spider-points',
       layout: {
         'icon-image': ['get', 'cropType'],
-        'icon-size': [ // Adjusted size for spiderfied icons
+        'icon-size': [ // Adjusted size for spiderfied icons to be clear but not overwhelming
           'interpolate',
           ['linear'],
           ['zoom'],
-          10, 0.15,  // Smaller
-          16, 0.25, // Smaller
+          10, 0.2,  
+          16, 0.3, 
         ],
         'icon-allow-overlap': true,
       },
@@ -328,7 +334,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (map.getSource('spider-points')) {
       map.removeLayer('spider-lines');
       map.removeLayer('spider-points-icons');
-      // Removed spider-points-circle-bg explicitly if it was somehow added
       if (map.getLayer('spider-points-circle-bg')) map.removeLayer('spider-points-circle-bg');
       map.removeSource('spider-points');
       map.removeSource('spider-lines');
@@ -390,7 +395,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const map = mapRef.current;
     console.log('Starting icon loading process...');
     
-    // Get all unique crop types that need icons
     const uniqueNormalizedCropTypes = new Set<string>();
     allData.forEach(point => {
       uniqueNormalizedCropTypes.add(getMapboxIconIdFromPoint(point));
@@ -411,10 +415,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         map.loadImage(url, (error, image) => {
           if (error) {
             console.error(`ERROR: Failed to load PNG image for ID: "${id}" from URL: ${url}. Reason:`, error);
-            // Create a fallback circle and add it to Mapbox if the PNG fails
             try {
-                const fallbackCanvas = createFallbackCircleImage(30, '#3182CE'); // Default blue circle
-                // Convert canvas to ImageBitmap
+                const fallbackCanvas = createFallbackCircleImage(30, '#3182CE'); 
                 createImageBitmap(fallbackCanvas).then(imageBitmap => {
                     map.addImage(id, imageBitmap, { pixelRatio: window.devicePixelRatio || 1 });
                     newLoadedIcons.add(id);
@@ -439,10 +441,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             resolve();
           } else {
             console.error(`ERROR: map.loadImage for ID: "${id}" from URL: ${url} did not return an image or error (PNG).`);
-            // Create a fallback circle if nothing was returned
             try {
-                const fallbackCanvas = createFallbackCircleImage(30, '#3182CE'); // Default blue circle
-                // Convert canvas to ImageBitmap
+                const fallbackCanvas = createFallbackCircleImage(30, '#3182CE'); 
                 createImageBitmap(fallbackCanvas).then(imageBitmap => {
                     map.addImage(id, imageBitmap, { pixelRatio: window.devicePixelRatio || 1 });
                     newLoadedIcons.add(id);
@@ -470,8 +470,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             return;
         }
         try {
-            const fallbackCanvas = createFallbackCircleImage(30, '#cccccc'); // Gray fallback circle
-            // Convert canvas to ImageBitmap
+            const fallbackCanvas = createFallbackCircleImage(30, '#cccccc'); 
             createImageBitmap(fallbackCanvas).then(imageBitmap => {
                 map.addImage(FALLBACK_ICON_ID, imageBitmap, { pixelRatio: window.devicePixelRatio || 1 });
                 newLoadedIcons.add(FALLBACK_ICON_ID);
@@ -496,7 +495,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             return;
         }
         try {
-            const clusterCanvas = createGenericClusterImage(30); 
+            const clusterCanvas = createGenericClusterImage(40); // Use slightly larger canvas for the new design
             createImageBitmap(clusterCanvas).then(imageBitmap => {
                 map.addImage(GENERIC_CLUSTER_ICON_ID, imageBitmap, { pixelRatio: window.devicePixelRatio || 1 });
                 newLoadedIcons.add(GENERIC_CLUSTER_ICON_ID);
@@ -526,7 +525,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setIconsInitialized(true);
     }).catch(error => {
       console.error("Error in image loading process:", error);
-      setLoadedIconIds(newLoadedIcons); // Ensure state is updated even on error
+      setLoadedIconIds(newLoadedIcons); 
       setIconsInitialized(true);
     });
 
@@ -535,7 +534,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         if (!iconsInitialized) {
             console.warn("Icon loading timed out, proceeding with map rendering using available icons/fallbacks.");
             setIconsInitialized(true);
-            // Ensure at least the fallback icon is in loadedIconIds if nothing else loaded
             setLoadedIconIds(prev => {
                 const updatedSet = new Set(prev);
                 if (!updatedSet.has(FALLBACK_ICON_ID)) {
@@ -594,7 +592,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   // Add map layers and data - only after icons are loaded
   useEffect(() => {
-    // Only proceed if the map is loaded, icons have been initialized (or timed out), AND we have some loaded icons
     if (!mapRef.current || !isMapLoaded || !iconsInitialized || loadedIconIds.size === 0) {
       console.log('Skipping layer creation (waiting for map, icons, or loaded icons):', { 
         mapExists: !!mapRef.current, 
@@ -608,14 +605,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const map = mapRef.current;
     console.log('Creating/updating map layers with', filteredData.length, 'data points');
 
-    // Remove existing layers and source to ensure a clean update
     const layersToRemove = ['clusters', 'cluster-count', 'cluster-icons', 'unclustered-point-icons', 'spider-lines', 'spider-points-icons'];
     layersToRemove.forEach(layerId => {
       if (map.getLayer(layerId)) {
         map.removeLayer(layerId);
       }
     });
-    // Explicitly remove background circle layers if they somehow exist
+    // Explicitly ensure no stray circle layers
     if (map.getLayer('unclustered-point-circle-bg')) map.removeLayer('unclustered-point-circle-bg');
     if (map.getLayer('spider-points-circle-bg')) map.removeLayer('spider-points-circle-bg');
 
@@ -634,8 +630,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       clusterMaxZoom: 13,
       clusterRadius: 35,
       clusterProperties: {
-        // Aggregate 'cropType' for the cluster preview, not the main icon
-        'dominant_crop_type': ['first', ['get', 'cropType']] 
+        'first_crop_type_for_preview': ['first', ['get', 'originalCropType']] 
       }
     });
 
@@ -649,10 +644,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         'text-field': '{point_count_abbreviated}',
         'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
         'text-size': 12, 
-        'text-offset': [0, 1.0], // Offset text further below the icon
+        'text-offset': [0, 1.2], // Adjusted offset for better placement below the larger icon
       },
       paint: {
-        'text-color': 'hsl(0, 0%, 0%)', // Black text for better contrast
+        'text-color': 'hsl(0, 0%, 0%)', 
         'text-halo-color': 'hsl(0, 0%, 100%)',
         'text-halo-width': 1,
       },
@@ -666,13 +661,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         source: 'points',
         filter: ['has', 'point_count'], // Apply to clusters only
         layout: {
-          'icon-image': GENERIC_CLUSTER_ICON_ID, // Use the generic cluster icon
-          'icon-size': [
+          'icon-image': GENERIC_CLUSTER_ICON_ID, // Use the new generic cluster icon
+          'icon-size': [ // Adjusted size for clusters
             'interpolate',
             ['linear'],
             ['zoom'],
-            10, 0.3, // Adjusted size
-            16, 0.45, // Adjusted size
+            10, 0.4, 
+            16, 0.6, 
           ], 
           'icon-allow-overlap': true,
         },
@@ -692,12 +687,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             filter: ['!', ['has', 'point_count']],
             layout: {
                 'icon-image': ['get', 'cropType'], // Individual crop type icon
-                'icon-size': [
+                'icon-size': [ // Adjusted size for individual points
                     'interpolate',
                     ['linear'],
                     ['zoom'],
-                    10, 0.2, // Adjusted size
-                    16, 0.35, // Adjusted size
+                    10, 0.15, 
+                    16, 0.25, 
                 ],
                 'icon-allow-overlap': true,
             },
@@ -708,8 +703,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         });
     }
 
-    // Add event handlers (should be added only once during initial layer setup)
-    map.on('click', ['cluster-icons'], async (e) => { // Click on cluster icons to expand cluster
+    // Add event handlers
+    map.on('click', ['cluster-icons'], async (e) => { 
       const features = map.queryRenderedFeatures(e.point, { layers: ['cluster-icons'] });
       const clusterId = features[0]?.properties?.cluster_id;
       const pointCount = features[0]?.properties?.point_count;
@@ -727,11 +722,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               console.error('Error getting cluster leaves:', err);
               return;
             }
-            
             const clusterPoints: BrixDataPoint[] = leaves
               .map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null)
               .filter(Boolean);
-            
             spiderfyCluster(coords, clusterPoints, map);
           });
         } catch (error) {
@@ -743,7 +736,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             console.error('Error getting cluster expansion zoom:', err);
             return;
           }
-          
           map.easeTo({
             center: coords,
             zoom: zoom || currentZoom + 2, 
@@ -754,7 +746,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     });
 
     // Cluster hover preview
-    map.on('mouseenter', ['cluster-icons'], (e) => { // Hover on cluster icons
+    map.on('mouseenter', ['cluster-icons'], (e) => { 
       const features = map.queryRenderedFeatures(e.point, { layers: ['cluster-icons'] });
       const clusterId = features[0]?.properties?.cluster_id;
       const pointCount = features[0]?.properties?.point_count;
@@ -766,7 +758,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             const points: BrixDataPoint[] = leaves
               .map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null)
               .filter(Boolean);
-            
             setClusterPreview({
               points,
               position: { x: e.point.x, y: e.point.y }
@@ -776,12 +767,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
     });
 
-    map.on('mouseleave', ['cluster-icons'], () => { // Leave cluster icons
+    map.on('mouseleave', ['cluster-icons'], () => { 
       setClusterPreview(null);
     });
 
     // Individual point click handlers
-    map.on('click', ['unclustered-point-icons'], (e) => { // Click on unclustered icons
+    map.on('click', ['unclustered-point-icons'], (e) => { 
       const feature = e.features?.[0];
       const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
       if (point) setSelectedPoint(point);
