@@ -582,14 +582,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       cluster: true,
       clusterMaxZoom: 13,
       clusterRadius: 35,
-      clusterProperties: {
-        // Add crop type aggregation for smarter clustering
-        'dominant_crop': ['case',
-          ['>', ['get', 'point_count'], 1],
-          ['get', 'originalCropType'],
-          ['get', 'originalCropType']
-        ]
-      }
+      // Removed the problematic 'clusterProperties' definition
     });
 
     // Add cluster circles
