@@ -44,11 +44,14 @@ async function getMapboxToken() {
 
 // --- HELPER FUNCTIONS FOR ICONS ---
 // Helper function to get the *full URL* for the SVG file in Supabase Storage
-const getCropIconFileUrl = (normalizedCropName: string): string => {
+const getCropIconFileUrl = (mapboxIconId: string): string => {
   const supabaseUrl = getSupabaseUrl();
   const bucketName = 'crop-images'; // Your Supabase bucket name
   // The database `name_normalized` should match this format for direct lookup
-  return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${normalizedCropName}-uncolored.svg`;
+  // We assume `mapboxIconId` is already normalized (e.g., 'bell_pepper')
+  const fullUrl = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${mapboxIconId}-uncolored.svg`;
+  console.log(`Attempting to load icon from URL: ${fullUrl}`); // <--- ADDED LOGGING HERE
+  return fullUrl;
 };
 
 // Helper function to get the *ID string* Mapbox will use internally for the image
@@ -61,7 +64,7 @@ const getMapboxIconId = (cropType: string): string => {
 // Define a default fallback icon ID and its URL
 const FALLBACK_ICON_RAW_NAME = 'default'; // The base name of your default icon file (e.g., 'default-uncolored.svg')
 const FALLBACK_ICON_ID = getMapboxIconId(FALLBACK_ICON_RAW_NAME); // e.g., 'default'
-const FALLBACK_ICON_FILE_URL = getCropIconFileUrl(FALLBACK_ICON_RAW_NAME); // e.g., '.../default-uncolored.svg'
+const FALLBACK_ICON_FILE_URL = getCropIconFileUrl(FALLBACK_ICON_ID); // e.g., '.../default-uncolored.svg'
 
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ 
@@ -425,7 +428,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             const img = new Image();
             img.onload = () => {
                 try {
-                    map.addImage(id, img, { pixelRatio: window.devicePixelRatio || 1 });
+                    map.addImage(id, img); // Removed pixelRatio for now
                     currentLoadedIcons.add(id);
                 } catch (e) {
                     console.error(`Error adding image ${id} to map:`, e);
@@ -433,7 +436,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 resolve();
             };
             img.onerror = (e) => {
-                console.error(`Failed to load image for ${id} from ${url}:`, e);
+                // *** IMPORTANT DIAGNOSTIC LOGGING ***
+                console.error(`Failed to load image for ID: ${id} from URL: ${url}. Error:`, e); 
                 resolve(); // Resolve even on error to not block Promise.all
             };
             img.src = url;
