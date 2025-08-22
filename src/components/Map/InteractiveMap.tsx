@@ -43,6 +43,7 @@ async function getMapboxToken() {
 }
 
 // --- HELPER FUNCTIONS FOR ICONS ---
+// Your Supabase Project Reference - YOU MUST REPLACE THIS WITH YOUR ACTUAL PROJECT REFERENCE
 const SUPABASE_PROJECT_REF = 'wbkzczcqlorsewoofwqe'; 
 
 // Helper function to get the *full URL* for the SVG file in Supabase Storage
@@ -55,13 +56,20 @@ const getCropIconFileUrl = (mapboxIconId: string): string => {
 };
 
 // Helper function to get the *ID string* Mapbox will use internally for the image
-const getMapboxIconId = (cropType: string): string => {
-    return cropType.toLowerCase().replace(/ /g, '_');
+// This now prioritizes a 'name_normalized' field if present in the data point.
+const getMapboxIconIdFromPoint = (point: BrixDataPoint): string => {
+    // If your BrixDataPoint already has a name_normalized field, use it directly.
+    if (point.name_normalized) {
+        // Ensure consistency by lowercasing and replacing spaces, even if it's expected to be clean
+        return point.name_normalized.toLowerCase().replace(/ /g, '_');
+    }
+    // Fallback if name_normalized is not directly available (should rarely happen if your data is consistent)
+    return point.cropType.toLowerCase().replace(/ /g, '_');
 };
 
 // Define a default fallback icon ID and its URL
 const FALLBACK_ICON_RAW_NAME = 'default';
-const FALLBACK_ICON_ID = getMapboxIconId(FALLBACK_ICON_RAW_NAME);
+const FALLBACK_ICON_ID = getMapboxIconIdFromPoint({ cropType: FALLBACK_ICON_RAW_NAME } as BrixDataPoint); // Pass a mock point
 const FALLBACK_ICON_FILE_URL = getCropIconFileUrl(FALLBACK_ICON_ID);
 
 
@@ -162,7 +170,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const newPixelCoords = new mapboxgl.Point(pixelCenter.x + offsetX, pixelCenter.y + offsetY);
       const newGeoCoords = map.unproject(newPixelCoords);
       
-      const normalizedCropType = getMapboxIconId(point.cropType);
+      const normalizedCropType = getMapboxIconIdFromPoint(point); // <-- CHANGED
       const iconIdToUse = loadedIconIds.has(normalizedCropType) ? normalizedCropType : FALLBACK_ICON_ID;
 
       return {
@@ -337,7 +345,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         return null;
       }
 
-      const normalizedCropType = getMapboxIconId(point.cropType);
+      const normalizedCropType = getMapboxIconIdFromPoint(point); // <-- CHANGED
       const iconIdToUse = loadedIconIds.has(normalizedCropType) ? normalizedCropType : FALLBACK_ICON_ID;
 
       return {
@@ -372,33 +380,52 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     
     const uniqueNormalizedCropTypes = new Set<string>();
     allData.forEach(point => {
-      uniqueNormalizedCropTypes.add(getMapboxIconId(point.cropType));
+      uniqueNormalizedCropTypes.add(getMapboxIconIdFromPoint(point)); // <-- CHANGED
     });
 
     const loadImagesPromises: Promise<void>[] = [];
     const newLoadedIcons = new Set<string>();
 
     const loadImageAndAddtoMap = (id: string, url: string): Promise<void> => {
-        return new Promise(resolve => {
+        return new Promise(async (resolve) => { // Make this async to await Promise.race
             if (map.hasImage(id)) {
                 newLoadedIcons.add(id);
                 resolve();
                 return;
             }
-            map.loadImage(url, (error, image) => {
-                if (error) {
-                    console.error(`ERROR: Failed to load image for ID: "${id}" from URL: ${url}. Reason:`, error);
-                } else if (image) {
-                    try {
-                        map.addImage(id, image, { pixelRatio: window.devicePixelRatio || 1 }); // Re-added pixelRatio
-                        newLoadedIcons.add(id);
-                        console.log(`SUCCESS: Added icon "${id}" to Mapbox style.`); // Log success
-                    } catch (e) {
-                        console.error(`ERROR: Failed to add image "${id}" to Mapbox style after loading. Reason:`, e);
+
+            let loadImageComplete = false; // Flag to check if loadImage actually completed
+
+            const loadImagePromise = new Promise<void>(innerResolve => {
+                map.loadImage(url, (error, image) => {
+                    loadImageComplete = true; // Set flag
+                    if (error) {
+                        console.error(`ERROR: Failed to load image for ID: "${id}" from URL: ${url}. Reason:`, error);
+                    } else if (image) {
+                        try {
+                            map.addImage(id, image, { pixelRatio: window.devicePixelRatio || 1 });
+                            newLoadedIcons.add(id);
+                            console.log(`SUCCESS: Added icon "${id}" to Mapbox style.`);
+                        } catch (e) {
+                            console.error(`ERROR: Failed to add image "${id}" to Mapbox style after loading. Reason:`, e);
+                        }
                     }
-                }
-                resolve();
+                    innerResolve(); // Resolve the internal loadImage promise
+                });
             });
+
+            const timeoutPromise = new Promise<void>(innerResolve => {
+                setTimeout(() => {
+                    if (!loadImageComplete) { // Only log timeout if loadImage didn't complete first
+                        console.error(`TIMEOUT: map.loadImage for ID: "${id}" from URL: ${url} timed out after 5 seconds.`);
+                    }
+                    innerResolve(); // Resolve the internal timeout promise
+                }, 5000); // 5-second timeout
+            });
+
+            // Whichever promise (loadImage or timeout) resolves first, we continue.
+            await Promise.race([loadImagePromise, timeoutPromise]);
+            resolve(); // Resolve the outer promise now that race is done
         });
     };
 

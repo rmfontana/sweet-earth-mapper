@@ -4,7 +4,6 @@ import { supabase } from '../integrations/supabase/client';
 import { BrixDataPoint } from '../types'; // Your local BrixDataPoint interface
 
 // Define the base SELECT string cleanly
-// Removed SQL-style comment from inside the string literal
 const SUBMISSIONS_SELECT_QUERY_STRING = `
   id,
   assessment_date,
@@ -14,7 +13,7 @@ const SUBMISSIONS_SELECT_QUERY_STRING = `
   crop_variety,
   outlier_notes,
   location:location_id(id,name,latitude,longitude,place_id),
-  crop:crop_id(id,name,poor_brix,average_brix,good_brix,excellent_brix,category),
+  crop:crop_id(id,name,poor_brix,average_brix,good_brix,excellent_brix,category,name_normalized),
   store:store_id(id,name,location_id),
   brand:brand_id(id,name),
   user:users!user_id(id,display_name,id),
@@ -46,6 +45,7 @@ interface SupabaseSubmissionRow {
     good_brix: number | null;
     excellent_brix: number | null;
     category: string | null;
+    name_normalized: string | null; // Added name_normalized here
   } | null;
   store: {
     id: string;
@@ -101,6 +101,7 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     averageBrix: item.crop?.average_brix,
     goodBrix: item.crop?.good_brix,
     excellentBrix: item.crop?.excellent_brix,
+    name_normalized: item.crop?.name_normalized ?? undefined, // Mapped name_normalized here
   };
 }
 

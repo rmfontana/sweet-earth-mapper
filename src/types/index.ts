@@ -23,6 +23,7 @@ export interface BrixDataPoint {
   averageBrix: number | null;
   goodBrix: number | null;
   excellentBrix: number | null;
+  name_normalized?: string; // Added the name_normalized field here
 }
 
 export interface BrixThresholds {
