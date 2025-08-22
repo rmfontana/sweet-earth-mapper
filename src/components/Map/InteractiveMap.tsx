@@ -43,35 +43,27 @@ async function getMapboxToken() {
 }
 
 // --- HELPER FUNCTIONS FOR ICONS ---
-// Your Supabase Project Reference - YOU MUST REPLACE THIS WITH YOUR ACTUAL PROJECT REFERENCE
 const SUPABASE_PROJECT_REF = 'wbkzczcqlorsewoofwqe'; 
 
 // Helper function to get the *full URL* for the SVG file in Supabase Storage
 const getCropIconFileUrl = (mapboxIconId: string): string => {
-  const bucketName = 'crop-images'; // Your Supabase bucket name for crop icons
-  // Manually construct the public URL using the explicit projectRef
+  const bucketName = 'crop-images'; 
   const fullUrl = `https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1/object/public/${bucketName}/${mapboxIconId}-uncolored.svg`;
-  console.log(`Constructed icon URL: ${fullUrl}`); // Keep this for initial URL verification if needed
   return fullUrl;
 };
 
 // Helper function to get the *ID string* Mapbox will use internally for the image
-// This now prioritizes a 'name_normalized' field if present in the data point.
 const getMapboxIconIdFromPoint = (point: BrixDataPoint): string => {
-    // If your BrixDataPoint already has a name_normalized field, use it directly.
-    if (point.name_normalized) {
-        // Ensure consistency by lowercasing and replacing spaces, even if it's expected to be clean
-        return point.name_normalized.toLowerCase().replace(/ /g, '_');
-    }
-    // Fallback if name_normalized is not directly available (should rarely happen if your data is consistent)
-    return point.cropType.toLowerCase().replace(/ /g, '_');
+  if (point.name_normalized) {
+    return point.name_normalized.toLowerCase().replace(/ /g, '_');
+  }
+  return point.cropType.toLowerCase().replace(/ /g, '_');
 };
 
 // Define a default fallback icon ID and its URL
 const FALLBACK_ICON_RAW_NAME = 'default';
-const FALLBACK_ICON_ID = getMapboxIconIdFromPoint({ cropType: FALLBACK_ICON_RAW_NAME } as BrixDataPoint); // Pass a mock point
+const FALLBACK_ICON_ID = getMapboxIconIdFromPoint({ cropType: FALLBACK_ICON_RAW_NAME } as BrixDataPoint);
 const FALLBACK_ICON_FILE_URL = getCropIconFileUrl(FALLBACK_ICON_ID);
-
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ 
   userLocation, 
@@ -94,6 +86,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   // State to track which icon IDs have been successfully loaded into Mapbox
   const [loadedIconIds, setLoadedIconIds] = useState<Set<string>>(new Set());
+  const [iconsInitialized, setIconsInitialized] = useState(false);
 
   const { cache, loading } = useCropThresholds();
 
@@ -170,7 +163,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const newPixelCoords = new mapboxgl.Point(pixelCenter.x + offsetX, pixelCenter.y + offsetY);
       const newGeoCoords = map.unproject(newPixelCoords);
       
-      const normalizedCropType = getMapboxIconIdFromPoint(point); // <-- CHANGED
+      const normalizedCropType = getMapboxIconIdFromPoint(point);
       const iconIdToUse = loadedIconIds.has(normalizedCropType) ? normalizedCropType : FALLBACK_ICON_ID;
 
       return {
@@ -292,6 +285,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     setSpiderfiedPoints([]);
   };
 
+  // Initialize map
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
   
@@ -332,9 +326,95 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         mapRef.current.remove();
         mapRef.current = null;
         setIsMapLoaded(false);
+        setIconsInitialized(false);
+        setLoadedIconIds(new Set());
       }
     };
   }, []);
+
+  // Load icons after map is loaded and we have data
+  useEffect(() => {
+    if (!mapRef.current || !isMapLoaded || allData.length === 0 || iconsInitialized) return;
+
+    const map = mapRef.current;
+    console.log('Starting icon loading process...');
+    
+    // Get all unique crop types that need icons
+    const uniqueNormalizedCropTypes = new Set<string>();
+    allData.forEach(point => {
+      uniqueNormalizedCropTypes.add(getMapboxIconIdFromPoint(point));
+    });
+
+    const loadImagesPromises: Promise<void>[] = [];
+    const newLoadedIcons = new Set<string>();
+
+    const loadImageAndAddToMap = (id: string, url: string): Promise<void> => {
+      return new Promise(async (resolve) => {
+        if (map.hasImage(id)) {
+          newLoadedIcons.add(id);
+          console.log(`Icon "${id}" already exists in map`);
+          resolve();
+          return;
+        }
+
+        let loadImageComplete = false;
+
+        const loadImagePromise = new Promise<void>(innerResolve => {
+          map.loadImage(url, (error, image) => {
+            loadImageComplete = true;
+            if (error) {
+              console.error(`Failed to load image for ID: "${id}" from URL: ${url}`, error);
+            } else if (image) {
+              try {
+                map.addImage(id, image, { 
+                  pixelRatio: window.devicePixelRatio || 1,
+                  sdf: false // Explicitly set to false for colored icons
+                });
+                newLoadedIcons.add(id);
+                console.log(`Successfully added icon "${id}" to Mapbox style`);
+              } catch (e) {
+                console.error(`Failed to add image "${id}" to Mapbox style after loading`, e);
+              }
+            }
+            innerResolve();
+          });
+        });
+
+        const timeoutPromise = new Promise<void>(innerResolve => {
+          setTimeout(() => {
+            if (!loadImageComplete) {
+              console.error(`Timeout: map.loadImage for ID: "${id}" from URL: ${url} timed out after 10 seconds`);
+            }
+            innerResolve();
+          }, 10000); // Increased timeout to 10 seconds
+        });
+
+        await Promise.race([loadImagePromise, timeoutPromise]);
+        resolve();
+      });
+    };
+
+    // Load fallback icon first
+    loadImagesPromises.push(loadImageAndAddToMap(FALLBACK_ICON_ID, FALLBACK_ICON_FILE_URL));
+
+    // Load all unique crop icons
+    uniqueNormalizedCropTypes.forEach(iconId => {
+      if (iconId === FALLBACK_ICON_ID) return;
+      loadImagesPromises.push(loadImageAndAddToMap(iconId, getCropIconFileUrl(iconId)));
+    });
+
+    Promise.all(loadImagesPromises).then(() => {
+      console.log(`Loaded ${newLoadedIcons.size} icons successfully`);
+      setLoadedIconIds(newLoadedIcons);
+      setIconsInitialized(true);
+    }).catch(error => {
+      console.error("Error in image loading process:", error);
+      // Even if some fail, mark as initialized so we can proceed
+      setLoadedIconIds(newLoadedIcons);
+      setIconsInitialized(true);
+    });
+
+  }, [isMapLoaded, allData, iconsInitialized]);
 
   const toGeoJSON = useCallback((data: BrixDataPoint[]): GeoJSON.FeatureCollection => {
     console.log('Converting', data.length, 'data points to GeoJSON');
@@ -345,7 +425,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         return null;
       }
 
-      const normalizedCropType = getMapboxIconIdFromPoint(point); // <-- CHANGED
+      const normalizedCropType = getMapboxIconIdFromPoint(point);
       const iconIdToUse = loadedIconIds.has(normalizedCropType) ? normalizedCropType : FALLBACK_ICON_ID;
 
       return {
@@ -360,6 +440,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           color: getColor(point.cropType, point.brixLevel),
           raw: JSON.stringify(point),
           cropType: iconIdToUse, 
+          originalCropType: point.cropType, // Keep original for clustering logic
         },
       };
     }).filter(Boolean);
@@ -372,302 +453,247 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     };
   }, [getColor, loadedIconIds]);
 
-  // --- NEW: Dedicated Effect for ONE-TIME Image Loading on Map Load ---
+  // Add map layers and data - only after icons are loaded
   useEffect(() => {
-    if (!mapRef.current || !isMapLoaded || allData.length === 0) return;
-
-    const map = mapRef.current;
-    
-    const uniqueNormalizedCropTypes = new Set<string>();
-    allData.forEach(point => {
-      uniqueNormalizedCropTypes.add(getMapboxIconIdFromPoint(point)); // <-- CHANGED
-    });
-
-    const loadImagesPromises: Promise<void>[] = [];
-    const newLoadedIcons = new Set<string>();
-
-    const loadImageAndAddtoMap = (id: string, url: string): Promise<void> => {
-        return new Promise(async (resolve) => { // Make this async to await Promise.race
-            if (map.hasImage(id)) {
-                newLoadedIcons.add(id);
-                resolve();
-                return;
-            }
-
-            let loadImageComplete = false; // Flag to check if loadImage actually completed
-
-            const loadImagePromise = new Promise<void>(innerResolve => {
-                map.loadImage(url, (error, image) => {
-                    loadImageComplete = true; // Set flag
-                    if (error) {
-                        console.error(`ERROR: Failed to load image for ID: "${id}" from URL: ${url}. Reason:`, error);
-                    } else if (image) {
-                        try {
-                            map.addImage(id, image, { pixelRatio: window.devicePixelRatio || 1 });
-                            newLoadedIcons.add(id);
-                            console.log(`SUCCESS: Added icon "${id}" to Mapbox style.`);
-                        } catch (e) {
-                            console.error(`ERROR: Failed to add image "${id}" to Mapbox style after loading. Reason:`, e);
-                        }
-                    }
-                    innerResolve(); // Resolve the internal loadImage promise
-                });
-            });
-
-            const timeoutPromise = new Promise<void>(innerResolve => {
-                setTimeout(() => {
-                    if (!loadImageComplete) { // Only log timeout if loadImage didn't complete first
-                        console.error(`TIMEOUT: map.loadImage for ID: "${id}" from URL: ${url} timed out after 5 seconds.`);
-                    }
-                    innerResolve(); // Resolve the internal timeout promise
-                }, 5000); // 5-second timeout
-            });
-
-            // Whichever promise (loadImage or timeout) resolves first, we continue.
-            await Promise.race([loadImagePromise, timeoutPromise]);
-            resolve(); // Resolve the outer promise now that race is done
-        });
-    };
-
-    loadImagesPromises.push(loadImageAndAddtoMap(FALLBACK_ICON_ID, FALLBACK_ICON_FILE_URL));
-
-    uniqueNormalizedCropTypes.forEach(iconId => {
-        if (iconId === FALLBACK_ICON_ID) return;
-        loadImagesPromises.push(loadImageAndAddtoMap(iconId, getCropIconFileUrl(iconId)));
-    });
-
-    Promise.all(loadImagesPromises).then(() => {
-        setLoadedIconIds(prev => {
-            const mergedSet = new Set([...prev, ...newLoadedIcons]);
-            if (mergedSet.size !== prev.size) {
-                console.log("Updated loadedIconIds:", mergedSet);
-                return mergedSet;
-            }
-            return prev;
-        });
-        console.log("All unique icons processed for initial load.");
-    }).catch(error => {
-        console.error("Error in initial image loading chain:", error);
-    });
-
-  }, [isMapLoaded, allData]);
-
-
-  // --- Main Effect for Map Layers and Data Updates ---
-  useEffect(() => {
-    if (!mapRef.current || !isMapLoaded || loadedIconIds.size === 0) {
+    if (!mapRef.current || !isMapLoaded || !iconsInitialized || loadedIconIds.size === 0) {
+      console.log('Skipping layer creation:', { 
+        mapExists: !!mapRef.current, 
+        isMapLoaded, 
+        iconsInitialized, 
+        loadedIconCount: loadedIconIds.size 
+      });
       return; 
     }
 
     const map = mapRef.current;
+    console.log('Creating/updating map layers with', filteredData.length, 'data points');
+
+    // Remove existing layers if they exist
+    const layersToRemove = ['clusters', 'cluster-count', 'unclustered-point-circle-bg', 'unclustered-point-icons'];
+    layersToRemove.forEach(layerId => {
+      if (map.getLayer(layerId)) {
+        map.removeLayer(layerId);
+      }
+    });
 
     if (map.getSource('points')) {
-      (map.getSource('points') as mapboxgl.GeoJSONSource).setData(toGeoJSON(filteredData));
-    } else {
-      map.addSource('points', {
-        type: 'geojson',
-        data: toGeoJSON(filteredData),
-        cluster: true,
-        clusterMaxZoom: 13,
-        clusterRadius: 35,
-      });
+      map.removeSource('points');
+    }
 
-      if (!map.getLayer('clusters')) {
-        map.addLayer({
-          id: 'clusters',
-          type: 'circle',
-          source: 'points',
-          filter: ['has', 'point_count'],
-          paint: {
-            'circle-color': [
-              'step',
-              ['get', 'point_count'],
-              'hsl(220, 70%, 60%)',
-              5,
-              'hsl(45, 80%, 55%)',  
-              15,
-              'hsl(350, 70%, 60%)',
-            ],
-            'circle-radius': [
-              'step',
-              ['get', 'point_count'],
-              25,
-              5,
-              35,
-              15,
-              45,
-            ],
-            'circle-stroke-width': 3,
-            'circle-stroke-color': 'hsl(0, 0%, 100%)',
-            'circle-opacity': 0.8,
-            'circle-stroke-opacity': 0.85,
-          },
-        });
+    // Add source with clustering
+    map.addSource('points', {
+      type: 'geojson',
+      data: toGeoJSON(filteredData),
+      cluster: true,
+      clusterMaxZoom: 13,
+      clusterRadius: 35,
+      clusterProperties: {
+        // Add crop type aggregation for smarter clustering
+        'dominant_crop': ['case',
+          ['>', ['get', 'point_count'], 1],
+          ['get', 'originalCropType'],
+          ['get', 'originalCropType']
+        ]
       }
+    });
 
-      if (!map.getLayer('cluster-count')) {
-        map.addLayer({
-          id: 'cluster-count',
-          type: 'symbol',
-          source: 'points',
-          filter: ['has', 'point_count'],
-          layout: {
-            'text-field': '{point_count_abbreviated}',
-            'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-            'text-size': 14,
-          },
-          paint: {
-            'text-color': 'hsl(0, 0%, 100%)',
-            'text-halo-color': 'hsl(0, 0%, 0%)',
-            'text-halo-width': 1,
-          },
-        });
-      }
+    // Add cluster circles
+    map.addLayer({
+      id: 'clusters',
+      type: 'circle',
+      source: 'points',
+      filter: ['has', 'point_count'],
+      paint: {
+        'circle-color': [
+          'step',
+          ['get', 'point_count'],
+          'hsl(220, 70%, 60%)',
+          5,
+          'hsl(45, 80%, 55%)',  
+          15,
+          'hsl(350, 70%, 60%)',
+        ],
+        'circle-radius': [
+          'step',
+          ['get', 'point_count'],
+          25,
+          5,
+          35,
+          15,
+          45,
+        ],
+        'circle-stroke-width': 3,
+        'circle-stroke-color': 'hsl(0, 0%, 100%)',
+        'circle-opacity': 0.8,
+        'circle-stroke-opacity': 0.85,
+      },
+    });
 
-      if (!map.getLayer('unclustered-point-circle-bg')) {
-        map.addLayer({
-          id: 'unclustered-point-circle-bg',
-          type: 'circle',
-          source: 'points',
-          filter: ['!', ['has', 'point_count']],
-          paint: {
-            'circle-color': ['get', 'color'],
-            'circle-radius': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              10, 10,
-              16, 25,
-            ],
-            'circle-stroke-width': 2,
-            'circle-stroke-color': 'hsl(0, 0%, 100%)',
-            'circle-opacity': 0.9,
-          },
-        });
-      }
+    // Add cluster count labels
+    map.addLayer({
+      id: 'cluster-count',
+      type: 'symbol',
+      source: 'points',
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': '{point_count_abbreviated}',
+        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+        'text-size': 14,
+      },
+      paint: {
+        'text-color': 'hsl(0, 0%, 100%)',
+        'text-halo-color': 'hsl(0, 0%, 0%)',
+        'text-halo-width': 1,
+      },
+    });
 
-      if (!map.getLayer('unclustered-point-icons')) {
-        map.addLayer({
-          id: 'unclustered-point-icons',
-          type: 'symbol',
-          source: 'points',
-          filter: ['!', ['has', 'point_count']],
-          layout: {
-            'icon-image': ['get', 'cropType'],
-            'icon-size': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              10, 0.5,
-              16, 0.75,
-            ],
-            'icon-allow-overlap': true,
-          },
-          paint: {
-            'icon-halo-color': 'hsl(0, 0%, 100%)',
-            'icon-halo-width': 1,
-          },
-        });
-      }
+    // Add individual point background circles
+    map.addLayer({
+      id: 'unclustered-point-circle-bg',
+      type: 'circle',
+      source: 'points',
+      filter: ['!', ['has', 'point_count']],
+      paint: {
+        'circle-color': ['get', 'color'],
+        'circle-radius': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          10, 12,
+          16, 20,
+        ],
+        'circle-stroke-width': 2,
+        'circle-stroke-color': 'hsl(0, 0%, 100%)',
+        'circle-opacity': 0.9,
+      },
+    });
 
-      map.on('click', 'clusters', async (e) => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-        const clusterId = features[0]?.properties?.cluster_id;
-        const pointCount = features[0]?.properties?.point_count;
-      
-        if (!clusterId || features[0].geometry.type !== 'Point') return;
-      
-        const source = map.getSource('points') as mapboxgl.GeoJSONSource;
-        const coords = features[0].geometry.coordinates as [number, number];
-        const currentZoom = map.getZoom();
-      
-        if (currentZoom >= 13 || pointCount <= 5) {
-          try {
-            source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
-              if (err || !leaves) {
-                console.error('Error getting cluster leaves:', err);
-                return;
-              }
-              
-              const clusterPoints: BrixDataPoint[] = leaves
-                .map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null)
-                .filter(Boolean);
-              
-              spiderfyCluster(coords, clusterPoints, map);
-            });
-          } catch (error) {
-            console.error('Error during spiderfying:', error);
-          }
-        } else {
-          source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-            if (err) {
-              console.error('Error getting cluster expansion zoom:', err);
+    // Add individual point icons
+    map.addLayer({
+      id: 'unclustered-point-icons',
+      type: 'symbol',
+      source: 'points',
+      filter: ['!', ['has', 'point_count']],
+      layout: {
+        'icon-image': ['get', 'cropType'],
+        'icon-size': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          10, 0.4,
+          16, 0.6,
+        ],
+        'icon-allow-overlap': true,
+      },
+      paint: {
+        'icon-halo-color': 'hsl(0, 0%, 100%)',
+        'icon-halo-width': 1,
+      },
+    });
+
+    // Add event handlers
+    map.on('click', 'clusters', async (e) => {
+      const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+      const clusterId = features[0]?.properties?.cluster_id;
+      const pointCount = features[0]?.properties?.point_count;
+    
+      if (!clusterId || features[0].geometry.type !== 'Point') return;
+    
+      const source = map.getSource('points') as mapboxgl.GeoJSONSource;
+      const coords = features[0].geometry.coordinates as [number, number];
+      const currentZoom = map.getZoom();
+    
+      if (currentZoom >= 13 || pointCount <= 5) {
+        try {
+          source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
+            if (err || !leaves) {
+              console.error('Error getting cluster leaves:', err);
               return;
             }
             
-            map.easeTo({
-              center: coords,
-              zoom: zoom || currentZoom + 2, 
-              duration: 800,
+            const clusterPoints: BrixDataPoint[] = leaves
+              .map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null)
+              .filter(Boolean);
+            
+            spiderfyCluster(coords, clusterPoints, map);
+          });
+        } catch (error) {
+          console.error('Error during spiderfying:', error);
+        }
+      } else {
+        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) {
+            console.error('Error getting cluster expansion zoom:', err);
+            return;
+          }
+          
+          map.easeTo({
+            center: coords,
+            zoom: zoom || currentZoom + 2, 
+            duration: 800,
+          });
+        });
+      }
+    });
+
+    // Cluster hover preview
+    map.on('mouseenter', 'clusters', (e) => {
+      const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+      const clusterId = features[0]?.properties?.cluster_id;
+      const pointCount = features[0]?.properties?.point_count;
+      
+      if (clusterId && pointCount <= 8) {  
+        const source = map.getSource('points') as mapboxgl.GeoJSONSource;
+        source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
+          if (!err && leaves) {
+            const points: BrixDataPoint[] = leaves
+              .map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null)
+              .filter(Boolean);
+            
+            setClusterPreview({
+              points,
+              position: { x: e.point.x, y: e.point.y }
             });
-          });
-        }
-      });
+          }
+        });
+      }
+    });
 
-      map.on('mouseenter', 'clusters', (e) => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-        const clusterId = features[0]?.properties?.cluster_id;
-        const pointCount = features[0]?.properties?.point_count;
-        
-        if (clusterId && pointCount <= 8) {  
-          const source = map.getSource('points') as mapboxgl.GeoJSONSource;
-          source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
-            if (!err && leaves) {
-              const points: BrixDataPoint[] = leaves
-                .map(leaf => leaf.properties?.raw ? JSON.parse(leaf.properties.raw) : null)
-                .filter(Boolean);
-              
-              setClusterPreview({
-                points,
-                position: { x: e.point.x, y: e.point.y }
-              });
-            }
-          });
-        }
-      });
+    map.on('mouseleave', 'clusters', () => {
+      setClusterPreview(null);
+    });
 
-      map.on('mouseleave', 'clusters', () => {
-        setClusterPreview(null);
-      });
+    // Individual point click handlers
+    map.on('click', ['unclustered-point-circle-bg', 'unclustered-point-icons'], (e) => {
+      const feature = e.features?.[0];
+      const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
+      if (point) setSelectedPoint(point);
+    });
 
-      map.on('click', ['unclustered-point-circle-bg', 'unclustered-point-icons'], (e) => {
-        const feature = e.features?.[0];
-        const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
-        if (point) setSelectedPoint(point);
-      });
+    // Cursor changes
+    map.on('mouseenter', 'clusters', () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', 'clusters', () => {
+      map.getCanvas().style.cursor = '';
+    });
 
-      map.on('mouseenter', 'clusters', () => {
-        map.getCanvas().style.cursor = 'pointer';
-      });
-      map.on('mouseleave', 'clusters', () => {
-        map.getCanvas().style.cursor = '';
-      });
+    map.on('mouseenter', ['unclustered-point-circle-bg', 'unclustered-point-icons'], () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', ['unclustered-point-circle-bg', 'unclustered-point-icons'], () => {
+      map.getCanvas().style.cursor = '';
+    });
 
-      map.on('mouseenter', ['unclustered-point-circle-bg', 'unclustered-point-icons'], () => {
-        map.getCanvas().style.cursor = 'pointer';
-      });
-      map.on('mouseleave', ['unclustered-point-circle-bg', 'unclustered-point-icons'], () => {
-        map.getCanvas().style.cursor = '';
-      });
+    // Clear spiderfy on map click
+    map.on('click', (e) => {
+      const features = map.queryRenderedFeatures(e.point);
+      if (!features.some(f => f.source === 'points' || f.source === 'spider-points')) {
+        clearSpiderfy();
+      }
+    });
 
-      map.on('click', (e) => {
-        const features = map.queryRenderedFeatures(e.point);
-        if (!features.some(f => f.source === 'points' || f.source === 'spider-points')) {
-          clearSpiderfy();
-        }
-      });
-    }
-
+    // Fit bounds to data if we have any
     if (filteredData.length > 0) {
       const bounds = new mapboxgl.LngLatBounds();
       filteredData.forEach(point => {
@@ -677,8 +703,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
       map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
     }
-  }, [isMapLoaded, filteredData, toGeoJSON, loadedIconIds]);
 
+  }, [isMapLoaded, iconsInitialized, filteredData, toGeoJSON, loadedIconIds]);
+
+  // Clean up user location layer
   useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
@@ -686,10 +714,19 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (map.getSource('user-location')) map.removeSource('user-location');
   }, [userLocation]);
 
-
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
+
+      {/* Debug info - remove in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="absolute top-4 left-4 bg-white p-2 rounded shadow text-xs">
+          <div>Map Loaded: {isMapLoaded ? '✅' : '❌'}</div>
+          <div>Icons Initialized: {iconsInitialized ? '✅' : '❌'}</div>
+          <div>Loaded Icons: {loadedIconIds.size}</div>
+          <div>Data Points: {filteredData.length}</div>
+        </div>
+      )}
 
       {clusterPreview && (
         <div 
