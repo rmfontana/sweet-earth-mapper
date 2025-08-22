@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { BrixDataPoint } from '../../types'; 
+import { BrixDataPoint } from '../../types'; // Updated to use the new BrixDataPoint interface
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
 import { useFilters } from '../../contexts/FilterContext';
 import { applyFilters } from '../../lib/filterUtils';
@@ -178,7 +178,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (map.getSource('spider-points')) {
       map.removeLayer('spider-lines');
       map.removeLayer('spider-points-icons');
-      map.removeLayer('spider-points-circle-bg');
+      // Removed spider-points-circle-bg
+      if (map.getLayer('spider-points-circle-bg')) map.removeLayer('spider-points-circle-bg'); 
       map.removeSource('spider-points');
       map.removeSource('spider-lines');
     }
@@ -256,18 +257,19 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       data: { type: 'FeatureCollection', features },
     });
 
-    map.addLayer({
-      id: 'spider-points-circle-bg',
-      type: 'circle',
-      source: 'spider-points',
-      paint: {
-        'circle-color': ['get', 'color'],
-        'circle-radius': 10,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#fff',
-        'circle-opacity': 0.9,
-      },
-    });
+    // Removed spider-points-circle-bg as requested
+    // map.addLayer({
+    //   id: 'spider-points-circle-bg',
+    //   type: 'circle',
+    //   source: 'spider-points',
+    //   paint: {
+    //     'circle-color': ['get', 'color'],
+    //     'circle-radius': 10,
+    //     'circle-stroke-width': 2,
+    //     'circle-stroke-color': '#fff',
+    //     'circle-opacity': 0.9,
+    //   },
+    // });
 
     map.addLayer({
       id: 'spider-points-icons',
@@ -279,8 +281,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           'interpolate',
           ['linear'],
           ['zoom'],
-          10, 0.15, 
-          16, 0.25,
+          10, 0.1,  // Even smaller
+          16, 0.2, // Even smaller
         ],
         'icon-allow-overlap': true,
       },
@@ -316,7 +318,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (map.getSource('spider-points')) {
       map.removeLayer('spider-lines');
       map.removeLayer('spider-points-icons');
-      map.removeLayer('spider-points-circle-bg');
+      // Removed spider-points-circle-bg
+      if (map.getLayer('spider-points-circle-bg')) map.removeLayer('spider-points-circle-bg');
       map.removeSource('spider-points');
       map.removeSource('spider-lines');
     }
@@ -636,7 +639,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         'text-field': '{point_count_abbreviated}',
         'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
         'text-size': 12, // Slightly smaller text for better icon integration
-        'text-offset': [0, 0.7], // Offset text below the icon
+        'text-offset': [0, 1.0], // Offset text further below the icon
       },
       paint: {
         'text-color': 'hsl(0, 0%, 0%)', // Changed to black for better contrast on icon
@@ -658,8 +661,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             'interpolate',
             ['linear'],
             ['zoom'],
-            10, 0.2, // Smaller on lower zoom
-            16, 0.35, // Larger on higher zoom
+            10, 0.15, // Adjusted, even smaller
+            16, 0.25, // Adjusted, even smaller
           ], 
           'icon-allow-overlap': true,
         },
@@ -670,30 +673,31 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
     }
 
-    // Add individual point background circles (optional, can be removed if only icons are desired)
-    map.addLayer({
-      id: 'unclustered-point-circle-bg',
-      type: 'circle',
-      source: 'points',
-      filter: ['!', ['has', 'point_count']],
-      paint: {
-        'circle-color': ['get', 'color'],
-        'circle-radius': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          10, 10, // Slightly smaller radius
-          16, 16, // Slightly smaller radius
-        ],
-        'circle-stroke-width': 2,
-        'circle-stroke-color': 'hsl(0, 0%, 100%)',
-        'circle-opacity': 0.9,
-      },
-    });
+    // Removed individual point background circles
+    if (map.getLayer('unclustered-point-circle-bg')) map.removeLayer('unclustered-point-circle-bg');
+    // map.addLayer({
+    //   id: 'unclustered-point-circle-bg',
+    //   type: 'circle',
+    //   source: 'points',
+    //   filter: ['!', ['has', 'point_count']],
+    //   paint: {
+    //     'circle-color': ['get', 'color'],
+    //     'circle-radius': [
+    //       'interpolate',
+    //       ['linear'],
+    //       ['zoom'],
+    //       10, 10, // Slightly smaller radius
+    //       16, 16, // Slightly smaller radius
+    //     ],
+    //     'circle-stroke-width': 2,
+    //     'circle-stroke-color': '#fff',
+    //     'circle-opacity': 0.9,
+    //   },
+    // });
 
     // Only add the individual point icons layer IF there are actual PNG icons loaded
-    // Otherwise, it will just show the background circles
-    if (loadedIconIds.size > 1 || loadedIconIds.has(FALLBACK_ICON_ID)) { 
+    // Otherwise, it will just show the fallback circle (if PNGs fail for that crop type)
+    if (loadedIconIds.size > 0) { 
         map.addLayer({
             id: 'unclustered-point-icons',
             type: 'symbol',
@@ -705,8 +709,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                     'interpolate',
                     ['linear'],
                     ['zoom'],
-                    10, 0.1, // Significantly smaller
-                    16, 0.25, // Significantly smaller
+                    10, 0.07, // Significantly smaller
+                    16, 0.15, // Significantly smaller
                 ],
                 'icon-allow-overlap': true,
             },
@@ -718,8 +722,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
 
     // Add event handlers (should be added only once during initial layer setup)
-    map.on('click', ['clusters', 'cluster-icons'], async (e) => { // Click on either circle or icon to expand cluster
-      const features = map.queryRenderedFeatures(e.point, { layers: ['clusters', 'cluster-icons'] });
+    map.on('click', ['cluster-icons'], async (e) => { // Click on cluster icons to expand cluster
+      const features = map.queryRenderedFeatures(e.point, { layers: ['cluster-icons'] });
       const clusterId = features[0]?.properties?.cluster_id;
       const pointCount = features[0]?.properties?.point_count;
     
@@ -729,7 +733,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const coords = features[0].geometry.coordinates as [number, number];
       const currentZoom = map.getZoom();
     
-      if (currentZoom >= 13 || pointCount <= 5) {
+      if (currentZoom >= 13 || pointCount <= 5) { // Spiderfy if zoomed in enough or few points
         try {
           source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
             if (err || !leaves) {
@@ -763,8 +767,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     });
 
     // Cluster hover preview
-    map.on('mouseenter', ['clusters', 'cluster-icons'], (e) => { // Hover on either circle or icon
-      const features = map.queryRenderedFeatures(e.point, { layers: ['clusters', 'cluster-icons'] });
+    map.on('mouseenter', ['cluster-icons'], (e) => { // Hover on cluster icons
+      const features = map.queryRenderedFeatures(e.point, { layers: ['cluster-icons'] });
       const clusterId = features[0]?.properties?.cluster_id;
       const pointCount = features[0]?.properties?.point_count;
       
@@ -785,12 +789,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
     });
 
-    map.on('mouseleave', ['clusters', 'cluster-icons'], () => { // Leave either circle or icon
+    map.on('mouseleave', ['cluster-icons'], () => { // Leave cluster icons
       setClusterPreview(null);
     });
 
     // Individual point click handlers
-    map.on('click', ['unclustered-point-circle-bg', 'unclustered-point-icons'], (e) => {
+    map.on('click', ['unclustered-point-icons'], (e) => { // Click on unclustered icons
       const feature = e.features?.[0];
       const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
       if (point) setSelectedPoint(point);
