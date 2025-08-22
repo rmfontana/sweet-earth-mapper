@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { BrixDataPoint } from '../../types';
+import { BrixDataPoint } from '../../types'; // Updated to use the new BrixDataPoint interface
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
 import { useFilters } from '../../contexts/FilterContext';
 import { applyFilters } from '../../lib/filterUtils';
@@ -43,27 +43,59 @@ async function getMapboxToken() {
 }
 
 // --- HELPER FUNCTIONS FOR ICONS ---
+// Your Supabase Project Reference - YOU MUST REPLACE THIS WITH YOUR ACTUAL PROJECT REFERENCE
 const SUPABASE_PROJECT_REF = 'wbkzczcqlorsewoofwqe'; 
 
-// Helper function to get the *full URL* for the SVG file in Supabase Storage
+// Helper function to get the *full URL* for the PNG file in Supabase Storage
 const getCropIconFileUrl = (mapboxIconId: string): string => {
-  const bucketName = 'crop-images'; 
-  const fullUrl = `https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1/object/public/${bucketName}/${mapboxIconId}-uncolored.svg`;
+  const bucketName = 'crop-images'; // Your Supabase bucket name for crop icons
+  // Manually construct the public URL using the explicit projectRef, now for PNG
+  const fullUrl = `https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1/object/public/${bucketName}/${mapboxIconId}-uncolored.png`;
+  // console.log(`Constructed icon URL (PNG): ${fullUrl}`); // Keep this for initial URL verification if needed
   return fullUrl;
 };
 
 // Helper function to get the *ID string* Mapbox will use internally for the image
+// This now prioritizes a 'name_normalized' field if present in the data point.
 const getMapboxIconIdFromPoint = (point: BrixDataPoint): string => {
-  if (point.name_normalized) {
-    return point.name_normalized.toLowerCase().replace(/ /g, '_');
-  }
-  return point.cropType.toLowerCase().replace(/ /g, '_');
+    // If your BrixDataPoint already has a name_normalized field, use it directly.
+    if (point.name_normalized) {
+        // Ensure consistency by lowercasing and replacing spaces, even if it's expected to be clean
+        return point.name_normalized.toLowerCase().replace(/ /g, '_');
+    }
+    // Fallback if name_normalized is not directly available
+    return point.cropType.toLowerCase().replace(/ /g, '_');
 };
 
 // Define a default fallback icon ID and its URL
 const FALLBACK_ICON_RAW_NAME = 'default';
-const FALLBACK_ICON_ID = getMapboxIconIdFromPoint({ cropType: FALLBACK_ICON_RAW_NAME } as BrixDataPoint);
-const FALLBACK_ICON_FILE_URL = getCropIconFileUrl(FALLBACK_ICON_ID);
+// When creating a mock point for fallback, ensure it aligns with BrixDataPoint structure, even if minimal
+const FALLBACK_ICON_ID = getMapboxIconIdFromPoint({ 
+  cropType: FALLBACK_ICON_RAW_NAME, 
+  id: '', brixLevel: 0, verified: false, variety: '', category: '', 
+  latitude: null, longitude: null, locationName: '', storeName: '', brandName: '', 
+  submittedBy: '', verifiedBy: '', submittedAt: '', outlier_notes: '', images: [] 
+} as BrixDataPoint); 
+
+// Create a simple canvas-based circle for fallback icon if PNG fails
+const createFallbackCircleImage = (size = 30, color = '#3182CE') => {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  if (context) {
+    context.clearRect(0, 0, size, size);
+    context.beginPath();
+    context.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2, true);
+    context.fillStyle = color;
+    context.fill();
+    context.lineWidth = 2;
+    context.strokeStyle = '#FFFFFF';
+    context.stroke();
+  }
+  return canvas;
+};
+
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ 
   userLocation, 
@@ -86,7 +118,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   // State to track which icon IDs have been successfully loaded into Mapbox
   const [loadedIconIds, setLoadedIconIds] = useState<Set<string>>(new Set());
-  const [iconsInitialized, setIconsInitialized] = useState(false);
+  const [iconsInitialized, setIconsInitialized] = useState(false); // New state to track if icons have been processed
 
   const { cache, loading } = useCropThresholds();
 
@@ -180,7 +212,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           cropType: iconIdToUse, 
         },
       };
-    });
+    }).filter(Boolean);
 
     const spiderLines = points.map((point, index) => {
       const angle = 0.5 * index;
@@ -349,7 +381,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const newLoadedIcons = new Set<string>();
 
     const loadImageAndAddToMap = (id: string, url: string): Promise<void> => {
-      return new Promise(async (resolve) => {
+      return new Promise((resolve) => {
         if (map.hasImage(id)) {
           newLoadedIcons.add(id);
           console.log(`Icon "${id}" already exists in map`);
@@ -357,45 +389,85 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           return;
         }
 
-        let loadImageComplete = false;
-
-        const loadImagePromise = new Promise<void>(innerResolve => {
-          map.loadImage(url, (error, image) => {
-            loadImageComplete = true;
-            if (error) {
-              console.error(`Failed to load image for ID: "${id}" from URL: ${url}`, error);
-            } else if (image) {
-              try {
-                map.addImage(id, image, { 
-                  pixelRatio: window.devicePixelRatio || 1,
-                  sdf: false // Explicitly set to false for colored icons
+        map.loadImage(url, (error, image) => {
+          if (error) {
+            console.error(`ERROR: Failed to load PNG image for ID: "${id}" from URL: ${url}. Reason:`, error);
+            // Create a fallback circle and add it to Mapbox if the PNG fails
+            try {
+                const fallbackCanvas = createFallbackCircleImage(30, '#3182CE'); // Default blue circle
+                // Convert canvas to ImageBitmap
+                createImageBitmap(fallbackCanvas).then(imageBitmap => {
+                    map.addImage(id, imageBitmap, { pixelRatio: window.devicePixelRatio || 1 });
+                    newLoadedIcons.add(id);
+                    console.log(`SUCCESS: Added fallback circle for "${id}" due to PNG load failure.`);
+                    resolve();
+                }).catch(e => {
+                    console.error(`ERROR: Failed to create ImageBitmap from canvas for fallback "${id}". Reason:`, e);
+                    resolve();
                 });
-                newLoadedIcons.add(id);
-                console.log(`Successfully added icon "${id}" to Mapbox style`);
-              } catch (e) {
-                console.error(`Failed to add image "${id}" to Mapbox style after loading`, e);
-              }
+            } catch (e) {
+                console.error(`ERROR: Failed to create/add fallback circle for "${id}". Reason:`, e);
+                resolve();
             }
-            innerResolve();
-          });
-        });
-
-        const timeoutPromise = new Promise<void>(innerResolve => {
-          setTimeout(() => {
-            if (!loadImageComplete) {
-              console.error(`Timeout: map.loadImage for ID: "${id}" from URL: ${url} timed out after 10 seconds`);
+          } else if (image) {
+            try {
+              map.addImage(id, image, { pixelRatio: window.devicePixelRatio || 1 });
+              newLoadedIcons.add(id);
+              console.log(`SUCCESS: Added PNG icon "${id}" to Mapbox style.`);
+            } catch (e) {
+              console.error(`ERROR: Failed to add PNG image "${id}" to Mapbox style after loading. Reason:`, e);
             }
-            innerResolve();
-          }, 10000); // Increased timeout to 10 seconds
+            resolve();
+          } else {
+            console.error(`ERROR: map.loadImage for ID: "${id}" from URL: ${url} did not return an image or error (PNG).`);
+            // Create a fallback circle if nothing was returned
+            try {
+                const fallbackCanvas = createFallbackCircleImage(30, '#3182CE'); // Default blue circle
+                // Convert canvas to ImageBitmap
+                createImageBitmap(fallbackCanvas).then(imageBitmap => {
+                    map.addImage(id, imageBitmap, { pixelRatio: window.devicePixelRatio || 1 });
+                    newLoadedIcons.add(id);
+                    console.log(`SUCCESS: Added fallback circle for "${id}" as PNG load was indeterminate.`);
+                    resolve();
+                }).catch(e => {
+                    console.error(`ERROR: Failed to create ImageBitmap from canvas for fallback "${id}". Reason:`, e);
+                    resolve();
+                });
+            } catch (e) {
+                console.error(`ERROR: Failed to create/add fallback circle for "${id}". Reason:`, e);
+                resolve();
+            }
+          }
         });
-
-        await Promise.race([loadImagePromise, timeoutPromise]);
-        resolve();
       });
     };
 
-    // Load fallback icon first
-    loadImagesPromises.push(loadImageAndAddToMap(FALLBACK_ICON_ID, FALLBACK_ICON_FILE_URL));
+    // Load fallback icon (always a generated circle for consistency)
+    loadImagesPromises.push(new Promise(resolve => {
+        if (map.hasImage(FALLBACK_ICON_ID)) {
+            newLoadedIcons.add(FALLBACK_ICON_ID);
+            console.log(`Fallback icon "${FALLBACK_ICON_ID}" already exists.`);
+            resolve();
+            return;
+        }
+        try {
+            const fallbackCanvas = createFallbackCircleImage(30, '#cccccc'); // Gray fallback circle
+            // Convert canvas to ImageBitmap
+            createImageBitmap(fallbackCanvas).then(imageBitmap => {
+                map.addImage(FALLBACK_ICON_ID, imageBitmap, { pixelRatio: window.devicePixelRatio || 1 });
+                newLoadedIcons.add(FALLBACK_ICON_ID);
+                console.log(`SUCCESS: Added generated fallback circle for "${FALLBACK_ICON_ID}".`);
+                resolve();
+            }).catch(e => {
+                console.error(`ERROR: Failed to create ImageBitmap from canvas for generated fallback "${FALLBACK_ICON_ID}". Reason:`, e);
+                resolve();
+            });
+        } catch (e) {
+            console.error(`ERROR: Failed to create/add generated fallback circle for "${FALLBACK_ICON_ID}". Reason:`, e);
+            resolve();
+        }
+    }));
+
 
     // Load all unique crop icons
     uniqueNormalizedCropTypes.forEach(iconId => {
@@ -403,15 +475,35 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       loadImagesPromises.push(loadImageAndAddToMap(iconId, getCropIconFileUrl(iconId)));
     });
 
-    Promise.all(loadImagesPromises).then(() => {
-      console.log(`Loaded ${newLoadedIcons.size} icons successfully`);
+    // Add a general timeout to ensure map layers are eventually created even if all icons fail
+    const allIconsLoadPromise = Promise.all(loadImagesPromises).then(() => {
+      console.log(`Loaded ${newLoadedIcons.size} icons successfully (including fallbacks).`);
       setLoadedIconIds(newLoadedIcons);
       setIconsInitialized(true);
     }).catch(error => {
       console.error("Error in image loading process:", error);
-      // Even if some fail, mark as initialized so we can proceed
-      setLoadedIconIds(newLoadedIcons);
+      setLoadedIconIds(newLoadedIcons); // Ensure state is updated even on error
       setIconsInitialized(true);
+    });
+
+    // Fallback timer to ensure map renders after a delay even if icons fail
+    const fallbackTimer = setTimeout(() => {
+        if (!iconsInitialized) {
+            console.warn("Icon loading timed out, proceeding with map rendering using available icons/fallbacks.");
+            setIconsInitialized(true);
+            // Ensure at least the fallback icon is in loadedIconIds if nothing else loaded
+            setLoadedIconIds(prev => {
+                const updatedSet = new Set(prev);
+                if (!updatedSet.has(FALLBACK_ICON_ID)) {
+                    updatedSet.add(FALLBACK_ICON_ID);
+                }
+                return updatedSet;
+            });
+        }
+    }, 10000); // 10 seconds fallback
+
+    allIconsLoadPromise.finally(() => {
+        clearTimeout(fallbackTimer); // Clear the fallback timer if promises resolve naturally
     });
 
   }, [isMapLoaded, allData, iconsInitialized]);
@@ -455,8 +547,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   // Add map layers and data - only after icons are loaded
   useEffect(() => {
+    // Only proceed if the map is loaded, icons have been initialized (or timed out), AND we have some loaded icons
     if (!mapRef.current || !isMapLoaded || !iconsInitialized || loadedIconIds.size === 0) {
-      console.log('Skipping layer creation:', { 
+      console.log('Skipping layer creation (waiting for map, icons, or loaded icons):', { 
         mapExists: !!mapRef.current, 
         isMapLoaded, 
         iconsInitialized, 
@@ -468,17 +561,19 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const map = mapRef.current;
     console.log('Creating/updating map layers with', filteredData.length, 'data points');
 
-    // Remove existing layers if they exist
-    const layersToRemove = ['clusters', 'cluster-count', 'unclustered-point-circle-bg', 'unclustered-point-icons'];
+    // Remove existing layers and source to ensure a clean update
+    const layersToRemove = ['clusters', 'cluster-count', 'unclustered-point-circle-bg', 'unclustered-point-icons', 'spider-lines', 'spider-points-icons', 'spider-points-circle-bg'];
     layersToRemove.forEach(layerId => {
       if (map.getLayer(layerId)) {
         map.removeLayer(layerId);
       }
     });
-
-    if (map.getSource('points')) {
-      map.removeSource('points');
-    }
+    const sourcesToRemove = ['points', 'spider-points', 'spider-lines'];
+    sourcesToRemove.forEach(sourceId => {
+        if (map.getSource(sourceId)) {
+            map.removeSource(sourceId);
+        }
+    });
 
     // Add source with clustering
     map.addSource('points', {
@@ -509,7 +604,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           ['get', 'point_count'],
           'hsl(220, 70%, 60%)',
           5,
-          'hsl(45, 80%, 55%)',  
+          'hsl(45, 80%, 55%)',  
           15,
           'hsl(350, 70%, 60%)',
         ],
@@ -547,7 +642,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       },
     });
 
-    // Add individual point background circles
+    // Add individual point background circles (always created)
     map.addLayer({
       id: 'unclustered-point-circle-bg',
       type: 'circle',
@@ -568,30 +663,34 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       },
     });
 
-    // Add individual point icons
-    map.addLayer({
-      id: 'unclustered-point-icons',
-      type: 'symbol',
-      source: 'points',
-      filter: ['!', ['has', 'point_count']],
-      layout: {
-        'icon-image': ['get', 'cropType'],
-        'icon-size': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          10, 0.4,
-          16, 0.6,
-        ],
-        'icon-allow-overlap': true,
-      },
-      paint: {
-        'icon-halo-color': 'hsl(0, 0%, 100%)',
-        'icon-halo-width': 1,
-      },
-    });
+    // Only add the individual point icons layer IF there are actual PNG icons loaded
+    // Otherwise, it will just show the background circles
+    if (loadedIconIds.size > 1 || loadedIconIds.has(FALLBACK_ICON_ID)) { // Check if any non-fallback icons or at least fallback is present
+        map.addLayer({
+            id: 'unclustered-point-icons',
+            type: 'symbol',
+            source: 'points',
+            filter: ['!', ['has', 'point_count']],
+            layout: {
+                'icon-image': ['get', 'cropType'], // This will correctly use the ID from toGeoJSON
+                'icon-size': [
+                    'interpolate',
+                    ['linear'],
+                    ['zoom'],
+                    10, 0.4,
+                    16, 0.6,
+                ],
+                'icon-allow-overlap': true,
+            },
+            paint: {
+                'icon-halo-color': 'hsl(0, 0%, 100%)',
+                'icon-halo-width': 1,
+            },
+        });
+    }
 
-    // Add event handlers
+
+    // Add event handlers (should be added only once during initial layer setup)
     map.on('click', 'clusters', async (e) => {
       const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
       const clusterId = features[0]?.properties?.cluster_id;
@@ -642,7 +741,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const clusterId = features[0]?.properties?.cluster_id;
       const pointCount = features[0]?.properties?.point_count;
       
-      if (clusterId && pointCount <= 8) {  
+      if (clusterId && pointCount <= 8) {  
         const source = map.getSource('points') as mapboxgl.GeoJSONSource;
         source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
           if (!err && leaves) {
@@ -723,7 +822,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <div className="absolute top-4 left-4 bg-white p-2 rounded shadow text-xs">
           <div>Map Loaded: {isMapLoaded ? '✅' : '❌'}</div>
           <div>Icons Initialized: {iconsInitialized ? '✅' : '❌'}</div>
-          <div>Loaded Icons: {loadedIconIds.size}</div>
+          <div>Loaded Icons (including fallbacks): {loadedIconIds.size}</div>
           <div>Data Points: {filteredData.length}</div>
         </div>
       )}
