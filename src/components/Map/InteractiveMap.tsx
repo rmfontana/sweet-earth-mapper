@@ -43,28 +43,27 @@ async function getMapboxToken() {
 }
 
 // --- HELPER FUNCTIONS FOR ICONS ---
+// Your Supabase Project Reference - YOU MUST REPLACE THIS WITH YOUR ACTUAL PROJECT REFERENCE
+const SUPABASE_PROJECT_REF = 'wbkzczcqlorsewoofwqe'; 
+
 // Helper function to get the *full URL* for the SVG file in Supabase Storage
 const getCropIconFileUrl = (mapboxIconId: string): string => {
-  const supabaseUrl = getSupabaseUrl();
-  const bucketName = 'crop-images'; // Your Supabase bucket name
-  // The database `name_normalized` should match this format for direct lookup
-  // We assume `mapboxIconId` is already normalized (e.g., 'bell_pepper')
-  const fullUrl = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${mapboxIconId}-uncolored.svg`;
-  console.log(`Attempting to load icon from URL: ${fullUrl}`); // <--- ADDED LOGGING HERE
+  const bucketName = 'crop-images'; // Your Supabase bucket name for crop icons
+  // Manually construct the public URL using the explicit projectRef
+  const fullUrl = `https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1/object/public/${bucketName}/${mapboxIconId}-uncolored.svg`;
+  console.log(`Constructed icon URL: ${fullUrl}`); 
   return fullUrl;
 };
 
 // Helper function to get the *ID string* Mapbox will use internally for the image
-// This ID should match the `cropType` property in the GeoJSON features.
 const getMapboxIconId = (cropType: string): string => {
-    // This assumes your database's `name_normalized` column is already `lowercase_with_underscores`
     return cropType.toLowerCase().replace(/ /g, '_');
 };
 
 // Define a default fallback icon ID and its URL
-const FALLBACK_ICON_RAW_NAME = 'default'; // The base name of your default icon file (e.g., 'default-uncolored.svg')
-const FALLBACK_ICON_ID = getMapboxIconId(FALLBACK_ICON_RAW_NAME); // e.g., 'default'
-const FALLBACK_ICON_FILE_URL = getCropIconFileUrl(FALLBACK_ICON_ID); // e.g., '.../default-uncolored.svg'
+const FALLBACK_ICON_RAW_NAME = 'default';
+const FALLBACK_ICON_ID = getMapboxIconId(FALLBACK_ICON_RAW_NAME);
+const FALLBACK_ICON_FILE_URL = getCropIconFileUrl(FALLBACK_ICON_ID);
 
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ 
@@ -106,10 +105,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   useEffect(() => {
     console.log('Applying filters to', allData.length, 'submissions');
-    
-    // Apply filters directly since nearbyOnly is no longer part of the filter system
     const filtered = applyFilters(allData, filters, isAdmin);
-
     console.log('Filtered results:', filtered.length, 'submissions');
     setFilteredData(filtered);
   }, [filters, allData, isAdmin]);
@@ -118,15 +114,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   useEffect(() => {
     if (nearMeTriggered && userLocation && mapRef.current) {
       const map = mapRef.current;
-      
-      // Zoom to user location with a tight zoom level to show nearby area
       map.easeTo({
         center: [userLocation.lng, userLocation.lat],
-        zoom: 14, // Tight zoom to focus on nearby area
+        zoom: 14,
         duration: 1000,
       });
-
-      // Call the callback to reset the trigger
       onNearMeHandled?.();
     }
   }, [nearMeTriggered, userLocation, onNearMeHandled]);
@@ -134,43 +126,34 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.resize();
-  
-    // Optional: zoom out a bit to show expanded map area when filters hide
     if (!showFilters) {
       const currentZoom = mapRef.current.getZoom();
       mapRef.current.easeTo({
-        zoom: Math.max(currentZoom - 1, 5), // zoom out by 1, min zoom 5
+        zoom: Math.max(currentZoom - 1, 5),
         duration: 700,
       });
     }
   }, [showFilters]);
   
-  // Fallback color if loading or no thresholds
   const getColor = (cropType: string, brixLevel: number) => {
-    if (loading) return '#d1d5db'; // gray fallback hex
+    if (loading) return '#d1d5db';
     const thresholds = cache[cropType];
-    // Use your getBrixColor utility from your utils, which expects thresholds
     return getBrixColor(brixLevel, thresholds, 'hex');
   };
 
-  // Spiderfy cluster function - MODIFIED to use icons for individual spider points
   const spiderfyCluster = (centerCoords: [number, number], points: BrixDataPoint[], map: mapboxgl.Map) => {
-    // Clear any existing spiderfied points
     setSpiderfiedPoints([]);
     
-    // Remove existing spider layers and sources if they exist
     if (map.getSource('spider-points')) {
       map.removeLayer('spider-lines');
-      map.removeLayer('spider-points-icons'); // Remove the old icon layer for spider points
-      map.removeLayer('spider-points-circle-bg'); // Remove the old circle layer for spider points
+      map.removeLayer('spider-points-icons');
+      map.removeLayer('spider-points-circle-bg');
       map.removeSource('spider-points');
       map.removeSource('spider-lines');
     }
 
-    // Use spiral distribution for better spacing — works well for many points
-    const spiderRadiusBase = 60; // base radius in pixels
+    const spiderRadiusBase = 60;
     const features = points.map((point, index) => {
-      // Spiral formula for angle and distance to avoid overlap
       const angle = 0.5 * index;
       const radius = spiderRadiusBase * (1 + 0.15 * angle);
 
@@ -181,7 +164,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const newPixelCoords = new mapboxgl.Point(pixelCenter.x + offsetX, pixelCenter.y + offsetY);
       const newGeoCoords = map.unproject(newPixelCoords);
       
-      // Determine the icon ID for this specific spiderfied point
       const normalizedCropType = getMapboxIconId(point.cropType);
       const iconIdToUse = loadedIconIds.has(normalizedCropType) ? normalizedCropType : FALLBACK_ICON_ID;
 
@@ -196,13 +178,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           brix: point.brixLevel,
           color: getColor(point.cropType, point.brixLevel),
           raw: JSON.stringify(point),
-          // Ensure cropType property is the actual loaded icon ID or the fallback
           cropType: iconIdToUse, 
         },
       };
     });
 
-    // Spider lines from center to each point
     const spiderLines = points.map((point, index) => {
       const angle = 0.5 * index;
       const radius = spiderRadiusBase * (1 + 0.15 * angle);
@@ -224,7 +204,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       };
     });
     
-    // Add spider lines
     map.addSource('spider-lines', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: spiderLines },
@@ -241,13 +220,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       },
     });
 
-    // Add spider points as a GeoJSON source
     map.addSource('spider-points', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features },
     });
 
-    // Layer for the Brix color circle background for spiderfied points
     map.addLayer({
       id: 'spider-points-circle-bg',
       type: 'circle',
@@ -261,24 +238,21 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       },
     });
 
-    // Layer for the crop icons on spiderfied points
     map.addLayer({
       id: 'spider-points-icons',
-      type: 'symbol', // Changed to symbol for icons
+      type: 'symbol',
       source: 'spider-points',
       layout: {
-        // Use the cropType property directly, as it's guaranteed to be a loaded ID or fallback
         'icon-image': ['get', 'cropType'],
-        'icon-size': 0.7, // Adjust size as needed for spider points
+        'icon-size': 0.7,
         'icon-allow-overlap': true,
       },
       paint: {
-        'icon-halo-color': 'hsl(0, 0%, 100%)', // Optional: white halo for better contrast
+        'icon-halo-color': 'hsl(0, 0%, 100%)',
         'icon-halo-width': 1,
       },
     });
 
-    // Add click handler for spider points (listen on the icon layer)
     map.on('click', 'spider-points-icons', (e) => { 
       const feature = e.features?.[0];
       if (feature?.properties?.raw) {
@@ -287,7 +261,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
     });
 
-    // Add hover effects for spider points (listen on the icon layer)
     map.on('mouseenter', 'spider-points-icons', () => {
       map.getCanvas().style.cursor = 'pointer';
     });
@@ -299,22 +272,20 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     setSpiderfiedPoints(points);
   };
 
-  // Clear spiderfied points when clicking elsewhere
   const clearSpiderfy = () => {
     if (!mapRef.current) return;
     const map = mapRef.current;
     
     if (map.getSource('spider-points')) {
       map.removeLayer('spider-lines');
-      map.removeLayer('spider-points-icons'); // Remove icon layer
-      map.removeLayer('spider-points-circle-bg'); // Remove circle layer
+      map.removeLayer('spider-points-icons');
+      map.removeLayer('spider-points-circle-bg');
       map.removeSource('spider-points');
       map.removeSource('spider-lines');
     }
     setSpiderfiedPoints([]);
   };
 
-  // Initialize Mapbox map once
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
   
@@ -359,8 +330,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     };
   }, []);
 
-  // Helper function to convert data points to GeoJSON format
-  // This function now uses the loadedIconIds to ensure `cropType` property is always a valid image ID.
   const toGeoJSON = useCallback((data: BrixDataPoint[]): GeoJSON.FeatureCollection => {
     console.log('Converting', data.length, 'data points to GeoJSON');
     
@@ -370,9 +339,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         return null;
       }
 
-      // Determine the icon ID to use for this specific cropType
       const normalizedCropType = getMapboxIconId(point.cropType);
-      // If the specific icon was loaded, use its ID; otherwise, use the fallback ID
       const iconIdToUse = loadedIconIds.has(normalizedCropType) ? normalizedCropType : FALLBACK_ICON_ID;
 
       return {
@@ -386,7 +353,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           brix: point.brixLevel,
           color: getColor(point.cropType, point.brixLevel),
           raw: JSON.stringify(point),
-          // IMPORTANT: The `cropType` property now directly holds the Mapbox image ID
           cropType: iconIdToUse, 
         },
       };
@@ -398,10 +364,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       type: 'FeatureCollection',
       features: features as any[],
     };
-  }, [getColor, loadedIconIds]); // Depend on loadedIconIds to re-generate GeoJSON if icons change
+  }, [getColor, loadedIconIds]);
 
-
-  // Effect to load images and setup map layers
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
 
@@ -410,38 +374,47 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     // Collect all unique normalized crop types from filtered data
     const uniqueNormalizedCropTypes = new Set<string>();
     filteredData.forEach(point => {
-      // Ensure we get the Mapbox ID for the crop type
       uniqueNormalizedCropTypes.add(getMapboxIconId(point.cropType));
     });
 
-    const currentLoadedIcons = new Set<string>();
     const loadImagesPromises: Promise<void>[] = [];
+    const iconsToAddToMapbox = new Set<string>();
 
-    // Function to load an individual image using an Image object
-    const loadImageAndAddtoMap = (id: string, url: string): Promise<void> => {
-        return new Promise(resolve => {
-            if (map.hasImage(id)) {
-                currentLoadedIcons.add(id);
-                resolve();
-                return;
+    // Function to load an individual image using fetch (as blob) and add to map
+    const loadImageAndAddtoMap = async (id: string, url: string): Promise<void> => {
+        if (map.hasImage(id)) {
+            iconsToAddToMapbox.add(id);
+            return;
+        }
+
+        try {
+            // Use fetch to retrieve the image as a blob
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status} for URL: ${url}`);
             }
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob); // Create a local URL for the blob
+
             const img = new Image();
             img.onload = () => {
                 try {
-                    map.addImage(id, img); // Removed pixelRatio for now
-                    currentLoadedIcons.add(id);
+                    map.addImage(id, img);
+                    iconsToAddToMapbox.add(id);
                 } catch (e) {
-                    console.error(`Error adding image ${id} to map:`, e);
+                    console.error(`Error adding image ${id} to map after loading blob:`, e);
+                } finally {
+                    URL.revokeObjectURL(objectUrl); // Clean up the object URL after Mapbox uses it
                 }
-                resolve();
             };
             img.onerror = (e) => {
-                // *** IMPORTANT DIAGNOSTIC LOGGING ***
-                console.error(`Failed to load image for ID: ${id} from URL: ${url}. Error:`, e); 
-                resolve(); // Resolve even on error to not block Promise.all
+                console.error(`Failed to process image blob for ID: ${id} from URL: ${url}. Error:`, e);
+                URL.revokeObjectURL(objectUrl); // Clean up on error too
             };
-            img.src = url;
-        });
+            img.src = objectUrl;
+        } catch (e: any) {
+            console.error(`Failed to fetch image for ID: ${id} from URL: ${url}. Error:`, e.message || e);
+        }
     };
 
     // 1. Always load the fallback icon first
@@ -449,16 +422,19 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
     // 2. Dynamically load crop icons for unique types
     uniqueNormalizedCropTypes.forEach(iconId => {
-        // Skip fallback icon if it's already in the set, to avoid redundant loading
         if (iconId === FALLBACK_ICON_ID) return; 
         loadImagesPromises.push(loadImageAndAddtoMap(iconId, getCropIconFileUrl(iconId)));
     });
 
-    // Wait for all images to load before proceeding with layer setup
     Promise.all(loadImagesPromises).then(() => {
-        // Update the state with newly loaded icons
-        setLoadedIconIds(currentLoadedIcons);
-
+        setLoadedIconIds(prev => {
+            const newSet = new Set([...prev, ...iconsToAddToMapbox]);
+            if (newSet.size !== prev.size) {
+                return newSet;
+            }
+            return prev; 
+        });
+        
         // Remove existing layers and sources to ensure a clean update
         if (map.getLayer('unclustered-point-icons')) map.removeLayer('unclustered-point-icons');
         if (map.getLayer('unclustered-point-circle-bg')) map.removeLayer('unclustered-point-circle-bg');
@@ -470,14 +446,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         console.log('Adding source and layers with', filteredData.length, 'points');
         map.addSource('points', {
           type: 'geojson',
-          // Use the `toGeoJSON` function, which now accounts for `loadedIconIds`
           data: toGeoJSON(filteredData),
           cluster: true,
-          clusterMaxZoom: 13, // Lower for better UX - individual points show sooner
-          clusterRadius: 35, // Smaller radius for less aggressive clustering
+          clusterMaxZoom: 13,
+          clusterRadius: 35,
         });
 
-        // Enhanced cluster styling with better visual hierarchy (remains circles for now)
         map.addLayer({
           id: 'clusters',
           type: 'circle',
@@ -487,16 +461,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             'circle-color': [
               'step',
               ['get', 'point_count'],
-              'hsl(220, 70%, 60%)', // Primary blue for small clusters
+              'hsl(220, 70%, 60%)',
               5,
-              'hsl(45, 80%, 55%)', // Warning yellow for medium clusters  
+              'hsl(45, 80%, 55%)',  
               15,
-              'hsl(350, 70%, 60%)', // Destructive red for large clusters
+              'hsl(350, 70%, 60%)',
             ],
             'circle-radius': [
               'step',
               ['get', 'point_count'],
-              25, // Larger base size
+              25,
               5,
               35,
               15,
@@ -504,8 +478,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             ],
             'circle-stroke-width': 3,
             'circle-stroke-color': 'hsl(0, 0%, 100%)',
-            'circle-stroke-opacity': 0.8,
-            'circle-opacity': 0.85,
+            'circle-opacity': 0.8,
+            'circle-stroke-opacity': 0.85,
           },
         });
 
@@ -526,8 +500,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           },
         });
 
-        // --- NEW LAYERS FOR UNCLUSTERED POINTS (ICONS) ---
-        // Layer for the Brix color circle background for unclustered points
         map.addLayer({
           id: 'unclustered-point-circle-bg',
           type: 'circle',
@@ -539,8 +511,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               'interpolate',
               ['linear'],
               ['zoom'],
-              10, 10, // A bit larger circle behind the icon at lower zooms
-              16, 25, // Larger circle at higher zooms
+              10, 10,
+              16, 25,
             ],
             'circle-stroke-width': 2,
             'circle-stroke-color': 'hsl(0, 0%, 100%)',
@@ -548,31 +520,28 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           },
         });
 
-        // Layer for the crop icons on top of the circles
         map.addLayer({
           id: 'unclustered-point-icons',
-          type: 'symbol', // Change type to 'symbol' for icons
+          type: 'symbol',
           source: 'points',
           filter: ['!', ['has', 'point_count']],
           layout: {
-            // Use the cropType property directly, as it's guaranteed to be a loaded ID or fallback
             'icon-image': ['get', 'cropType'],
             'icon-size': [
               'interpolate',
               ['linear'],
               ['zoom'],
-              10, 0.5, // Smaller icon at lower zooms
-              16, 0.75, // Larger icon at higher zooms
+              10, 0.5,
+              16, 0.75,
             ],
-            'icon-allow-overlap': true, // Allow icons to overlap if necessary
+            'icon-allow-overlap': true,
           },
           paint: {
-            'icon-halo-color': 'hsl(0, 0%, 100%)', // Optional: white halo for better contrast
+            'icon-halo-color': 'hsl(0, 0%, 100%)',
             'icon-halo-width': 1,
           },
         });
 
-        // Smart cluster expansion or spiderfying based on zoom level
         map.on('click', 'clusters', async (e) => {
           const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
           const clusterId = features[0]?.properties?.cluster_id;
@@ -584,10 +553,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           const coords = features[0].geometry.coordinates as [number, number];
           const currentZoom = map.getZoom();
         
-          // If we're at high zoom or small cluster, spiderfy instead of zooming
           if (currentZoom >= 13 || pointCount <= 5) {
             try {
-              // Get cluster leaves for spiderfying
               source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
                 if (err || !leaves) {
                   console.error('Error getting cluster leaves:', err);
@@ -604,7 +571,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               console.error('Error during spiderfying:', error);
             }
           } else {
-            // Normal zoom expansion for lower zoom levels
             source.getClusterExpansionZoom(clusterId, (err, zoom) => {
               if (err) {
                 console.error('Error getting cluster expansion zoom:', err);
@@ -620,13 +586,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           }
         });
 
-        // Cluster hover preview
         map.on('mouseenter', 'clusters', (e) => {
           const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
           const clusterId = features[0]?.properties?.cluster_id;
           const pointCount = features[0]?.properties?.point_count;
           
-          if (clusterId && pointCount <= 8) {  // Only show preview for smaller clusters
+          if (clusterId && pointCount <= 8) {  
             const source = map.getSource('points') as mapboxgl.GeoJSONSource;
             source.getClusterLeaves(clusterId, pointCount, 0, (err, leaves) => {
               if (!err && leaves) {
@@ -647,14 +612,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           setClusterPreview(null);
         });
 
-        // Update click handler for the new symbol layers for unclustered points
         map.on('click', ['unclustered-point-circle-bg', 'unclustered-point-icons'], (e) => {
           const feature = e.features?.[0];
           const point = feature?.properties?.raw && JSON.parse(feature.properties.raw);
           if (point) setSelectedPoint(point);
         });
 
-        // Enhanced hover effects for clusters
         map.on('mouseenter', 'clusters', () => {
           map.getCanvas().style.cursor = 'pointer';
         });
@@ -662,7 +625,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           map.getCanvas().style.cursor = '';
         });
 
-        // Hover effects for unclustered points (listen on both layers for better UX)
         map.on('mouseenter', ['unclustered-point-circle-bg', 'unclustered-point-icons'], () => {
           map.getCanvas().style.cursor = 'pointer';
         });
@@ -670,16 +632,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           map.getCanvas().style.cursor = '';
         });
 
-        // Clear spiderfied points when clicking elsewhere on map
         map.on('click', (e) => {
           const features = map.queryRenderedFeatures(e.point);
-          // Check if the click was not on any points layer (cluster or unclustered/spider)
           if (!features.some(f => f.source === 'points' || f.source === 'spider-points')) {
             clearSpiderfy();
           }
         });
 
-        // Fit map to show all data points initially
         if (filteredData.length > 0) {
           const bounds = new mapboxgl.LngLatBounds();
           filteredData.forEach(point => {
@@ -692,14 +651,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }).catch(error => {
         console.error("Error in image loading or map setup chain:", error);
     });
-  }, [isMapLoaded, filteredData, toGeoJSON]); // Added toGeoJSON to dependencies due to useCallback
+  }, [isMapLoaded, filteredData, toGeoJSON]);
 
-  // Add user location marker (optional - could add a simple marker instead of radius)
   useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
-
-    // Clean up any existing user location indicators
     if (map.getLayer('user-location')) map.removeLayer('user-location');
     if (map.getSource('user-location')) map.removeSource('user-location');
   }, [userLocation]);
@@ -709,7 +665,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
 
-      {/* Cluster Preview Tooltip (remains unchanged) */}
       {clusterPreview && (
         <div 
           className="absolute pointer-events-none z-40"
@@ -728,7 +683,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 <div className="flex justify-between">
                   <span>Crops:</span>
                   <span className="font-medium">
-                    {/* Display original cropType here for readability in UI */}
                     {[...new Set(clusterPreview.points.map(p => p.cropType))].slice(0, 2).join(', ')}
                     {[...new Set(clusterPreview.points.map(p => p.cropType))].length > 2 && '...'}
                   </span>
@@ -754,7 +708,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         </div>
       )}
 
-      {/* Selected Point Info Card (remains unchanged) */}
       {selectedPoint && (
         <div className="absolute inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <Card className="w-full max-w-md bg-white">
