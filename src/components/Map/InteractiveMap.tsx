@@ -275,7 +275,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       source: 'spider-points',
       layout: {
         'icon-image': ['get', 'cropType'],
-        'icon-size': 0.7,
+        'icon-size': 0.5, // Adjusted icon size
         'icon-allow-overlap': true,
       },
       paint: {
@@ -562,7 +562,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     console.log('Creating/updating map layers with', filteredData.length, 'data points');
 
     // Remove existing layers and source to ensure a clean update
-    const layersToRemove = ['clusters', 'cluster-count', 'unclustered-point-circle-bg', 'unclustered-point-icons', 'spider-lines', 'spider-points-icons', 'spider-points-circle-bg'];
+    const layersToRemove = ['clusters', 'cluster-count', 'cluster-icons', 'unclustered-point-circle-bg', 'unclustered-point-icons', 'spider-lines', 'spider-points-icons', 'spider-points-circle-bg'];
     layersToRemove.forEach(layerId => {
       if (map.getLayer(layerId)) {
         map.removeLayer(layerId);
@@ -582,7 +582,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       cluster: true,
       clusterMaxZoom: 13,
       clusterRadius: 35,
-      // Removed the problematic 'clusterProperties' definition
+      clusterProperties: {
+        // Aggregate 'cropType' to show a representative icon for clusters
+        'dominant_crop_type': ['first', ['get', 'cropType']] 
+      }
     });
 
     // Add cluster circles
@@ -635,6 +638,32 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       },
     });
 
+    // New layer for cluster icons
+    if (loadedIconIds.size > 0) { // Only add if we have at least the fallback or real icons
+      map.addLayer({
+        id: 'cluster-icons',
+        type: 'symbol',
+        source: 'points',
+        filter: ['has', 'point_count'], // Apply to clusters only
+        layout: {
+          'icon-image': ['get', 'dominant_crop_type'], // Use the aggregated dominant crop type
+          'icon-size': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10, 0.5, // Smaller on lower zoom
+            16, 0.7, // Larger on higher zoom
+          ], 
+          'icon-allow-overlap': true,
+        },
+        paint: {
+          'icon-halo-color': 'hsl(0, 0%, 100%)',
+          'icon-halo-width': 1,
+        },
+      });
+    }
+
+
     // Add individual point background circles (always created)
     map.addLayer({
       id: 'unclustered-point-circle-bg',
@@ -670,8 +699,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                     'interpolate',
                     ['linear'],
                     ['zoom'],
-                    10, 0.4,
-                    16, 0.6,
+                    10, 0.3, // Adjusted size
+                    16, 0.5, // Adjusted size
                 ],
                 'icon-allow-overlap': true,
             },
@@ -763,10 +792,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     });
 
     // Cursor changes
-    map.on('mouseenter', 'clusters', () => {
+    map.on('mouseenter', ['clusters', 'cluster-icons'], () => {
       map.getCanvas().style.cursor = 'pointer';
     });
-    map.on('mouseleave', 'clusters', () => {
+    map.on('mouseleave', ['clusters', 'cluster-icons'], () => {
       map.getCanvas().style.cursor = '';
     });
 
