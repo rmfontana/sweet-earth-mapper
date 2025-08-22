@@ -52,11 +52,10 @@ const getCropIconFileUrl = (mapboxIconId: string): string => {
 };
 
 const getMapboxIconIdFromPoint = (point: BrixDataPoint): string => {
-  if (point.name_normalized) {
-    return point.name_normalized.toLowerCase().replace(/ /g, '_');
-  }
-  return point.cropType.toLowerCase().replace(/ /g, '_');
+  const name = point.name_normalized || point.cropType;
+  return name;
 };
+
 
 const FALLBACK_ICON_RAW_NAME = 'default';
 const FALLBACK_ICON_ID = getMapboxIconIdFromPoint({
@@ -296,7 +295,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         type: 'geojson',
         data: toGeoJSON(filteredData),
         cluster: true,
-        clusterMaxZoom: 8,
+        clusterMaxZoom: 3,
         clusterRadius: 35,
         clusterProperties: {
           'min_brix': ['min', ['get', 'brix']],
@@ -385,8 +384,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             'interpolate',
             ['linear'],
             ['zoom'],
-            10, 0.05,
-            16, 0.1,
+            10, 0.04,
+            16, 0.08,
           ],
           'icon-allow-overlap': true,
         },
