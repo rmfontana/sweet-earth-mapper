@@ -96,6 +96,30 @@ const createFallbackCircleImage = (size = 30, color = '#3182CE') => {
   return canvas;
 };
 
+// Define a generic cluster icon ID
+const GENERIC_CLUSTER_ICON_ID = 'generic_cluster_icon';
+
+// Create a simple canvas for a generic cluster icon (e.g., three dots)
+const createGenericClusterImage = (size = 30, color = '#6B7280') => { // Grey color for neutrality
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  if (context) {
+    context.clearRect(0, 0, size, size);
+    context.fillStyle = color;
+    context.beginPath();
+    context.arc(size * 0.3, size * 0.3, size * 0.1, 0, Math.PI * 2);
+    context.arc(size * 0.7, size * 0.3, size * 0.1, 0, Math.PI * 2);
+    context.arc(size * 0.5, size * 0.7, size * 0.1, 0, Math.PI * 2);
+    context.fill();
+    context.lineWidth = 2;
+    context.strokeStyle = '#FFFFFF';
+    context.stroke();
+  }
+  return canvas;
+};
+
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({ 
   userLocation, 
@@ -178,7 +202,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (map.getSource('spider-points')) {
       map.removeLayer('spider-lines');
       map.removeLayer('spider-points-icons');
-      // Removed spider-points-circle-bg
+      // Removed spider-points-circle-bg explicitly if it was somehow added
       if (map.getLayer('spider-points-circle-bg')) map.removeLayer('spider-points-circle-bg'); 
       map.removeSource('spider-points');
       map.removeSource('spider-lines');
@@ -257,20 +281,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       data: { type: 'FeatureCollection', features },
     });
 
-    // Removed spider-points-circle-bg as requested
-    // map.addLayer({
-    //   id: 'spider-points-circle-bg',
-    //   type: 'circle',
-    //   source: 'spider-points',
-    //   paint: {
-    //     'circle-color': ['get', 'color'],
-    //     'circle-radius': 10,
-    //     'circle-stroke-width': 2,
-    //     'circle-stroke-color': '#fff',
-    //     'circle-opacity': 0.9,
-    //   },
-    // });
-
     map.addLayer({
       id: 'spider-points-icons',
       type: 'symbol',
@@ -281,8 +291,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           'interpolate',
           ['linear'],
           ['zoom'],
-          10, 0.1,  // Even smaller
-          16, 0.2, // Even smaller
+          10, 0.15,  // Smaller
+          16, 0.25, // Smaller
         ],
         'icon-allow-overlap': true,
       },
@@ -318,7 +328,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (map.getSource('spider-points')) {
       map.removeLayer('spider-lines');
       map.removeLayer('spider-points-icons');
-      // Removed spider-points-circle-bg
+      // Removed spider-points-circle-bg explicitly if it was somehow added
       if (map.getLayer('spider-points-circle-bg')) map.removeLayer('spider-points-circle-bg');
       map.removeSource('spider-points');
       map.removeSource('spider-lines');
@@ -477,16 +487,41 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         }
     }));
 
+    // Load generic cluster icon (always a generated canvas for consistency)
+    loadImagesPromises.push(new Promise(resolve => {
+        if (map.hasImage(GENERIC_CLUSTER_ICON_ID)) {
+            newLoadedIcons.add(GENERIC_CLUSTER_ICON_ID);
+            console.log(`Generic cluster icon "${GENERIC_CLUSTER_ICON_ID}" already exists.`);
+            resolve();
+            return;
+        }
+        try {
+            const clusterCanvas = createGenericClusterImage(30); 
+            createImageBitmap(clusterCanvas).then(imageBitmap => {
+                map.addImage(GENERIC_CLUSTER_ICON_ID, imageBitmap, { pixelRatio: window.devicePixelRatio || 1 });
+                newLoadedIcons.add(GENERIC_CLUSTER_ICON_ID);
+                console.log(`SUCCESS: Added generated generic cluster icon for "${GENERIC_CLUSTER_ICON_ID}".`);
+                resolve();
+            }).catch(e => {
+                console.error(`ERROR: Failed to create ImageBitmap from canvas for generic cluster icon "${GENERIC_CLUSTER_ICON_ID}". Reason:`, e);
+                resolve();
+            });
+        } catch (e) {
+            console.error(`ERROR: Failed to create/add generated generic cluster icon for "${GENERIC_CLUSTER_ICON_ID}". Reason:`, e);
+            resolve();
+        }
+    }));
+
 
     // Load all unique crop icons
     uniqueNormalizedCropTypes.forEach(iconId => {
-      if (iconId === FALLBACK_ICON_ID) return;
+      if (iconId === FALLBACK_ICON_ID || iconId === GENERIC_CLUSTER_ICON_ID) return;
       loadImagesPromises.push(loadImageAndAddToMap(iconId, getCropIconFileUrl(iconId)));
     });
 
     // Add a general timeout to ensure map layers are eventually created even if all icons fail
     const allIconsLoadPromise = Promise.all(loadImagesPromises).then(() => {
-      console.log(`Loaded ${newLoadedIcons.size} icons successfully (including fallbacks).`);
+      console.log(`Loaded ${newLoadedIcons.size} icons successfully (including fallbacks and generic cluster icon).`);
       setLoadedIconIds(newLoadedIcons);
       setIconsInitialized(true);
     }).catch(error => {
@@ -505,6 +540,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 const updatedSet = new Set(prev);
                 if (!updatedSet.has(FALLBACK_ICON_ID)) {
                     updatedSet.add(FALLBACK_ICON_ID);
+                }
+                if (!updatedSet.has(GENERIC_CLUSTER_ICON_ID)) {
+                    updatedSet.add(GENERIC_CLUSTER_ICON_ID);
                 }
                 return updatedSet;
             });
@@ -571,12 +609,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     console.log('Creating/updating map layers with', filteredData.length, 'data points');
 
     // Remove existing layers and source to ensure a clean update
-    const layersToRemove = ['clusters', 'cluster-count', 'cluster-icons', 'unclustered-point-circle-bg', 'unclustered-point-icons', 'spider-lines', 'spider-points-icons', 'spider-points-circle-bg'];
+    const layersToRemove = ['clusters', 'cluster-count', 'cluster-icons', 'unclustered-point-icons', 'spider-lines', 'spider-points-icons'];
     layersToRemove.forEach(layerId => {
       if (map.getLayer(layerId)) {
         map.removeLayer(layerId);
       }
     });
+    // Explicitly remove background circle layers if they somehow exist
+    if (map.getLayer('unclustered-point-circle-bg')) map.removeLayer('unclustered-point-circle-bg');
+    if (map.getLayer('spider-points-circle-bg')) map.removeLayer('spider-points-circle-bg');
+
     const sourcesToRemove = ['points', 'spider-points', 'spider-lines'];
     sourcesToRemove.forEach(sourceId => {
         if (map.getSource(sourceId)) {
@@ -592,44 +634,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       clusterMaxZoom: 13,
       clusterRadius: 35,
       clusterProperties: {
-        // Aggregate 'cropType' to show a representative icon for clusters
+        // Aggregate 'cropType' for the cluster preview, not the main icon
         'dominant_crop_type': ['first', ['get', 'cropType']] 
       }
     });
 
-    // Removed the 'clusters' layer to replace large circles with icons for clusters
-    // map.addLayer({
-    //   id: 'clusters',
-    //   type: 'circle',
-    //   source: 'points',
-    //   filter: ['has', 'point_count'],
-    //   paint: {
-    //     'circle-color': [
-    //       'step',
-    //       ['get', 'point_count'],
-    //       'hsl(220, 70%, 60%)',
-    //       5,
-    //       'hsl(45, 80%, 55%)',  
-    //       15,
-    //       'hsl(350, 70%, 60%)',
-    //     ],
-    //     'circle-radius': [
-    //       'step',
-    //       ['get', 'point_count'],
-    //       25,
-    //       5,
-    //       35,
-    //       15,
-    //       45,
-    //     ],
-    //     'circle-stroke-width': 3,
-    //     'circle-stroke-color': 'hsl(0, 0%, 100%)',
-    //     'circle-opacity': 0.8,
-    //     'circle-stroke-opacity': 0.85,
-    //   },
-    // });
-
-    // Add cluster count labels (now displayed over the cluster icon)
+    // Add cluster count labels (displayed below the generic cluster icon)
     map.addLayer({
       id: 'cluster-count',
       type: 'symbol',
@@ -638,31 +648,31 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       layout: {
         'text-field': '{point_count_abbreviated}',
         'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-        'text-size': 12, // Slightly smaller text for better icon integration
+        'text-size': 12, 
         'text-offset': [0, 1.0], // Offset text further below the icon
       },
       paint: {
-        'text-color': 'hsl(0, 0%, 0%)', // Changed to black for better contrast on icon
+        'text-color': 'hsl(0, 0%, 0%)', // Black text for better contrast
         'text-halo-color': 'hsl(0, 0%, 100%)',
         'text-halo-width': 1,
       },
     });
 
-    // New layer for cluster icons (now the primary visual for clusters)
-    if (loadedIconIds.size > 0) { 
+    // Layer for generic cluster icons
+    if (loadedIconIds.has(GENERIC_CLUSTER_ICON_ID)) { 
       map.addLayer({
         id: 'cluster-icons',
         type: 'symbol',
         source: 'points',
         filter: ['has', 'point_count'], // Apply to clusters only
         layout: {
-          'icon-image': ['get', 'dominant_crop_type'], // Use the aggregated dominant crop type
+          'icon-image': GENERIC_CLUSTER_ICON_ID, // Use the generic cluster icon
           'icon-size': [
             'interpolate',
             ['linear'],
             ['zoom'],
-            10, 0.15, // Adjusted, even smaller
-            16, 0.25, // Adjusted, even smaller
+            10, 0.3, // Adjusted size
+            16, 0.45, // Adjusted size
           ], 
           'icon-allow-overlap': true,
         },
@@ -672,31 +682,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         },
       });
     }
-
-    // Removed individual point background circles
-    if (map.getLayer('unclustered-point-circle-bg')) map.removeLayer('unclustered-point-circle-bg');
-    // map.addLayer({
-    //   id: 'unclustered-point-circle-bg',
-    //   type: 'circle',
-    //   source: 'points',
-    //   filter: ['!', ['has', 'point_count']],
-    //   paint: {
-    //     'circle-color': ['get', 'color'],
-    //     'circle-radius': [
-    //       'interpolate',
-    //       ['linear'],
-    //       ['zoom'],
-    //       10, 10, // Slightly smaller radius
-    //       16, 16, // Slightly smaller radius
-    //     ],
-    //     'circle-stroke-width': 2,
-    //     'circle-stroke-color': '#fff',
-    //     'circle-opacity': 0.9,
-    //   },
-    // });
-
-    // Only add the individual point icons layer IF there are actual PNG icons loaded
-    // Otherwise, it will just show the fallback circle (if PNGs fail for that crop type)
+    
+    // Layer for individual point icons (no background circle)
     if (loadedIconIds.size > 0) { 
         map.addLayer({
             id: 'unclustered-point-icons',
@@ -704,13 +691,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             source: 'points',
             filter: ['!', ['has', 'point_count']],
             layout: {
-                'icon-image': ['get', 'cropType'], // This will correctly use the ID from toGeoJSON
+                'icon-image': ['get', 'cropType'], // Individual crop type icon
                 'icon-size': [
                     'interpolate',
                     ['linear'],
                     ['zoom'],
-                    10, 0.07, // Significantly smaller
-                    16, 0.15, // Significantly smaller
+                    10, 0.2, // Adjusted size
+                    16, 0.35, // Adjusted size
                 ],
                 'icon-allow-overlap': true,
             },
