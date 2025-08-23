@@ -9,7 +9,7 @@ import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { MapPin, Calendar, User, CheckCircle, Eye } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom'; // Corrected: Added useLocation
 import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
 import type { GeoJSON } from 'geojson';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
@@ -42,7 +42,6 @@ async function getMapboxToken() {
   }
 }
 
-// Your Supabase Project Reference - YOU MUST REPLACE THIS WITH YOUR ACTUAL PROJECT REFERENCE
 const SUPABASE_PROJECT_REF = 'wbkzczcqlorsewoofwqe';
 
 const getCropIconFileUrl = (mapboxIconId: string): string => {
@@ -88,6 +87,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   nearMeTriggered,
   onNearMeHandled
 }) => {
+  const location = useLocation(); // Corrected: Added useLocation
+  const { highlightedPoint } = location.state || {}; // Corrected: Destructure highlightedPoint from state
   const { filters, isAdmin } = useFilters();
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -180,6 +181,21 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     };
   }, []);
 
+  // Corrected: New useEffect to handle highlightedPoint from router state
+  useEffect(() => {
+    if (highlightedPoint && mapRef.current) {
+      const point = allData.find(d => d.id === highlightedPoint.id);
+      if (point && point.latitude && point.longitude) {
+        mapRef.current.easeTo({
+          center: [point.longitude, point.latitude],
+          zoom: 16,
+          duration: 1000,
+        });
+        setSelectedPoint(point);
+      }
+    }
+  }, [highlightedPoint, allData]);
+
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
 
@@ -232,9 +248,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
     });
 
-  }, [filteredData, isMapLoaded, getColor]); // Re-run effect when filtered data changes
-
-  // The rest of your component for displaying the info card remains the same
+  }, [filteredData, isMapLoaded, getColor]);
 
   return (
     <div className="relative w-full h-full flex flex-col">
