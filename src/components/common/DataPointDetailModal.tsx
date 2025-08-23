@@ -4,7 +4,6 @@ import { Button } from '../ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
@@ -29,7 +28,10 @@ import {
   ExternalLink,
   X,
   Edit,
-  AlertCircle
+  AlertCircle,
+  Loader2,
+  Image as ImageIcon,
+  CheckCircle,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { deleteSubmission } from '../../lib/fetchSubmissions';
@@ -38,23 +40,9 @@ import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { supabase } from '../../integrations/supabase/client';
-
-interface SupabaseSubmission {
-  id: string;
-  assessment_date: string;
-  crop_variety: string | null;
-  brix_value: number;
-  verified: boolean;
-  verified_at: string | null;
-  outlier_notes: string | null;
-  user_id: string;
-  location: { id: string; name: string; } | null;
-  crop: { id: string; name: string; category: string; } | null;
-  store: { id: string; name: string; } | null;
-  brand: { id: string; name: string; } | null;
-  user: { id: string; display_name: string; } | null;
-  verifier: { id: string; display_name: string; } | null;
-}
+import { getBrixColor } from '../../lib/getBrixColor';
+import { getBrixQuality } from '../../lib/getBrixQuality';
+import { useCropThresholds } from '../../contexts/CropThresholdContext';
 
 interface DataPointDetailModalProps {
   dataPoint: BrixDataPoint | null;
@@ -81,6 +69,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 }) => {
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
+  const { cache: thresholdsCache } = useCropThresholds();
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -102,23 +91,44 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const [locations, setLocations] = useState<any[]>([]);
   const [stores, setStores] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [imagesLoading, setImagesLoading] = useState(false);
 
-  // Combined useEffect for data fetching and state population
   useEffect(() => {
     async function fetchAllData() {
-      // The crucial change: Check if initialDataPoint exists
-      // If it doesn't, no data fetching or state population should occur
       if (!isOpen || !initialDataPoint) return;
 
       setError(null);
+      
+      const fetchImages = async () => {
+        setImagesLoading(true);
+        if (!initialDataPoint.images || !Array.isArray(initialDataPoint.images) || initialDataPoint.images.length === 0) {
+          setImageUrls([]);
+          setImagesLoading(false);
+          return;
+        }
+
+        const urls: string[] = [];
+        const projectRef = 'wbkzczcqlorsewoofwqe'; 
+        const bucketName = 'submission-images-bucket';
+
+        for (const imagePath of initialDataPoint.images) {
+          if (typeof imagePath === 'string' && imagePath !== '') {
+            const publicUrl = `https://${projectRef}.supabase.co/storage/v1/object/public/${bucketName}/${imagePath}`;
+            urls.push(publicUrl);
+          }
+        }
+        setImageUrls(urls);
+        setImagesLoading(false);
+      };
 
       try {
         const [brandsRes, cropsRes, locationsRes, storesRes, usersRes] = await Promise.all([
-          supabase.from('brands').select('id, name'),
-          supabase.from('crops').select('id, name, category'),
-          supabase.from('locations').select('id, name'),
-          supabase.from('stores').select('id, name'),
-          isAdmin ? supabase.from('users').select('id, display_name') : Promise.resolve({ data: [] }),
+          supabase.from('brands').select('id, name').order('name'),
+          supabase.from('crops').select('id, name, category').order('name'),
+          supabase.from('locations').select('id, name').order('name'),
+          supabase.from('stores').select('id, name').order('name'),
+          isAdmin ? supabase.from('users').select('id, display_name').order('display_name') : Promise.resolve({ data: [] }),
         ]);
 
         const { data: submissionData, error: submissionError } = await supabase.from('submissions').select(`
@@ -140,28 +150,23 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 
         if (submissionError) throw submissionError;
 
-        // Set state for dropdown options
         setBrands(brandsRes.data ?? []);
         setCrops(cropsRes.data ?? []);
         setLocations(locationsRes.data ?? []);
         setStores(storesRes.data ?? []);
         setUsers(usersRes.data ?? []);
 
-        // Populate form fields with detailed data
         if (submissionData) {
           setAssessmentDate(submissionData.assessment_date ? new Date(submissionData.assessment_date).toISOString().split('T')[0] : '');
-          setCropVariety(submissionData.crop_variety || '');
-          setNotes(submissionData.outlier_notes || '');
-          setBrixLevel(submissionData.brix_value ?? '');
+          setCropVariety(submissionData.crop_variety || initialDataPoint.variety || '');
+          setNotes(submissionData.outlier_notes || initialDataPoint.outlier_notes || '');
+          setBrixLevel(submissionData.brix_value ?? initialDataPoint.brixLevel);
           setVerified(submissionData.verified);
           setLocationId(isValidJoinedData(submissionData.location) ? submissionData.location.id : '');
           setCropId(isValidJoinedData(submissionData.crop) ? submissionData.crop.id : '');
           setStoreId(isValidJoinedData(submissionData.store) ? submissionData.store.id : '');
           setBrandId(isValidJoinedData(submissionData.brand) ? submissionData.brand.id : '');
           setVerifiedById(isValidJoinedData(submissionData.verifier) ? submissionData.verifier.id : '');
-        } else {
-          console.error('Submission data is null or undefined.');
-          setError('Failed to load submission details.');
         }
 
       } catch (err) {
@@ -174,9 +179,10 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
           variant: 'destructive',
         });
       }
+      fetchImages();
     }
     fetchAllData();
-  }, [isOpen, initialDataPoint, isAdmin, toast]); // Dependency array is correct
+  }, [isOpen, initialDataPoint, isAdmin, toast]);
 
   const handleDelete = async () => {
     if (!initialDataPoint || !user) return;
@@ -275,7 +281,6 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     }
   };
 
-  // Now we check initialDataPoint directly, which is always up-to-date
   if (!initialDataPoint) {
     return null;
   }
@@ -284,63 +289,33 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const canEdit = isAdmin || (isOwner && !initialDataPoint.verified);
   const canDelete = isAdmin || (isOwner && !initialDataPoint.verified);
   
-  const brixColor = (brix: number): string => {
-    if (
-      initialDataPoint.excellentBrix &&
-      brix >= initialDataPoint.excellentBrix
-    )
-      return 'bg-green-500 text-white';
-    if (initialDataPoint.goodBrix && brix >= initialDataPoint.goodBrix)
-      return 'bg-lime-500 text-white';
-    if (initialDataPoint.averageBrix && brix >= initialDataPoint.averageBrix)
-      return 'bg-yellow-500';
-    if (initialDataPoint.poorBrix && brix >= initialDataPoint.poorBrix)
-      return 'bg-orange-500';
-    return 'bg-red-500 text-white';
-  };
+  const cropThresholds = initialDataPoint.cropType ? (thresholdsCache[initialDataPoint.cropType] || {
+    poor: initialDataPoint.poorBrix,
+    average: initialDataPoint.averageBrix,
+    good: initialDataPoint.goodBrix,
+    excellent: initialDataPoint.excellentBrix,
+  }) : undefined;
 
-  const getBrixQuality = (brix: number): string => {
-    if (
-      initialDataPoint.excellentBrix &&
-      brix >= initialDataPoint.excellentBrix
-    )
-      return 'Excellent';
-    if (initialDataPoint.goodBrix && brix >= initialDataPoint.goodBrix)
-      return 'Good';
-    if (initialDataPoint.averageBrix && brix >= initialDataPoint.averageBrix)
-      return 'Average';
-    if (initialDataPoint.poorBrix && brix >= initialDataPoint.poorBrix)
-      return 'Poor';
-    return 'Very Poor';
-  };
-
-  const formattedDate = new Date(initialDataPoint.submittedAt).toLocaleDateString();
-  const formattedTime = new Date(initialDataPoint.submittedAt).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  const googleMapsUrl = `http://maps.google.com/?q=${initialDataPoint.latitude},${initialDataPoint.longitude}`;
+  const colorClass = getBrixColor(initialDataPoint.brixLevel, cropThresholds, 'bg');
+  const qualityText = getBrixQuality(initialDataPoint.brixLevel, cropThresholds);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md md:max-w-3xl">
         <DialogHeader>
-          <DialogTitle className="flex justify-between items-center">
-            {isEditing ? `Edit Submission for ${initialDataPoint.cropType}` : `Details for ${initialDataPoint.cropType}`}
-            {canEdit && !isEditing && (
-              <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
-                <Edit className="w-4 h-4" />
-              </Button>
-            )}
-            {isEditing && (
-              <Button variant="ghost" size="icon" onClick={() => setIsEditing(false)}>
-                <X className="w-4 h-4" />
-              </Button>
-            )}
+          <DialogTitle className="flex justify-between items-center text-2xl font-bold">
+            {isEditing ? `Edit Submission` : `Details for ${initialDataPoint.cropType}`}
+            <div className="flex space-x-2">
+                {canEdit && !isEditing && (
+                <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
+                    <Edit className="w-5 h-5" />
+                </Button>
+                )}
+                <Button variant="ghost" size="icon" onClick={onClose}>
+                    <X className="w-5 h-5" />
+                </Button>
+            </div>
           </DialogTitle>
-          <DialogDescription>
-            {isEditing ? 'Make changes to this submission.' : 'View the full details of this brix measurement.'}
-          </DialogDescription>
         </DialogHeader>
 
         {error && (
@@ -358,69 +333,119 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                 <p>This data point is verified and can no longer be edited, except by an administrator.</p>
               </div>
             )}
-            <div>
-              <Label className="block text-sm font-medium mb-1">Assessment Date</Label>
-              <Input type="date" value={assessmentDate} onChange={e => setAssessmentDate(e.target.value)} disabled={!canEdit} />
-            </div>
-            <div>
-              <Label className="block text-sm font-medium mb-1">Crop Variety</Label>
-              <Input type="text" value={cropVariety} onChange={e => setCropVariety(e.target.value)} disabled={!canEdit} />
-            </div>
-            <div>
-              <Label className="block text-sm font-medium mb-1">BRIX Level</Label>
-              <Input type="number" value={brixLevel} onChange={e => setBrixLevel(e.target.value === '' ? '' : Number(e.target.value))} min={0} step={0.1} disabled={!canEdit} />
-            </div>
-            <div>
-              <Label className="block text-sm font-medium mb-1">Location</Label>
-              <select value={locationId} onChange={e => setLocationId(e.target.value)} disabled={!canEdit} className="w-full border rounded px-3 py-2 bg-white disabled:bg-gray-100">
-                <option value="">Select Location</option>
-                {locations.map(loc => (<option key={loc.id} value={loc.id}>{loc.name}</option>))}
-              </select>
-            </div>
-            <div>
-              <Label className="block text-sm font-medium mb-1">Crop</Label>
-              <select value={cropId} onChange={e => setCropId(e.target.value)} disabled={!canEdit} className="w-full border rounded px-3 py-2 bg-white disabled:bg-gray-100">
-                <option value="">Select Crop</option>
-                {crops.map(crop => (<option key={crop.id} value={crop.id}>{crop.name} {crop.category ? `(${crop.category})` : ''}</option>))}
-              </select>
-            </div>
-            <div>
-              <Label className="block text-sm font-medium mb-1">Store</Label>
-              <select value={storeId} onChange={e => setStoreId(e.target.value)} disabled={!canEdit} className="w-full border rounded px-3 py-2 bg-white disabled:bg-gray-100">
-                <option value="">Select Store</option>
-                {stores.map(store => (<option key={store.id} value={store.id}>{store.name}</option>))}
-              </select>
-            </div>
-            <div>
-              <Label className="block text-sm font-medium mb-1">Brand</Label>
-              <select value={brandId} onChange={e => setBrandId(e.target.value)} disabled={!canEdit} className="w-full border rounded px-3 py-2 bg-white disabled:bg-gray-100">
-                <option value="">Select Brand</option>
-                {brands.map(brand => (<option key={brand.id} value={brand.id}>{brand.name}</option>))}
-              </select>
-            </div>
-            <div>
-              <Label className="block text-sm font-medium mb-1">Notes</Label>
-              <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4} disabled={!canEdit} />
-            </div>
-            {isAdmin && (
-              <>
-                <div className="border-t pt-6 space-y-6">
-                  <h3 className="text-lg font-medium">Admin Controls</h3>
-                  <div>
-                    <Label className="inline-flex items-center space-x-2">
-                      <input type="checkbox" checked={verified} onChange={e => setVerified(e.target.checked)} className="form-checkbox h-5 w-5" disabled={!isAdmin} />
-                      <span>Verified</span>
-                    </Label>
-                  </div>
-                  <div>
-                    <Label className="block text-sm font-medium mb-1">Verified By</Label>
-                    <select value={verifiedById} onChange={e => setVerifiedById(e.target.value)} className="w-full border rounded px-3 py-2 bg-white disabled:bg-gray-100" disabled={!isAdmin}>
-                      <option value="">Select User</option>
-                      {users.map(u => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
-                    </select>
-                  </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <Droplets className="w-5 h-5 text-gray-600" />
+                    <div>
+                        <Label className="text-sm text-gray-600">BRIX Level</Label>
+                        <Input type="number" value={brixLevel} onChange={e => setBrixLevel(e.target.value === '' ? '' : Number(e.target.value))} min={0} step={0.1} disabled={!canEdit} className="mt-1" />
+                    </div>
                 </div>
-              </>
+                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <Calendar className="w-5 h-5 text-gray-600" />
+                    <div>
+                        <Label className="text-sm text-gray-600">Assessment Date</Label>
+                        <Input type="date" value={assessmentDate} onChange={e => setAssessmentDate(e.target.value)} disabled={!canEdit} className="mt-1" />
+                    </div>
+                </div>
+                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <Leaf className="w-5 h-5 text-gray-600" />
+                    <div>
+                        <Label className="text-sm text-gray-600">Crop</Label>
+                        <div className="flex mt-1">
+                            <Input
+                                type="text"
+                                value={cropVariety}
+                                onChange={e => setCropVariety(e.target.value)}
+                                placeholder="Variety"
+                                disabled={!canEdit}
+                                className="mr-2"
+                            />
+                            <select value={cropId} onChange={e => setCropId(e.target.value)} disabled={!canEdit} className="w-full border rounded px-3 py-2 bg-white disabled:bg-gray-100">
+                                <option value="">Select Crop</option>
+                                {crops.map(crop => (<option key={crop.id} value={crop.id}>{crop.name}</option>))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <MapPin className="w-5 h-5 text-gray-600" />
+                    <div>
+                        <Label className="text-sm text-gray-600">Location</Label>
+                        <select value={locationId} onChange={e => setLocationId(e.target.value)} disabled={!canEdit} className="w-full border rounded px-3 py-2 bg-white disabled:bg-gray-100 mt-1">
+                            <option value="">Select Location</option>
+                            {locations.map(loc => (<option key={loc.id} value={loc.id}>{loc.name}</option>))}
+                        </select>
+                    </div>
+                </div>
+                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <Store className="w-5 h-5 text-gray-600" />
+                    <div>
+                        <Label className="text-sm text-gray-600">Store</Label>
+                        <div className="flex mt-1">
+                            <Input
+                                type="text"
+                                value={initialDataPoint.storeName || ''}
+                                onChange={() => {}}
+                                placeholder="Store Name"
+                                disabled={true}
+                                className="mr-2"
+                            />
+                            <select value={storeId} onChange={e => setStoreId(e.target.value)} disabled={!canEdit} className="w-full border rounded px-3 py-2 bg-white disabled:bg-gray-100">
+                                <option value="">Select Store</option>
+                                {stores.map(store => (<option key={store.id} value={store.id}>{store.name}</option>))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <Tag className="w-5 h-5 text-gray-600" />
+                    <div>
+                        <Label className="text-sm text-gray-600">Brand</Label>
+                        <div className="flex mt-1">
+                            <Input
+                                type="text"
+                                value={initialDataPoint.brandName || ''}
+                                onChange={() => {}}
+                                placeholder="Brand Name"
+                                disabled={true}
+                                className="mr-2"
+                            />
+                            <select value={brandId} onChange={e => setBrandId(e.target.value)} disabled={!canEdit} className="w-full border rounded px-3 py-2 bg-white disabled:bg-gray-100">
+                                <option value="">Select Brand</option>
+                                {brands.map(brand => (<option key={brand.id} value={brand.id}>{brand.name}</option>))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="font-semibold text-gray-900 mb-2 flex items-center space-x-2">
+                    <MessageCircle className="w-5 h-5 text-gray-600" />
+                    <span>Outlier Notes</span>
+                </h3>
+                <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4} disabled={!canEdit} />
+            </div>
+
+            {isAdmin && (
+              <div className="border-t pt-6 space-y-6">
+                <h3 className="text-lg font-medium">Admin Controls</h3>
+                <div>
+                  <Label className="inline-flex items-center space-x-2">
+                    <input type="checkbox" checked={verified} onChange={e => setVerified(e.target.checked)} className="form-checkbox h-5 w-5" disabled={!isAdmin} />
+                    <span>Verified</span>
+                  </Label>
+                </div>
+                <div>
+                  <Label className="block text-sm font-medium mb-1">Verified By</Label>
+                  <select value={verifiedById} onChange={e => setVerifiedById(e.target.value)} className="w-full border rounded px-3 py-2 bg-white disabled:bg-gray-100" disabled={!isAdmin}>
+                    <option value="">Select User</option>
+                    {users.map(u => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
+                  </select>
+                </div>
+              </div>
             )}
             <div className="flex space-x-4 pt-4">
               <Button onClick={handleSave} disabled={saving || !canEdit}>
@@ -432,141 +457,139 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              {initialDataPoint.images && initialDataPoint.images.length > 0 ? (
-                <div className="h-48 w-full bg-gray-100 flex items-center justify-center rounded-lg text-gray-400">
-                  Image Placeholder
-                </div>
-              ) : (
-                <div className="h-48 w-full bg-gray-100 flex items-center justify-center rounded-lg text-gray-400">
-                  No Image
-                </div>
-              )}
-            </div>
-            <div className="space-y-4">
-              <Table>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>
-                      <Droplets className="inline-block h-4 w-4 mr-2" />
-                      <strong>Brix Level</strong>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          className={`text-lg px-3 py-1 ${brixColor(
-                            initialDataPoint.brixLevel,
-                          )}`}
-                        >
-                          {initialDataPoint.brixLevel.toFixed(1)}°
+          // Display Mode
+          <div className="space-y-6">
+            <div className="bg-gray-50 rounded-lg p-6 text-center">
+                <div className="flex items-center justify-center space-x-4 mb-4">
+                    <div className={`${colorClass} w-16 h-16 rounded-full flex items-center justify-center`}>
+                        <span className="text-white font-bold text-xl">{initialDataPoint.brixLevel}</span>
+                    </div>
+                    <div className="text-left">
+                        <p className="text-2xl font-bold text-gray-900">{initialDataPoint.brixLevel} BRIX</p>
+                        <p className="text-sm text-gray-600">Refractometer Reading</p>
+                        <Badge className={`${colorClass} mt-1 text-white`}>
+                            {qualityText} Quality
                         </Badge>
-                        <span className="text-sm text-gray-500">
-                          ({getBrixQuality(initialDataPoint.brixLevel)})
-                        </span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>
-                      <Leaf className="inline-block h-4 w-4 mr-2" />
-                      <strong>Crop</strong>
-                    </TableCell>
-                    <TableCell>
-                      {initialDataPoint.variety || initialDataPoint.cropType}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>
-                      <Store className="inline-block h-4 w-4 mr-2" />
-                      <strong>Store</strong>
-                    </TableCell>
-                    <TableCell>{initialDataPoint.storeName || 'N/A'}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>
-                      <Tag className="inline-block h-4 w-4 mr-2" />
-                      <strong>Brand</strong>
-                    </TableCell>
-                    <TableCell>{initialDataPoint.brandName || 'N/A'}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>
-                      <MapPin className="inline-block h-4 w-4 mr-2" />
-                      <strong>Location</strong>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center">
-                        {initialDataPoint.locationName || 'N/A'}
-                        {initialDataPoint.latitude && initialDataPoint.longitude && (
-                          <a
-                            href={googleMapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-2 text-blue-600 hover:text-blue-800"
-                            aria-label="View on Google Maps"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>
-                      <Calendar className="inline-block h-4 w-4 mr-2" />
-                      <strong>Date</strong>
-                    </TableCell>
-                    <TableCell>{formattedDate}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>
-                      <Clock className="inline-block h-4 w-4 mr-2" />
-                      <strong>Time</strong>
-                    </TableCell>
-                    <TableCell>{formattedTime}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>
-                      <User className="inline-block h-4 w-4 mr-2" />
-                      <strong>Submitted By</strong>
-                    </TableCell>
-                    <TableCell>{initialDataPoint.submittedBy}</TableCell>
-                  </TableRow>
-                  {initialDataPoint.verified && (
-                    <TableRow>
-                      <TableCell>
-                        <Check className="inline-block h-4 w-4 mr-2 text-green-500" />
-                        <strong>Verified</strong>
-                      </TableCell>
-                      <TableCell>
-                        Yes by {initialDataPoint.verifiedBy} at{' '}
-                        {initialDataPoint.verifiedAt ? new Date(initialDataPoint.verifiedAt).toLocaleDateString() : ''}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {initialDataPoint.outlier_notes && (
-                    <TableRow>
-                      <TableCell>
-                        <MessageCircle className="inline-block h-4 w-4 mr-2" />
-                        <strong>Notes</strong>
-                      </TableCell>
-                      <TableCell>{initialDataPoint.outlier_notes}</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-              {canDelete && (
-                <Button
-                  variant="destructive"
-                  onClick={handleDelete}
-                  className="w-full mt-4"
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? 'Deleting...' : 'Delete Submission'}
-                </Button>
-              )}
+                    </div>
+                </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <Calendar className="w-5 h-5 text-gray-600" />
+                    <div>
+                        <p className="text-sm text-gray-600">Assessment Date</p>
+                        <p className="font-medium">{new Date(initialDataPoint.submittedAt).toLocaleDateString()}</p>
+                    </div>
+                </div>
+                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <User className="w-5 h-5 text-gray-600" />
+                    <div>
+                        <p className="text-sm text-gray-600">Submitted By</p>
+                        <p className="font-medium">{initialDataPoint.submittedBy}</p>
+                    </div>
+                </div>
+                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    {initialDataPoint.verified ? (
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                    ) : (
+                        <AlertCircle className="w-5 h-5 text-yellow-500" />
+                    )}
+                    <div>
+                        <p className="text-sm text-gray-600">Verification Status</p>
+                        <p className="font-medium">{initialDataPoint.verified ? 'Verified' : 'Pending'}</p>
+                    </div>
+                </div>
+                {initialDataPoint.verified && initialDataPoint.verifiedBy && (
+                    <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                        <User className="w-5 h-5 text-gray-600" />
+                        <div>
+                            <p className="text-sm text-gray-600">Verified By</p>
+                            <p className="font-medium">{initialDataPoint.verifiedBy}</p>
+                        </div>
+                    </div>
+                )}
+                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                    <MapPin className="w-5 h-5 text-gray-600" />
+                    <div>
+                        <p className="text-sm text-gray-600">Location</p>
+                        <p className="font-medium">{initialDataPoint.locationName}</p>
+                        <p className="text-xs text-gray-500">
+                            {initialDataPoint.latitude?.toFixed(4)}, {initialDataPoint.longitude?.toFixed(4)}
+                        </p>
+                    </div>
+                </div>
+                {initialDataPoint.storeName && (
+                    <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                        <Store className="w-5 h-5 text-gray-600" />
+                        <div>
+                            <p className="text-sm text-gray-600">Store</p>
+                            <p className="font-medium">{initialDataPoint.storeName}</p>
+                        </div>
+                    </div>
+                )}
+                {initialDataPoint.brandName && (
+                    <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                        <Tag className="w-5 h-5 text-gray-600" />
+                        <div>
+                            <p className="text-sm text-gray-600">Brand</p>
+                            <p className="font-medium">{initialDataPoint.brandName}</p>
+                        </div>
+                    </div>
+                )}
+            </div>
+            
+            {initialDataPoint.outlier_notes && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="font-semibold text-gray-900 mb-2 flex items-center space-x-2">
+                        <MessageCircle className="w-5 h-5 text-gray-600" />
+                        <span>Outlier Notes</span>
+                    </h3>
+                    <p className="text-gray-700">{initialDataPoint.outlier_notes}</p>
+                </div>
+            )}
+            
+            <div className="pt-4 border-t border-gray-100">
+                <h3 className="flex items-center space-x-2 text-lg font-bold text-gray-900 mb-4">
+                    <ImageIcon className="w-6 h-6 text-gray-600" />
+                    <span>Reference Images ({imageUrls.length})</span>
+                </h3>
+                {imagesLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                        <span className="ml-3 text-gray-600">Loading images...</span>
+                    </div>
+                ) : imageUrls.length === 0 ? (
+                    <p className="text-gray-500 italic">No images added for this submission.</p>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {imageUrls.map((url: string, index: number) => (
+                            <div key={index} className="relative w-full pb-[75%] rounded-lg overflow-hidden shadow-md group">
+                                <img
+                                    src={url}
+                                    alt={`Submission image ${index + 1}`}
+                                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                    onError={(e) => {
+                                        e.currentTarget.src = 'https://placehold.co/400x300/CCCCCC/333333?text=Image+Error';
+                                        e.currentTarget.alt = 'Error loading image';
+                                    }}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {canDelete && (
+                <Button
+                    variant="destructive"
+                    onClick={handleDelete}
+                    className="w-full mt-4"
+                    disabled={isDeleting}
+                >
+                    {isDeleting ? 'Deleting...' : 'Delete Submission'}
+                </Button>
+            )}
           </div>
         )}
       </DialogContent>
