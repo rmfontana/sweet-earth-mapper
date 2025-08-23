@@ -4,13 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import {
   ArrowLeft,
-  AlertCircle,
   Edit,
   Trash2,
   MapPin,
   Loader2,
   Lock,
-  X,
   Plus,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -25,7 +23,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogClose,
 } from '../ui/dialog';
 import { DialogFooter } from '../ui/dialog';
 
@@ -46,23 +43,18 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [category, setCategory] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
 
+  // This useEffect is good, so we'll keep it as is.
   useEffect(() => {
     let isMounted = true;
     const fetchCategoryForCrop = async () => {
-      if (!dataPoint?.cropType) {
-        if (isMounted) setCategory(null);
-        return;
-      }
+      if (!dataPoint?.cropType) return;
       try {
-        const cropData = await fetchCropCategoryByName(dataPoint.cropType);
-        if (isMounted) setCategory(cropData?.category ?? null);
+        await fetchCropCategoryByName(dataPoint.cropType);
       } catch (error) {
         console.error('Failed to fetch crop category:', error);
-        if (isMounted) setCategory(null);
       }
     };
     fetchCategoryForCrop();
@@ -85,7 +77,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     if (!isAdmin && dataPoint.verified) {
       toast({
         title: 'Deletion Restricted',
-        description: 'You cannot delete verified submissions as a regular user.',
+        description: 'You cannot delete a verified submission.',
         variant: 'destructive',
       });
       setShowConfirmDeleteModal(false);
@@ -98,7 +90,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       if (success) {
         toast({ title: 'Submission deleted successfully!', variant: 'default' });
         onDeleteSuccess(dataPoint.id);
-        onClose(); // Close the modal after deletion
+        onClose();
       } else {
         toast({
           title: 'Failed to delete submission.',
@@ -125,80 +117,62 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl p-0 overflow-hidden rounded-xl">
+      <DialogContent className="sm:max-w-3xl p-0 overflow-hidden rounded-xl">
         <div className="grid grid-cols-1 lg:grid-cols-3 max-h-[90vh] overflow-y-auto">
-          {/* Main Details Section - Spans 2 columns on large screens */}
-          <div className="lg:col-span-2 p-8">
-            <DialogHeader className="flex flex-row items-center justify-between pb-4">
-              <div className="flex items-center space-x-2">
-                <DialogClose asChild>
-                  <Button variant="ghost" size="icon" className="-ml-2">
-                    <X className="h-6 w-6" />
-                  </Button>
-                </DialogClose>
-                <DialogTitle className="text-2xl font-bold text-gray-900">
-                  Submission Details
-                </DialogTitle>
-              </div>
+          {/* Main Details Section */}
+          <div className="lg:col-span-2 p-6">
+            <DialogHeader className="pb-4 border-b border-gray-200">
+              <DialogTitle className="text-2xl font-bold text-gray-900">
+                Submission Details
+              </DialogTitle>
+              <DialogDescription className="text-gray-600">
+                Review the full details of this BRIX measurement.
+              </DialogDescription>
             </DialogHeader>
 
-            <div className="pt-4 border-t border-gray-200">
+            <div className="py-6">
               <SubmissionDetails dataPoint={dataPoint} showImages={true} />
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-wrap items-center space-x-2 mt-6">
+            <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-gray-200">
               <Button
-                variant="default"
+                variant="outline"
                 onClick={() => {
-                  navigate(`/data-entry`);
+                  navigate(`/data-point/edit/${dataPoint.id}`);
                   onClose();
                 }}
               >
-                <Plus className="w-4 h-4 mr-2" /> Add New Measurement
+                <Edit className="w-4 h-4 mr-2" />
+                Edit
               </Button>
-              {(isOwner || isAdmin) && (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      navigate(`/data-point/edit/${dataPoint.id}`);
-                      onClose();
-                    }}
-                  >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Edit
-                  </Button>
-                  {isAdmin || canOwnerDelete ? (
-                    <Button
-                      variant="destructive"
-                      onClick={handleDeleteClick}
-                      disabled={isDeleting}
-                    >
-                      {isDeleting ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4 mr-2" />
-                      )}
-                      {isDeleting ? 'Deleting...' : 'Delete'}
-                    </Button>
+              {isAdmin || canOwnerDelete ? (
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteClick}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
-                    isOwner &&
-                    dataPoint.verified && (
-                      <span className="inline-flex items-center space-x-1 px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm italic border border-gray-200">
-                        <Lock className="w-4 h-4" />
-                        <span>Verified submissions cannot be deleted.</span>
-                      </span>
-                    )
+                    <Trash2 className="w-4 h-4 mr-2" />
                   )}
-                </>
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </Button>
+              ) : (
+                isOwner &&
+                dataPoint.verified && (
+                  <span className="inline-flex items-center space-x-1 px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm italic border border-gray-200">
+                    <Lock className="w-4 h-4" />
+                    <span>Verified submissions cannot be deleted.</span>
+                  </span>
+                )
               )}
             </div>
           </div>
 
-          {/* Sidebar Section - 1 column on large screens */}
-          <div className="lg:col-span-1 p-8 lg:border-l border-gray-200 flex flex-col space-y-8">
-            {/* Quick Actions Card */}
+          {/* Sidebar Section */}
+          <div className="lg:col-span-1 p-6 lg:border-l border-gray-200 flex flex-col space-y-6">
             <Card className="bg-white shadow-sm">
               <CardHeader>
                 <CardTitle className="text-xl font-semibold">Quick Actions</CardTitle>
@@ -210,16 +184,15 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                     View on Map
                   </Button>
                 </Link>
-                <Link to="/your-data" className="block">
+                <Link to="/data" className="block">
                   <Button variant="outline" className="w-full justify-start">
                     <ArrowLeft className="w-4 h-4 mr-2" />
-                    View All My Data
+                    View All Submissions
                   </Button>
                 </Link>
               </CardContent>
             </Card>
 
-            {/* BRIX Scale Reference Card */}
             <Card className="bg-white shadow-sm">
               <CardHeader>
                 <CardTitle className="text-xl font-semibold">BRIX Scale Reference</CardTitle>
