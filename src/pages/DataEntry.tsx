@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Layout/Header';
@@ -52,6 +52,11 @@ async function getMapboxToken() {
 interface LocationFeature {
   id: string;
   place_name: string;
+  text: string;
+  place_type: string[];
+  properties?: {
+    category?: string;
+  };
   center: [number, number]; // [longitude, latitude]
 }
 
@@ -213,70 +218,53 @@ const DataEntry = () => {
     setIsManualLocationEntry(true); // Track that this is manual entry
   };
 
-  // Autocomplete location suggestions from Mapbox API
+  // Refactored useEffect for location suggestions (best practice)
   useEffect(() => {
-    if (!mapboxToken) return;
-    if (formData.location.trim().length < 3) {
-      setLocationSuggestions([]);
-      return;
-    }
-
     const controller = new AbortController();
+    const timeout = setTimeout(async () => {
+      const query = formData.location.trim();
+      if (!mapboxToken || query.length < 3) {
+        setLocationSuggestions([]);
+        return;
+      }
 
-    async function fetchLocations() {
       try {
-        const searchParams = new URLSearchParams({
-          access_token: mapboxToken,
-          // Combine poi and place types in a single, efficient query
-          types: 'poi,place',
-          country: 'US',
-          autocomplete: 'true',
-          // Request more results to ensure you have enough to sort
-          limit: '10',
-        });
+        const storeTypes = 'poi.retail,poi.grocery,poi.pharmacy';
+        const generalTypes = 'poi,address,place';
 
-        const res = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(formData.location)}.json?${searchParams.toString()}`,
-          { signal: controller.signal }
+        const [storesResponse, generalResponse] = await Promise.all([
+          fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&types=${storeTypes}&limit=5&autocomplete=true&country=US`,
+            { signal: controller.signal }
+          ),
+          fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&types=${generalTypes}&limit=5&autocomplete=true&country=US`,
+            { signal: controller.signal }
+          ),
+        ]);
+
+        const [storesData, generalData] = await Promise.all([
+          storesResponse.json(),
+          generalResponse.json(),
+        ]);
+
+        const allFeatures = [...(storesData.features || []), ...(generalData.features || [])];
+
+        const uniqueFeatures = allFeatures.filter(
+          (item, index, self) => index === self.findIndex(t => t.place_name === item.place_name)
         );
 
-        const data = await res.json();
-        const allSuggestions = data.features || [];
-
-        // Sort results to prioritize stores and retail locations
-        allSuggestions.sort((a: any, b: any) => {
-          // Use the context or properties to determine if it's a store
-          const aIsStore = a.place_type.includes('poi') && a.text.toLowerCase().includes('store');
-          const bIsStore = b.place_type.includes('poi') && b.text.toLowerCase().includes('store');
-          
-          // This is a more robust way to check for relevant POIs
-          const isRetailPOI = (feature: any) =>
-            feature.place_type.includes('poi') && 
-            (feature.properties?.category?.match(/retail|grocery|pharmacy/i) || 
-            feature.text.toLowerCase().match(/walmart|target|grocery|market|store/i));
-
-          const aIsRetail = isRetailPOI(a);
-          const bIsRetail = isRetailPOI(b);
-          
-          if (aIsRetail && !bIsRetail) return -1;
-          if (!aIsRetail && bIsRetail) return 1;
-          return 0;
-        });
-
-        setLocationSuggestions(allSuggestions.slice(0, 8));
-
+        setLocationSuggestions(uniqueFeatures.slice(0, 5) as LocationFeature[]);
       } catch (e) {
         if ((e as any).name !== 'AbortError') {
           console.error('Location search error:', e);
           toast({ title: 'Error fetching location suggestions', variant: 'destructive' });
         }
       }
-    }
-
-    const debounceTimeout = setTimeout(fetchLocations, 300);
+    }, 300);
 
     return () => {
-      clearTimeout(debounceTimeout);
+      clearTimeout(timeout);
       controller.abort();
     };
   }, [formData.location, mapboxToken, toast]);
