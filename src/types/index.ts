@@ -1,4 +1,4 @@
-
+// Core TypeScript interfaces for the BRIX platform
 // Core TypeScript interfaces for the BRIX platform
 export interface BrixDataPoint {
   id: string;
@@ -24,6 +24,47 @@ export interface BrixDataPoint {
   goodBrix: number | null;
   excellentBrix: number | null;
   name_normalized?: string; // Added the name_normalized field here
+
+  // ADD THESE NEW FIELDS
+  locationId: string;
+  cropId: string;
+  storeId: string;
+  brandId: string;
+  verifiedByUserId: string;
+}
+
+// Data format returned from Supabase, aligned with BrixDataPoint
+export interface FormattedSubmission {
+  id: string;
+  brixLevel: number;
+  verified: boolean;
+  verifiedAt: string | null;
+  label: string;
+  cropType: string;
+  category: string;
+  latitude: number | null;
+  longitude: number | null;
+  locationName: string;
+  storeName: string;
+  brandName: string;
+  submittedBy: string;
+  verifiedBy: string;
+  submittedAt: string;
+  images: string[];
+  notes: string | null;
+  location: { id: string; name: string; } | null;
+  crop: { id: string; name: string; category: string; excellent_brix: number | null; good_brix: number | null; average_brix: number | null; } | null;
+  store: { id: string; name: string; } | null;
+  brand: { id: string; name: string; } | null;
+  user: { id: string; display_name: string; } | null;
+  verifier: { id: string; display_name: string; } | null;
+  excellentBrix: number | null;
+  goodBrix: number | null;
+  averageBrix: number | null;
+  poorBrix: number | null; // ADD THIS LINE 🌟
+  userId: string;
+  outlier_notes: string | null;
+  variety: string | null;
 }
 
 export interface BrixThresholds {
@@ -71,4 +112,3 @@ export interface MapFilter {
   hasImage: boolean;
   category: string;
 }
-

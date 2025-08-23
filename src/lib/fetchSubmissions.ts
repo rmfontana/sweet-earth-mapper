@@ -3,7 +3,6 @@
 import { supabase } from '../integrations/supabase/client';
 import { BrixDataPoint } from '../types'; // Your local BrixDataPoint interface
 
-// Define the base SELECT string cleanly
 const SUBMISSIONS_SELECT_QUERY_STRING = `
   id,
   assessment_date,
@@ -21,7 +20,6 @@ const SUBMISSIONS_SELECT_QUERY_STRING = `
   submission_images(id,image_url)
 `;
 
-// Manually define the interface that matches the exact shape of data returned by the Supabase select query
 interface SupabaseSubmissionRow {
   id: string;
   assessment_date: string;
@@ -45,7 +43,7 @@ interface SupabaseSubmissionRow {
     good_brix: number | null;
     excellent_brix: number | null;
     category: string | null;
-    name_normalized: string | null; // Added name_normalized here
+    name_normalized: string | null;
   } | null;
   store: {
     id: string;
@@ -56,7 +54,7 @@ interface SupabaseSubmissionRow {
     id: string;
     name: string;
   } | null;
-  user: { // Now explicitly includes 'id' as it's selected in the query string
+  user: {
     id: string;
     display_name: string;
   } | null;
@@ -70,12 +68,8 @@ interface SupabaseSubmissionRow {
   }[];
 }
 
-type SubmissionsWithJoins = SupabaseSubmissionRow;
-
 /**
  * Helper function to format raw Supabase submission data into the BrixDataPoint interface.
- * @param item The raw data object from Supabase.
- * @returns Formatted BrixDataPoint object.
  */
 function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
   return {
@@ -86,13 +80,13 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     variety: item.crop_variety ?? '',
     cropType: item.crop?.name ?? 'Unknown',
     category: item.crop?.category ?? '',
-    latitude: item.location?.latitude,
-    longitude: item.location?.longitude,
+    latitude: item.location?.latitude ?? null,
+    longitude: item.location?.longitude ?? null,
     locationName: item.location?.name ?? '',
     storeName: item.store?.name ?? '',
     brandName: item.brand?.name ?? '',
     submittedBy: item.user?.display_name ?? 'Anonymous',
-    userId: item.user?.id ?? undefined, // NEW: Map the user's ID
+    userId: item.user?.id ?? undefined,
     verifiedBy: item.verifier?.display_name ?? '',
     submittedAt: item.assessment_date,
     outlier_notes: item.outlier_notes ?? '',
@@ -101,80 +95,30 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     averageBrix: item.crop?.average_brix,
     goodBrix: item.crop?.good_brix,
     excellentBrix: item.crop?.excellent_brix,
-    name_normalized: item.crop?.name_normalized ?? undefined, // Mapped name_normalized here
+    name_normalized: item.crop?.name_normalized ?? undefined,
+    
+    // NEW: Map the IDs from the nested objects
+    locationId: item.location?.id || '',
+    cropId: item.crop?.id || '',
+    storeId: item.store?.id || '',
+    brandId: item.brand?.id || '',
+    verifiedByUserId: item.verifier?.id || '',
   };
 }
 
-/**
- * Fetches and formats all submissions, ensuring a fresh query instance.
- * @returns A promise that resolves to an array of BrixDataPoint.
- */
 export async function fetchFormattedSubmissions(): Promise<BrixDataPoint[]> {
-  // --- START PROMINENT AUTHENTICATION DEBUGGING LOGS ---
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  console.log('--- FETCH SUBMISSIONS AUTH STATUS ---');
-  console.log('Auth Status: Current authenticated user:', user);
-  console.log('Auth Status: Auth error (if any):', authError);
-  console.log('-----------------------------------');
-  // --- END PROMINENT AUTHENTICATION DEBUGGING LOGS ---
-
-  // Create a fresh query instance without generic on .from()
   const { data, error } = await supabase.from('submissions')
     .select(SUBMISSIONS_SELECT_QUERY_STRING)
     .order('assessment_date', { ascending: false });
-
-  // --- START PROMINENT SUPABASE RESPONSE DEBUGGING LOGS ---
-  console.log('--- FETCH SUBMISSIONS RAW SUPABASE RESPONSE ---');
-  console.log('Raw Supabase data (before validation):', data);
-  console.log('Raw Supabase error (if any):', error);
-  console.log('-----------------------------------');
-  // --- END PROMINENT SUPABASE RESPONSE DEBUGGING LOGS ---
 
   if (error) {
     console.error('Error fetching submissions from Supabase:', error);
     return [];
   }
-
-  // Ensure data is an array before mapping and filtering. This safeguard remains crucial.
   const submissionsToFormat = Array.isArray(data) ? data : [];
-  console.log(`Prepared ${submissionsToFormat.length} submissions for formatting (after Array.isArray check).`);
-
-  // Cast `submissionsToFormat` to `SupabaseSubmissionRow[]` for the map function
-  const formattedData = (submissionsToFormat as SupabaseSubmissionRow[]).map(formatSubmissionData);
-
-  // Filter out submissions with invalid coordinates (retains previous logic)
-  const validSubmissions = formattedData.filter(item => {
-    const hasValidCoords = item.latitude != null &&
-                           item.longitude != null &&
-                           typeof item.latitude === 'number' &&
-                           typeof item.longitude === 'number' &&
-                           !isNaN(item.latitude) &&
-                           !isNaN(item.longitude) &&
-                           item.latitude >= -90 && item.latitude <= 90 &&
-                           item.longitude >= -180 && item.longitude <= 180;
-
-    if (!hasValidCoords) {
-      console.warn(`Submission ${item.id} has invalid coordinates and will be filtered out:`, {
-        latitude: item.latitude,
-        longitude: item.longitude,
-        locationName: item.locationName,
-        fullItem: item
-      });
-    }
-    return hasValidCoords;
-  });
-
-  console.log(`${validSubmissions.length} out of ${formattedData.length} submissions have valid coordinates.`);
-  console.log('Sample valid submission (if any):', validSubmissions[0]);
-
-  return validSubmissions;
+  return (submissionsToFormat as SupabaseSubmissionRow[]).map(formatSubmissionData);
 }
 
-/**
- * Fetches a single submission by its ID, ensuring a fresh query instance.
- * @param id The ID of the submission to fetch.
- * @returns A promise that resolves to a BrixDataPoint object or null if not found.
- */
 export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | null> {
   const { data, error } = await supabase.from('submissions')
     .select(SUBMISSIONS_SELECT_QUERY_STRING)
@@ -182,7 +126,7 @@ export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | n
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') { // No rows found
+    if (error.code === 'PGRST116') {
       console.warn(`No submission found with ID: ${id}`);
       return null;
     }
@@ -192,39 +136,25 @@ export async function fetchSubmissionById(id: string): Promise<BrixDataPoint | n
   return data ? formatSubmissionData(data as SupabaseSubmissionRow) : null;
 }
 
-/**
- * Deletes a submission and its associated image metadata from the database.
- * NOTE: This function does NOT delete the actual image files from Supabase Storage bucket.
- * This should be handled separately, typically via Supabase Storage's RLS policies or a server-side function.
- * @param submissionId The ID of the submission to delete.
- * @returns A promise that resolves to true if deletion was successful, false otherwise.
- */
 export async function deleteSubmission(submissionId: string): Promise<boolean> {
   try {
-    // 1. Delete associated image records from the 'submission_images' table first.
     const { error: deleteImagesError } = await supabase
       .from('submission_images')
       .delete()
       .eq('submission_id', submissionId);
+    if (deleteImagesError) console.error('Error deleting submission image metadata:', deleteImagesError);
 
-    if (deleteImagesError) {
-      console.error('Error deleting submission image metadata:', deleteImagesError);
-    }
-
-    // 2. Delete the main submission record from the 'submissions' table.
     const { error: deleteSubmissionError } = await supabase
       .from('submissions')
       .delete()
       .eq('id', submissionId);
-
     if (deleteSubmissionError) {
       console.error('Error deleting submission:', deleteSubmissionError);
-      return false; // Indicate failure
+      return false;
     }
-
-    return true; // Deletion successful
+    return true;
   } catch (error) {
     console.error('Unhandled error during submission deletion:', error);
-    return false; // Indicate failure
+    return false;
   }
 }

@@ -1,14 +1,15 @@
 // src/components/DataBrowser/DataTable.tsx
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { BrixDataPoint, MapFilter } from '../../types'; // Import MapFilter
+// Corrected import to use BrixDataPoint
+import { BrixDataPoint, MapFilter } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
-import { Label } from '../ui/label'; // Added Label for new filter inputs
-import { Badge } from '../ui/badge'; // Added Badge for selected crop types
-import { Switch } from '../ui/switch'; // Added Switch for boolean filters
+import { Label } from '../ui/label';
+import { Badge } from '../ui/badge';
+import { Switch } from '../ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import {
   Calendar,
@@ -17,28 +18,30 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  Eye, Edit, Trash2, // Existing imports
-  Check, ChevronDown, X // **ADDED THESE ICONS**
+  Eye, Edit, Trash2,
+  Check, ChevronDown, X
 } from 'lucide-react';
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
 import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext';
 import { applyFilters, getFilterSummary } from '../../lib/filterUtils';
 import SubmissionTableRow from '../common/SubmissionTableRow';
-import { useAuth } from '../../contexts/AuthContext'; // NEW: Import useAuth
+import { useAuth } from '../../contexts/AuthContext';
 
-// New imports for the expanded filter UI (from shadcn/ui and react-range)
 import { Command, CommandInput, CommandItem, CommandList, CommandEmpty } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Range, getTrackBackground } from 'react-range'; // For Brix Range Slider
+import { Range, getTrackBackground } from 'react-range';
 
-import DataPointDetailModal from '../common/DataPointDetailModal'; // NEW: Import the modal
+import DataPointDetailModal from '../common/DataPointDetailModal';
+import { fetchCropTypes } from '../../lib/fetchCropTypes';
+import { fetchBrands } from '../../lib/fetchBrands';
+import { fetchStores } from '../../lib/fetchStores';
+import { fetchCropCategories } from '../../lib/fetchCropCategories';
 
 // Constants for Brix Range Slider
 const STEP = 0.5;
 const MIN_BRIX = 0;
 const MAX_BRIX = 100;
 
-// Re-defining BrixRangeSlider component locally for DataTable or import it from MapFilters.tsx if it's generic enough
 const BrixRangeSlider = ({
   brixRange,
   onChange,
@@ -96,47 +99,37 @@ const BrixRangeSlider = ({
   );
 };
 
-
-// Assuming these fetch functions exist and are correct paths:
-import { fetchCropTypes } from '../../lib/fetchCropTypes';
-import { fetchBrands } from '../../lib/fetchBrands';
-import { fetchStores } from '../../lib/fetchStores';
-import { fetchCropCategories } from '../../lib/fetchCropCategories';
-
-
 const DataTable: React.FC = () => {
   const { filters, setFilters, isAdmin, setFilteredCount } = useFilters();
-  const { user } = useAuth(); // NEW: Get the current user from auth context
+  const { user } = useAuth();
 
+  // Corrected state type
   const [data, setData] = useState<BrixDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  // Corrected sort key type
   const [sortBy, setSortBy] = useState<keyof BrixDataPoint>('submittedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
-  // States for filter dropdown search queries
   const [cropCategoryQuery, setCropCategoryQuery] = useState('');
   const [brandQuery, setBrandQuery] = useState('');
   const [storeQuery, setStoreQuery] = useState('');
   const [cropQuery, setCropQuery] = useState('');
 
-
-  // Data options for dropdowns, similar to MapFilters
   const [availableCrops, setAvailableCrops] = useState<string[]>([]);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [availableStores, setAvailableStores] = useState<string[]>([]);
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Corrected selectedDataPoint type
   const [selectedDataPoint, setSelectedDataPoint] = useState<BrixDataPoint | null>(null);
 
-
-  // Fetch submissions and filter options on mount
   useEffect(() => {
     const loadDataAndFilters = async () => {
       setLoading(true);
@@ -172,13 +165,11 @@ const DataTable: React.FC = () => {
     loadDataAndFilters();
   }, []);
 
-  // Reset to page 1 when filters or search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [filters, searchTerm]);
 
   const filteredAndSortedData = useMemo(() => {
-    // The `applyFilters` utility should be smart enough to handle all properties of MapFilter
     let filtered = applyFilters(data, filters, isAdmin);
 
     if (searchTerm) {
@@ -218,7 +209,6 @@ const DataTable: React.FC = () => {
     return filtered;
   }, [data, filters, isAdmin, searchTerm, sortBy, sortOrder, setFilteredCount]);
 
-  // Pagination logic
   const totalPages = Math.ceil(filteredAndSortedData.length / itemsPerPage);
   const currentItems = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -232,21 +222,20 @@ const DataTable: React.FC = () => {
     }
   };
 
+  // Corrected sort key type
   const handleSort = (column: keyof BrixDataPoint) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
       setSortBy(column);
-      setSortOrder('desc'); // Default sort order when changing column
+      setSortOrder('desc');
     }
   };
 
-  // Generic handler for filter changes
   const handleFilterChange = (filterName: keyof MapFilter, value: any) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
 
-  // Crop type add/remove helpers (for multi-select dropdown)
   const addCropType = (crop: string) => {
     setFilters(prev => {
       if (!prev.cropTypes.includes(crop)) {
@@ -263,16 +252,14 @@ const DataTable: React.FC = () => {
   };
 
   const clearFilters = () => {
-    setFilters(DEFAULT_MAP_FILTERS); // Reset to predefined defaults
+    setFilters(DEFAULT_MAP_FILTERS);
     setSearchTerm('');
-    // Also clear internal search queries for dropdowns
     setCropCategoryQuery('');
     setBrandQuery('');
     setStoreQuery('');
     setCropQuery('');
   };
 
-  // Memoized filtered dropdown items for performance
   const filteredCategories = useMemo(() =>
     availableCategories.filter(cat =>
       cat.toLowerCase().includes(cropCategoryQuery.toLowerCase())
@@ -293,19 +280,9 @@ const DataTable: React.FC = () => {
       crop.toLowerCase().includes(cropQuery.toLowerCase())
     ), [availableCrops, cropQuery]);
 
-
-  // Helper for filter summary: IMPORTANT to correctly show active vs. default
-  // This assumes getFilterSummary in ../../lib/filterUtils.ts is updated
-  // to compare current filters against DEFAULT_MAP_FILTERS
   const filterSummary = getFilterSummary(filters, isAdmin);
 
-
-  // The handleDelete function here is just a placeholder.
-  // In a real application, you'd likely want to lift this state up
-  // or use a global state management solution if deletions from
-  // this general browser should also optimistically update the main data.
-  // For now, it will just log. If you want full deletion from here,
-  // we'd need to expand this, possibly introducing a confirmation modal here as well.
+  // Corrected function parameter type
   const handleOpenModal = (dataPoint: BrixDataPoint) => {
     setSelectedDataPoint(dataPoint);
     setIsModalOpen(true);
@@ -315,11 +292,18 @@ const DataTable: React.FC = () => {
     setIsModalOpen(false);
     setSelectedDataPoint(null);
   };
+  
+  // Corrected function parameter type
+  const handleUpdateSuccess = (updatedData: BrixDataPoint) => {
+    setData(currentData =>
+      currentData.map(item => (item.id === updatedData.id ? updatedData : item))
+    );
+    setSelectedDataPoint(updatedData);
+  };
 
   const handleDeleteSuccess = (deletedId: string) => {
-    // Update local state after a successful delete
     setData(currentData => currentData.filter(dp => dp.id !== deletedId));
-    handleCloseModal(); // Close modal after delete
+    handleCloseModal();
   };
 
   if (loading) {
@@ -338,7 +322,6 @@ const DataTable: React.FC = () => {
     <div className="px-4 sm:px-6 lg:px-8 py-8">
       <h2 className="text-3xl font-bold text-gray-900 mb-6">All Submissions</h2>
 
-      {/* Search and Filter Section */}
       <div className="mb-6 flex flex-col md:flex-row gap-4 items-center">
         <div className="relative w-full md:w-1/3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -367,7 +350,6 @@ const DataTable: React.FC = () => {
       {showFilters && (
         <Card className="mb-6">
           <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {/* Crop Types Filter */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Crop Types</Label>
               {filters.cropTypes.length > 0 && (
@@ -433,7 +415,6 @@ const DataTable: React.FC = () => {
               </Popover>
             </div>
 
-            {/* Brix Range Filter */}
             <div>
               <Label className="text-sm font-medium mb-2 block">BRIX Range</Label>
               <BrixRangeSlider
@@ -446,7 +427,6 @@ const DataTable: React.FC = () => {
               />
             </div>
 
-            {/* Date Range Filter */}
             <div>
               <Label className="text-sm font-medium mb-2 block flex items-center gap-1">
                 <Calendar className="w-4 h-4" />
@@ -482,7 +462,6 @@ const DataTable: React.FC = () => {
               </div>
             </div>
 
-            {/* Crop Category Filter */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Crop Category</Label>
               <Popover>
@@ -528,7 +507,6 @@ const DataTable: React.FC = () => {
               </Popover>
             </div>
 
-            {/* Brand Name Filter */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Brand Name</Label>
               <Popover>
@@ -574,7 +552,6 @@ const DataTable: React.FC = () => {
               </Popover>
             </div>
 
-            {/* Store Name Filter */}
             <div>
               <Label className="text-sm font-medium mb-2 block">Store Name</Label>
               <Popover>
@@ -620,8 +597,7 @@ const DataTable: React.FC = () => {
               </Popover>
             </div>
 
-            {/* Has Image Filter */}
-            <div className="flex items-center justify-between">
+            <div>
               <Label className="text-sm font-medium">Has Image</Label>
               <Switch
                 checked={filters.hasImage}
@@ -632,7 +608,6 @@ const DataTable: React.FC = () => {
               />
             </div>
 
-            {/* Verified Only Filter - only for admins */}
             {isAdmin && (
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">Verified Only</Label>
@@ -649,7 +624,6 @@ const DataTable: React.FC = () => {
         </Card>
       )}
 
-      {/* Changed conditional rendering to check if filterSummary is not "No active filters" */}
       {filterSummary !== 'No active filters' && (
         <p className="text-sm text-gray-600 mb-4">
           Applying filters: <span className="font-semibold">{filterSummary}</span>
@@ -703,10 +677,7 @@ const DataTable: React.FC = () => {
                   </TableRow>
                 ) : (
                   currentItems.map((submission) => {
-                    // Determine if the current user is the owner of THIS submission
                     const isOwner = user?.id === submission.userId;
-                    // Determine if the current user (owner) can delete this submission based on RLS
-                    // An admin can delete any, a regular user can only delete unverified owned submissions
                     const canDeleteByOwner = (isOwner && !submission.verified) || isAdmin;
 
                     return (
@@ -715,7 +686,7 @@ const DataTable: React.FC = () => {
                         submission={submission}
                         onDelete={handleDeleteSuccess}
                         isOwner={isOwner}
-                        canDeleteByOwner={canDeleteByOwner} // Pass the newly calculated prop
+                        canDeleteByOwner={canDeleteByOwner}
                         onOpenModal={handleOpenModal}
                       />
                     );
@@ -727,7 +698,6 @@ const DataTable: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Pagination */}
       <div className="flex justify-between items-center mt-6">
         <Button
           variant="outline"
@@ -748,13 +718,13 @@ const DataTable: React.FC = () => {
         </Button>
       </div>
 
-      {/* The Modal Component */}
       <DataPointDetailModal
         dataPoint={selectedDataPoint}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         onDeleteSuccess={handleDeleteSuccess}
-      /> 
+        onUpdateSuccess={handleUpdateSuccess}
+      />
     </div>
   );
 };
