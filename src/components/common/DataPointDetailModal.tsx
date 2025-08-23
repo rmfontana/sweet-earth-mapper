@@ -7,7 +7,7 @@ import {
   Loader2,
   Lock,
   X,
-  ArrowLeft, // Corrected: Added the missing import for ArrowLeft
+  ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { deleteSubmission } from '../../lib/fetchSubmissions';
@@ -106,12 +106,10 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     }
   };
 
-  // Guard clause for no data point
   if (!dataPoint) {
     return null;
   }
 
-  // Handle navigation to map with state
   const handleViewOnMap = () => {
     if (dataPoint.latitude && dataPoint.longitude) {
       navigate('/map', {
@@ -121,7 +119,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
             lng: dataPoint.longitude,
             id: dataPoint.id,
             name: dataPoint.cropType,
-            brixLevel: dataPoint.brixLevel, // Corrected: Using brixLevel instead of brix
+            brixLevel: dataPoint.brixLevel,
           },
         },
       });
@@ -130,26 +128,26 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       toast({
         title: 'Location Unavailable',
         description: 'This submission does not have valid coordinates to display on the map.',
-        variant: 'default', // Corrected: Changed 'info' to 'default'
+        variant: 'default',
       });
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-xl">
+      <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-xl [&>button]:hidden">
         <div className="flex flex-col max-h-[90vh] overflow-y-auto">
           {/* Header */}
           <DialogHeader className="flex flex-row items-center justify-between p-4 border-b border-gray-100 bg-gray-50">
-            <DialogTitle className="text-xl font-bold text-gray-900 flex-1 text-center pl-8">
-              Submission Details
-            </DialogTitle>
             <DialogClose asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full -m-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                 <X className="h-4 w-4 text-gray-500" />
                 <span className="sr-only">Close</span>
               </Button>
             </DialogClose>
+            <DialogTitle className="text-xl font-bold text-gray-900 flex-1 text-center pr-8">
+              Submission Details
+            </DialogTitle>
           </DialogHeader>
 
           {/* Main Content */}
