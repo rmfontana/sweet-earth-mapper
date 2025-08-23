@@ -220,32 +220,89 @@ const DataEntry = () => {
       setLocationSuggestions([]);
       return;
     }
-
+  
     // Only show suggestions for manual entry, not GPS captures
     if (!isManualLocationEntry) return;
-
+  
     const controller = new AbortController();
-
+  
     async function fetchLocations() {
       try {
-        const res = await fetch(
+        // First, try to search for stores/POIs with retail categories
+        const storeSearchParams = new URLSearchParams({
+          access_token: mapboxToken,
+          types: 'poi',
+          category: 'retail,shop,grocery,pharmacy,department_store,supermarket,convenience_store,gas_station',
+          limit: '8',
+          country: 'US',
+          autocomplete: 'true'
+        });
+  
+        const storeRes = await fetch(
           `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
             formData.location
-          )}.json?access_token=${mapboxToken}&autocomplete=true&limit=5&types=poi,address,place`,
+          )}.json?${storeSearchParams.toString()}`,
           { signal: controller.signal }
         );
-        const data = await res.json();
-        if (data.features) setLocationSuggestions(data.features);
+        
+        const storeData = await storeRes.json();
+        let allSuggestions = storeData.features || [];
+  
+        // If we don't have enough store results, also search general places
+        if (allSuggestions.length < 5) {
+          const generalSearchParams = new URLSearchParams({
+            access_token: mapboxToken,
+            types: 'poi,address,place',
+            limit: String(8 - allSuggestions.length),
+            country: 'US',
+            autocomplete: 'true'
+          });
+  
+          const generalRes = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+              formData.location
+            )}.json?${generalSearchParams.toString()}`,
+            { signal: controller.signal }
+          );
+          
+          const generalData = await generalRes.json();
+          
+          // Combine results, prioritizing stores
+          const generalFeatures = generalData.features || [];
+          
+          // Filter out duplicates and add general results
+          const existingIds = new Set(allSuggestions.map(f => f.id));
+          const uniqueGeneralFeatures = generalFeatures.filter(f => !existingIds.has(f.id));
+          
+          allSuggestions = [...allSuggestions, ...uniqueGeneralFeatures];
+        }
+  
+        // Sort results to prioritize stores/retail locations
+        allSuggestions.sort((a, b) => {
+          const aIsStore = a.place_name.toLowerCase().match(/(store|market|walmart|target|grocery|pharmacy|shop)/);
+          const bIsStore = b.place_name.toLowerCase().match(/(store|market|walmart|target|grocery|pharmacy|shop)/);
+          
+          if (aIsStore && !bIsStore) return -1;
+          if (!aIsStore && bIsStore) return 1;
+          return 0;
+        });
+  
+        setLocationSuggestions(allSuggestions.slice(0, 8));
+        
       } catch (e) {
         if ((e as any).name !== 'AbortError') {
+          console.error('Location search error:', e);
           toast({ title: 'Error fetching location suggestions', variant: 'destructive' });
         }
       }
     }
-
-    fetchLocations();
-
-    return () => controller.abort();
+  
+    const debounceTimeout = setTimeout(fetchLocations, 300); // Debounce for better UX
+  
+    return () => {
+      clearTimeout(debounceTimeout);
+      controller.abort();
+    };
   }, [formData.location, mapboxToken, toast, isManualLocationEntry]);
 
   // Use centralized handler for location selection
@@ -697,7 +754,7 @@ const DataEntry = () => {
                       <Input
                         id="location"
                         type="text"
-                        placeholder="Enter location or use GPS"
+                        placeholder="Search for store (e.g., 'Walmart Oswego NY') or enter location"
                         autoComplete="off"
                         value={formData.location}
                         onChange={handleLocationChange}
@@ -710,6 +767,7 @@ const DataEntry = () => {
                         onClick={handleLocationCapture}
                         disabled={locationLoading}
                         className="ml-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-colors duration-200"
+                        title="Use GPS to get current location"
                       >
                         {locationLoading ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -718,19 +776,54 @@ const DataEntry = () => {
                         )}
                       </Button>
                     </div>
+                    
+                    {/* Store/Location suggestions dropdown */}
                     {locationSuggestions.length > 0 && isManualLocationEntry && (
                       <ul className="absolute z-30 w-full max-h-48 overflow-auto rounded-xl border-2 border-gray-200 bg-white shadow-xl mt-1">
                         {locationSuggestions.map((feature) => (
                           <li
                             key={feature.id}
-                            className="cursor-pointer px-4 py-3 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-colors duration-200"
+                            className="cursor-pointer px-4 py-3 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0"
                             onMouseDown={() => selectLocationSuggestion(feature)}
                           >
-                            {feature.place_name}
+                            <div className="flex items-start space-x-3">
+                              {/* Show different icons based on feature type */}
+                              {feature.place_name.toLowerCase().includes('store') || 
+                              feature.place_name.toLowerCase().includes('market') ||
+                              feature.place_name.toLowerCase().includes('walmart') ||
+                              feature.place_name.toLowerCase().includes('target') ||
+                              feature.place_name.toLowerCase().includes('grocery') ? (
+                                <Store className="w-4 h-4 text-blue-500 mt-1 flex-shrink-0" />
+                              ) : (
+                                <MapPin className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-gray-900 truncate">
+                                  {feature.place_name.split(',')[0]} {/* Store/location name */}
+                                </div>
+                                <div className="text-sm text-gray-600 truncate">
+                                  {feature.place_name.split(',').slice(1).join(',').trim()} {/* Address */}
+                                </div>
+                              </div>
+                            </div>
                           </li>
                         ))}
                       </ul>
                     )}
+                    
+                    {/* Show coordinates when location is selected */}
+                    {formData.latitude !== 0 && formData.longitude !== 0 && (
+                      <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="text-sm text-blue-800">
+                          <strong>Selected:</strong> {formData.location}
+                        </div>
+                        <div className="text-xs text-blue-600 mt-1 flex items-center">
+                          <MapPin className="w-3 h-3 mr-1" />
+                          {formData.latitude.toFixed(4)}, {formData.longitude.toFixed(4)}
+                        </div>
+                      </div>
+                    )}
+                    
                     {errors.location && (
                       <p className="text-red-600 text-sm mt-2 flex items-center">
                         <X className="w-4 h-4 mr-1" />
