@@ -132,6 +132,25 @@ const DataEntry = () => {
     })();
   }, [toast]);
 
+  // New useEffect to get user's location on mount
+  useEffect(() => {
+    if (!mapboxToken) return;
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            ({ coords }) => {
+                const { latitude, longitude } = coords;
+                setUserLocation({ latitude, longitude });
+            },
+            (error) => {
+                console.error('Geolocation error:', error);
+                // You can optionally show a toast or error message here
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+    }
+  }, [mapboxToken]); // Dependency array: runs when mapboxToken is available
+
   // Centralized input change handler to keep form data in sync
   const handleInputChange = (field: keyof typeof formData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
