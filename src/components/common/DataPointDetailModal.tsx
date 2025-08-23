@@ -1,4 +1,3 @@
-// src/components/common/DataPointDetailModal.tsx
 import React, { useState, useEffect } from 'react';
 import { BrixDataPoint } from '../../types';
 import { Button } from '../ui/button';
@@ -91,13 +90,28 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 
   useEffect(() => {
     async function fetchAllData() {
-      if (!isOpen || !initialDataPoint) return;
-      
+      // 🐛 DEBUG: Check if the modal is open and data is available
+      console.log('Modal useEffect triggered.');
+      if (!isOpen || !initialDataPoint) {
+        console.log('Modal is not open or initialDataPoint is null. Exiting useEffect.');
+        return;
+      }
+      console.log('Modal is open with initialDataPoint:', initialDataPoint);
+
       const fetchImages = async () => {
         setImagesLoading(true);
-        const urls = initialDataPoint.images.map(imagePath => 
-            `https://wbkzczcqlorsewoofwqe.supabase.co/storage/v1/object/public/submission-images-bucket/${imagePath}`
-        );
+        // 🐛 DEBUG: Check the state of initialDataPoint.images before mapping
+        console.log('Attempting to fetch images. initialDataPoint.images:', initialDataPoint.images);
+        
+        // This is the CRITICAL FIX/CHECK: ensure initialDataPoint.images is an array before mapping
+        const urls = Array.isArray(initialDataPoint.images)
+          ? initialDataPoint.images.map(imagePath =>
+              `https://wbkzczcqlorsewoofwqe.supabase.co/storage/v1/object/public/submission-images-bucket/${imagePath}`
+            )
+          : [];
+
+        // 🐛 DEBUG: Log the generated URLs
+        console.log('Generated image URLs:', urls);
         setImageUrls(urls);
         setImagesLoading(false);
       };
@@ -114,13 +128,14 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         ]);
 
         if (cropsError || brandsError || storesError) {
+          console.error('Database fetch error:', cropsError || brandsError || storesError);
           throw new Error('Failed to fetch required data.');
         }
-        
+
         setCrops(cropsData || []);
         setBrands(brandsData || []);
         setStores(storesData || []);
-        
+
         // This is the core fix: Map the BrixDataPoint prop to local state
         setBrixLevel(initialDataPoint.brixLevel);
         setCropType(initialDataPoint.cropType || '');
@@ -161,6 +176,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   };
 
   if (!initialDataPoint) {
+    console.log('initialDataPoint is null, returning early.');
     return null;
   }
 
@@ -185,18 +201,18 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
           <DialogTitle className="flex justify-between items-center text-2xl font-bold">
             {isEditing ? `Edit Submission` : `Details for ${initialDataPoint.cropType}`}
             <div className="flex space-x-2">
-                {!isEditing && canEdit && (
-                    <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
-                        <Edit className="w-5 h-5" />
-                    </Button>
-                )}
-                <Button variant="ghost" size="icon" onClick={onClose}>
-                    <X className="w-5 h-5" />
-                </Button>
+              {!isEditing && canEdit && (
+                  <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
+                      <Edit className="w-5 h-5" />
+                  </Button>
+              )}
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                  <X className="w-5 h-5" />
+              </Button>
             </div>
           </DialogTitle>
         </DialogHeader>
-  
+
         {/* THIS IS THE NEW SCROLLABLE CONTENT WRAPPER */}
         <div className="max-h-[80vh] overflow-y-auto px-1">
           {error && (
@@ -205,7 +221,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
               <p>{error}</p>
             </div>
           )}
-  
+
           <div className="space-y-6">
             <div className="bg-gray-50 rounded-lg p-6 text-center">
                 <div className="flex items-center justify-center space-x-4 mb-4">
@@ -352,7 +368,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                       <p className="text-gray-700">{initialDataPoint.outlier_notes || 'No notes for this submission.'}</p>
                   )}
               </div>
-  
+
               <div className="bg-gray-50 rounded-lg p-4 mt-4 flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                       <CheckCircle className={`w-5 h-5 ${verified ? 'text-green-500' : 'text-gray-400'}`} />
@@ -374,7 +390,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                       </Badge>
                   )}
               </div>
-  
+
               {verified && (
                   <div className="mt-2 text-sm text-gray-500 flex items-center justify-end">
                       <User className="w-4 h-4 mr-1" />
