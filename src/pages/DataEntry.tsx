@@ -49,13 +49,25 @@ async function getMapboxToken() {
   }
 }
 
+// Define a new interface for the suggestion object
+interface LocationSuggestion {
+  mapbox_id: string; // The ID to use for the /retrieve endpoint
+  name: string;
+  feature_type: string;
+  full_address?: string;
+  address?: string;
+  place_formatted?: string;
+  context: any;
+}
+
+// Update your existing LocationFeature to match the /retrieve response
 interface LocationFeature {
-  id: string;
+  id: string; // This is the new id from /retrieve
   place_name: string;
   text: string;
   place_type: string[];
   properties?: {
-    category?: string;
+      category?: string;
   };
   center: [number, number]; // [longitude, latitude]
 }
@@ -92,7 +104,7 @@ const DataEntry = () => {
   const [stores, setStores] = useState<string[]>([]);
 
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
-  const [locationSuggestions, setLocationSuggestions] = useState<LocationFeature[]>([]);
+  const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
   // Store the user's current GPS location to use for proximity search
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
@@ -239,65 +251,100 @@ const DataEntry = () => {
     setIsManualLocationEntry(true); // Track that this is manual entry
   };
 
-  // Refactored useEffect for location suggestions (best practice)
-  // This is the key change to make the search more relevant
+  // Search with stores 
   useEffect(() => {
     const controller = new AbortController();
     const timeout = setTimeout(async () => {
-      const query = formData.location.trim();
-      
-      // The search only runs if we have a token, a query, and the user's location
-      if (!mapboxToken || query.length < 3 || !userLocation) {
-        setLocationSuggestions([]);
-        return;
-      }
+        const query = formData.location.trim();
 
-      try {
-        const searchParams = new URLSearchParams({
-          access_token: mapboxToken,
-          country: 'US',
-          autocomplete: 'true',
-          // CRITICAL: Bias search results towards the user's location
-          proximity: `${userLocation.longitude},${userLocation.latitude}`, 
-          // CRITICAL: Prioritize Points of Interest (stores, etc.) over general places
-          types: 'poi,address,place', 
-          limit: '5',
-        });
-        
-        const res = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?${searchParams.toString()}`,
-          { signal: controller.signal }
-        );
-
-        const data = await res.json();
-        const allSuggestions = data.features || [];
-
-        setLocationSuggestions(allSuggestions);
-      } catch (e) {
-        if ((e as any).name !== 'AbortError') {
-          console.error('Location search error:', e);
-          toast({ title: 'Error fetching location suggestions', variant: 'destructive' });
+        if (!mapboxToken || query.length < 3 || !userLocation) {
+            setLocationSuggestions([]);
+            return;
         }
-      }
+
+        try {
+            const searchParams = new URLSearchParams({
+                q: query, // The query parameter for Searchbox is 'q'
+                access_token: mapboxToken,
+                country: 'US',
+                session_token: 'YOUR_GENERATED_UUID', // This is crucial for billing and sessioning
+                proximity: `${userLocation.longitude},${userLocation.latitude}`,
+                types: 'poi,address', // Limiting results to POIs and addresses
+                limit: '5',
+            });
+
+            // Using the new /suggest endpoint
+            const res = await fetch(
+                `https://api.mapbox.com/search/searchbox/v1/suggest?${searchParams.toString()}`,
+                { signal: controller.signal }
+            );
+
+            const data = await res.json();
+            
+            // Mapbox's Searchbox API returns an array called 'suggestions'
+            const suggestions = data.suggestions || [];
+            
+            // Now, we will also filter suggestions to only show POIs (stores) and addresses
+            const filteredSuggestions = suggestions.filter((suggestion: any) => 
+                suggestion.feature_type === 'poi' || suggestion.feature_type === 'address'
+            );
+
+            setLocationSuggestions(filteredSuggestions);
+
+        } catch (e) {
+            if ((e as any).name !== 'AbortError') {
+                console.error('Location search error:', e);
+                toast({ title: 'Error fetching location suggestions', variant: 'destructive' });
+            }
+        }
     }, 300);
 
     return () => {
-      clearTimeout(timeout);
-      controller.abort();
+        clearTimeout(timeout);
+        controller.abort();
     };
-  }, [formData.location, mapboxToken, userLocation, toast]); // userLocation is now a dependency
+  }, [formData.location, mapboxToken, userLocation, toast]);
 
   // Use centralized handler for location selection
-  const selectLocationSuggestion = (feature: LocationFeature) => {
-    setFormData(prev => ({
-      ...prev,
-      location: feature.place_name,
-      longitude: feature.center[0],
-      latitude: feature.center[1],
-    }));
-    setLocationSuggestions([]);
-    setIsManualLocationEntry(false); // No longer manual entry after selection
-  };
+  const selectLocationSuggestion = async (suggestion: LocationSuggestion) => {
+    if (!mapboxToken) {
+        toast({ title: 'Mapbox token not loaded', variant: 'destructive' });
+        return;
+    }
+
+    try {
+        const sessionToken = 'YOUR_GENERATED_UUID'; // Use a consistent session token
+        const retrieveUrl = `https://api.mapbox.com/search/searchbox/v1/retrieve/${suggestion.mapbox_id}?access_token=${mapboxToken}&session_token=${sessionToken}`;
+        const res = await fetch(retrieveUrl);
+        const data = await res.json();
+
+        // The coordinates are now in properties.coordinates
+        if (data.features && data.features.length > 0) {
+            const feature = data.features[0];
+            const longitude = feature.geometry.coordinates[0];
+            const latitude = feature.geometry.coordinates[1];
+            
+            // Get the full formatted address from the feature's properties
+            const fullAddress = feature.properties.full_address || feature.properties.name;
+
+            setFormData(prev => ({
+                ...prev,
+                location: fullAddress,
+                longitude: longitude,
+                latitude: latitude,
+            }));
+            
+            setLocationSuggestions([]);
+            setIsManualLocationEntry(false);
+            
+        } else {
+            toast({ title: 'Could not retrieve full location details.', variant: 'destructive' });
+        }
+    } catch (e) {
+        console.error('Retrieve API error:', e);
+        toast({ title: 'Error retrieving location details', variant: 'destructive' });
+    }
+};
 
   // Use centralized handler for location capture
   const handleLocationCapture = () => {
@@ -763,36 +810,36 @@ const DataEntry = () => {
 
                     {/* Store/Location suggestions dropdown */}
                     {locationSuggestions.length > 0 && isManualLocationEntry && (
-                      <ul className="absolute z-30 w-full max-h-48 overflow-auto rounded-xl border-2 border-gray-200 bg-white shadow-xl mt-1">
-                        {locationSuggestions.map((feature) => (
-                          <li
-                            key={feature.id}
-                            className="cursor-pointer px-4 py-3 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0"
-                            onMouseDown={() => selectLocationSuggestion(feature)}
-                          >
-                            <div className="flex items-start space-x-3">
-                              {/* Show different icons based on feature type */}
-                              {feature.place_name.toLowerCase().includes('store') ||
-                                feature.place_name.toLowerCase().includes('market') ||
-                                feature.place_name.toLowerCase().includes('walmart') ||
-                                feature.place_name.toLowerCase().includes('target') ||
-                                feature.place_name.toLowerCase().includes('grocery') ? (
-                                <Store className="w-4 h-4 text-blue-500 mt-1 flex-shrink-0" />
-                              ) : (
-                                <MapPin className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-gray-900 truncate">
-                                  {feature.place_name.split(',')[0]} {/* Store/location name */}
-                                </div>
-                                <div className="text-sm text-gray-600 truncate">
-                                  {feature.place_name.split(',').slice(1).join(',').trim()} {/* Address */}
-                                </div>
-                              </div>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
+                        <ul className="absolute z-30 w-full max-h-48 overflow-auto rounded-xl border-2 border-gray-200 bg-white shadow-xl mt-1">
+                            {locationSuggestions.map((suggestion) => (
+                                <li
+                                    // The new data structure uses mapbox_id for the key
+                                    key={suggestion.mapbox_id}
+                                    className="cursor-pointer px-4 py-3 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0"
+                                    // Pass the new suggestion object to the selection handler
+                                    onMouseDown={() => selectLocationSuggestion(suggestion)}
+                                >
+                                    <div className="flex items-start space-x-3">
+                                        {/* Use the reliable feature_type property to show the correct icon */}
+                                        {suggestion.feature_type === 'poi' ? (
+                                            <Store className="w-4 h-4 text-blue-500 mt-1 flex-shrink-0" />
+                                        ) : (
+                                            <MapPin className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-gray-900 truncate">
+                                                {/* Use the 'name' property for the main title */}
+                                                {suggestion.name}
+                                            </div>
+                                            <div className="text-sm text-gray-600 truncate">
+                                                {/* Use the 'full_address' or a fallback for the secondary text */}
+                                                {suggestion.full_address || suggestion.place_formatted}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
                     )}
 
                     {/* Show coordinates when location is selected */}
