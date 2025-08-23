@@ -1,5 +1,3 @@
-// src/pages/YourData.tsx
-
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Layout/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -13,12 +11,16 @@ import { fetchFormattedSubmissions, deleteSubmission } from '../lib/fetchSubmiss
 import SubmissionTableRow from '../components/common/SubmissionTableRow';
 import { BrixDataPoint } from '../types';
 import { useToast } from '../hooks/use-toast';
-import DataPointDetailModal from '../components/common/DataPointDetailModal'; // New Import
+import DataPointDetailModal from '../components/common/DataPointDetailModal';
+import { useStaticData } from '../hooks/useStaticData'; // New Import
 
 const YourData: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Use the useStaticData hook to handle loading state
+  const { isLoading: isLoadingStaticData } = useStaticData();
 
   const [userSubmissions, setUserSubmissions] = useState<BrixDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,7 +105,8 @@ const YourData: React.FC = () => {
     );
   }
 
-  if (loading) {
+  // Combined loading state check
+  if (loading || isLoadingStaticData) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />

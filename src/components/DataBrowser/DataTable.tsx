@@ -1,24 +1,20 @@
 // src/components/DataBrowser/DataTable.tsx
 
 import React, { useState, useMemo, useEffect } from 'react';
-// Corrected import to use BrixDataPoint
 import { BrixDataPoint, MapFilter } from '../../types';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import {
   Calendar,
-  User,
   Filter,
   Search,
   ChevronLeft,
   ChevronRight,
-  Eye, Edit, Trash2,
   Check, ChevronDown, X
 } from 'lucide-react';
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
@@ -26,15 +22,11 @@ import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext';
 import { applyFilters, getFilterSummary } from '../../lib/filterUtils';
 import SubmissionTableRow from '../common/SubmissionTableRow';
 import { useAuth } from '../../contexts/AuthContext';
-
 import { Command, CommandInput, CommandItem, CommandList, CommandEmpty } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Range, getTrackBackground } from 'react-range';
-
 import DataPointDetailModal from '../common/DataPointDetailModal';
-import { fetchCropTypes } from '../../lib/fetchCropTypes';
-import { fetchBrands } from '../../lib/fetchBrands';
-import { fetchStores } from '../../lib/fetchStores';
+import { useStaticData } from '../../hooks/useStaticData';
 import { fetchCropCategories } from '../../lib/fetchCropCategories';
 
 // Constants for Brix Range Slider
@@ -103,68 +95,59 @@ const DataTable: React.FC = () => {
   const { filters, setFilters, isAdmin, setFilteredCount } = useFilters();
   const { user } = useAuth();
 
-  // Corrected state type
+  // Corrected destructuring: useStaticData hook does not return 'categories'.
+  const { crops, brands, stores, isLoading: isLoadingStaticData } = useStaticData();
+
+  // Re-added local state for categories since the hook doesn't provide it.
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+
+  // State for data submissions
   const [data, setData] = useState<BrixDataPoint[]>([]);
+  // Local loading state for fetching submissions and categories
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  // Corrected sort key type
   const [sortBy, setSortBy] = useState<keyof BrixDataPoint>('submittedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
+  // Queries for searching within filter popovers
   const [cropCategoryQuery, setCropCategoryQuery] = useState('');
   const [brandQuery, setBrandQuery] = useState('');
   const [storeQuery, setStoreQuery] = useState('');
   const [cropQuery, setCropQuery] = useState('');
 
-  const [availableCrops, setAvailableCrops] = useState<string[]>([]);
-  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
-  const [availableStores, setAvailableStores] = useState<string[]>([]);
-  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
-
   const [isModalOpen, setIsModalOpen] = useState(false);
-  // Corrected selectedDataPoint type
   const [selectedDataPoint, setSelectedDataPoint] = useState<BrixDataPoint | null>(null);
 
+  // Use a single useEffect to fetch submissions and categories
   useEffect(() => {
-    const loadDataAndFilters = async () => {
+    const loadData = async () => {
       setLoading(true);
       try {
-        const submissions = await fetchFormattedSubmissions();
-        setData(submissions);
-
-        const [crops, brands, stores, categories] = await Promise.all([
-          fetchCropTypes(),
-          fetchBrands(),
-          fetchStores(),
+        const [submissions, categories] = await Promise.all([
+          fetchFormattedSubmissions(),
           fetchCropCategories()
         ]);
-        setAvailableCrops(crops);
-        setAvailableBrands(brands);
-        setAvailableStores(stores);
+        setData(submissions);
         setAvailableCategories(categories);
-
         setError(null);
       } catch (err) {
-        console.error('Error fetching submissions or filter options:', err);
-        setError('Failed to load data or filter options');
+        console.error('Error fetching data:', err);
+        setError('Failed to load data.');
         setData([]);
-        setAvailableCrops([]);
-        setAvailableBrands([]);
-        setAvailableStores([]);
         setAvailableCategories([]);
       } finally {
         setLoading(false);
       }
     };
-
-    loadDataAndFilters();
+    loadData();
   }, []);
 
+  // Reset to first page whenever filters or search terms change
   useEffect(() => {
     setCurrentPage(1);
   }, [filters, searchTerm]);
@@ -222,7 +205,6 @@ const DataTable: React.FC = () => {
     }
   };
 
-  // Corrected sort key type
   const handleSort = (column: keyof BrixDataPoint) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -266,23 +248,22 @@ const DataTable: React.FC = () => {
     ), [availableCategories, cropCategoryQuery]);
 
   const filteredBrands = useMemo(() =>
-    availableBrands.filter(brand =>
-      brand.toLowerCase().includes(brandQuery.toLowerCase())
-    ), [availableBrands, brandQuery]);
+    brands.filter(brand =>
+      brand.name.toLowerCase().includes(brandQuery.toLowerCase())
+    ), [brands, brandQuery]);
 
   const filteredStores = useMemo(() =>
-    availableStores.filter(store =>
-      store.toLowerCase().includes(storeQuery.toLowerCase())
-    ), [availableStores, storeQuery]);
+    stores.filter(store =>
+      store.name.toLowerCase().includes(storeQuery.toLowerCase())
+    ), [stores, storeQuery]);
 
   const filteredCrops = useMemo(() =>
-    availableCrops.filter(crop =>
-      crop.toLowerCase().includes(cropQuery.toLowerCase())
-    ), [availableCrops, cropQuery]);
+    crops.filter(crop =>
+      crop.name.toLowerCase().includes(cropQuery.toLowerCase())
+    ), [crops, cropQuery]);
 
   const filterSummary = getFilterSummary(filters, isAdmin);
 
-  // Corrected function parameter type
   const handleOpenModal = (dataPoint: BrixDataPoint) => {
     setSelectedDataPoint(dataPoint);
     setIsModalOpen(true);
@@ -292,8 +273,7 @@ const DataTable: React.FC = () => {
     setIsModalOpen(false);
     setSelectedDataPoint(null);
   };
-  
-  // Corrected function parameter type
+
   const handleUpdateSuccess = (updatedData: BrixDataPoint) => {
     setData(currentData =>
       currentData.map(item => (item.id === updatedData.id ? updatedData : item))
@@ -306,7 +286,7 @@ const DataTable: React.FC = () => {
     handleCloseModal();
   };
 
-  if (loading) {
+  if (loading || isLoadingStaticData) {
     return (
       <div className="text-center py-12 text-gray-600">Loading data...</div>
     );
@@ -392,19 +372,19 @@ const DataTable: React.FC = () => {
                     <CommandList>
                       <CommandEmpty>No crops found.</CommandEmpty>
                       {filteredCrops.map((crop) => {
-                        const selected = filters.cropTypes.includes(crop);
+                        const selected = filters.cropTypes.includes(crop.name);
                         return (
                           <CommandItem
-                            key={crop}
+                            key={crop.id}
                             onSelect={() => {
-                              selected ? removeCropType(crop) : addCropType(crop);
+                              selected ? removeCropType(crop.name) : addCropType(crop.name);
                               setCropQuery('');
                             }}
                             className="flex justify-between items-center"
                             aria-selected={selected}
                             role="option"
                           >
-                            <span>{crop}</span>
+                            <span>{crop.name}</span>
                             {selected && <Check className="h-4 w-4" />}
                           </CommandItem>
                         );
@@ -533,17 +513,17 @@ const DataTable: React.FC = () => {
                       <CommandEmpty>No brands found.</CommandEmpty>
                       {filteredBrands.map((brand) => (
                         <CommandItem
-                          key={brand}
+                          key={brand.id}
                           onSelect={() => {
-                            handleFilterChange('brand', brand === filters.brand ? '' : brand);
+                            handleFilterChange('brand', brand.name === filters.brand ? '' : brand.name);
                             setBrandQuery('');
                           }}
-                          aria-selected={filters.brand === brand}
+                          aria-selected={filters.brand === brand.name}
                           role="option"
                           className="flex justify-between items-center"
                         >
-                          <span>{brand}</span>
-                          {filters.brand === brand && <Check className="h-4 w-4" />}
+                          <span>{brand.name}</span>
+                          {filters.brand === brand.name && <Check className="h-4 w-4" />}
                         </CommandItem>
                       ))}
                     </CommandList>
@@ -578,17 +558,17 @@ const DataTable: React.FC = () => {
                       <CommandEmpty>No stores found.</CommandEmpty>
                       {filteredStores.map((store) => (
                         <CommandItem
-                          key={store}
+                          key={store.id}
                           onSelect={() => {
-                            handleFilterChange('store', store === filters.store ? '' : store);
+                            handleFilterChange('store', store.name === filters.store ? '' : store.name);
                             setStoreQuery('');
                           }}
-                          aria-selected={filters.store === store}
+                          aria-selected={filters.store === store.name}
                           role="option"
                           className="flex justify-between items-center"
                         >
-                          <span>{store}</span>
-                          {filters.store === store && <Check className="h-4 w-4" />}
+                          <span>{store.name}</span>
+                          {filters.store === store.name && <Check className="h-4 w-4" />}
                         </CommandItem>
                       ))}
                     </CommandList>
