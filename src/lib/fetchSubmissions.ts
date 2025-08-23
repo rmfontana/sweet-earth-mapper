@@ -1,7 +1,7 @@
 // src/lib/fetchSubmissions.ts
 
 import { supabase } from '../integrations/supabase/client';
-import { BrixDataPoint } from '../types'; // Your local BrixDataPoint interface
+import { BrixDataPoint } from '../types';
 
 const SUBMISSIONS_SELECT_QUERY_STRING = `
   id,
@@ -11,13 +11,14 @@ const SUBMISSIONS_SELECT_QUERY_STRING = `
   verified_at,
   crop_variety,
   outlier_notes,
+  purchase_date,
   location:location_id(id,name,latitude,longitude,place_id),
   crop:crop_id(id,name,poor_brix,average_brix,good_brix,excellent_brix,category,name_normalized),
   store:store_id(id,name,location_id),
   brand:brand_id(id,name),
-  user:users!user_id(id,display_name,id),
+  user:users!user_id(id,display_name),
   verifier:users!verified_by(id,display_name),
-  submission_images(id,image_url)
+  submission_images(image_url)
 `;
 
 interface SupabaseSubmissionRow {
@@ -28,6 +29,7 @@ interface SupabaseSubmissionRow {
   verified_at: string | null;
   crop_variety: string | null;
   outlier_notes: string | null;
+  purchase_date: string | null;
   location: {
     id: string;
     name: string;
@@ -63,7 +65,6 @@ interface SupabaseSubmissionRow {
     display_name: string;
   } | null;
   submission_images: {
-    id: string;
     image_url: string;
   }[];
 }
@@ -90,6 +91,7 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     verifiedBy: item.verifier?.display_name ?? '',
     submittedAt: item.assessment_date,
     outlier_notes: item.outlier_notes ?? '',
+    purchaseDate: item.purchase_date,
     images: item.submission_images?.map(img => img.image_url) ?? [],
     poorBrix: item.crop?.poor_brix,
     averageBrix: item.crop?.average_brix,
@@ -97,12 +99,12 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     excellentBrix: item.crop?.excellent_brix,
     name_normalized: item.crop?.name_normalized ?? undefined,
     
-    // NEW: Map the IDs from the nested objects
-    locationId: item.location?.id || '',
-    cropId: item.crop?.id || '',
-    storeId: item.store?.id || '',
-    brandId: item.brand?.id || '',
-    verifiedByUserId: item.verifier?.id || '',
+    // Map the IDs from the nested objects
+    locationId: item.location?.id ?? '',
+    cropId: item.crop?.id ?? '',
+    storeId: item.store?.id ?? '',
+    brandId: item.brand?.id ?? '',
+    verifiedByUserId: item.verifier?.id ?? '',
   };
 }
 
