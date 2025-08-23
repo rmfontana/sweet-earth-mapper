@@ -1,3 +1,4 @@
+// src/components/common/DataPointDetailModal.tsx
 import React, { useState, useEffect } from 'react';
 import { BrixDataPoint } from '../../types';
 import { Button } from '../ui/button';
@@ -64,33 +65,33 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [brixLevel, setBrixLevel] = useState<number | ''>('');
-  const [cropType, setCropType] = useState('');
-  const [variety, setVariety] = useState('');
-  const [locationName, setLocationName] = useState('');
-  const [latitude, setLatitude] = useState<number | null>(null);
-  const [longitude, setLongitude] = useState<number | null>(null);
-  const [measurementDate, setMeasurementDate] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState('');
-  const [outlierNotes, setOutlierNotes] = useState('');
-  const [brand, setBrand] = useState('');
-  const [store, setStore] = useState('');
-
-  const [verified, setVerified] = useState(false);
-  const [verifiedBy, setVerifiedBy] = useState('');
-  const [verifiedAt, setVerifiedAt] = useState('');
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [imagesLoading, setImagesLoading] = useState(false);
+  const [isLocationLoading, setIsLocationLoading] = useState(false);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  
+  // 🟢 FIX: Initialize state with the prop data or a fallback
+  const [brixLevel, setBrixLevel] = useState<number | ''>(initialDataPoint?.brixLevel ?? '');
+  const [cropType, setCropType] = useState(initialDataPoint?.cropType || '');
+  const [variety, setVariety] = useState(initialDataPoint?.variety || '');
+  const [locationName, setLocationName] = useState(initialDataPoint?.locationName || '');
+  const [latitude, setLatitude] = useState<number | null>(initialDataPoint?.latitude ?? null);
+  const [longitude, setLongitude] = useState<number | null>(initialDataPoint?.longitude ?? null);
+  const [measurementDate, setMeasurementDate] = useState(initialDataPoint?.submittedAt ? new Date(initialDataPoint.submittedAt).toISOString().split('T')[0] : '');
+  const [purchaseDate, setPurchaseDate] = useState(initialDataPoint?.purchaseDate || '');
+  const [outlierNotes, setOutlierNotes] = useState(initialDataPoint?.outlier_notes || '');
+  const [brand, setBrand] = useState(initialDataPoint?.brandName || '');
+  const [store, setStore] = useState(initialDataPoint?.storeName || '');
+  const [verified, setVerified] = useState(initialDataPoint?.verified ?? false);
+  const [verifiedBy, setVerifiedBy] = useState(initialDataPoint?.verifiedBy || '');
+  const [verifiedAt, setVerifiedAt] = useState(initialDataPoint?.verifiedAt || '');
 
+  // State for Combobox data
   const [crops, setCrops] = useState<DatabaseItem[]>([]);
   const [brands, setBrands] = useState<DatabaseItem[]>([]);
   const [stores, setStores] = useState<DatabaseItem[]>([]);
-  const [isLocationLoading, setIsLocationLoading] = useState(false);
 
   useEffect(() => {
     async function fetchAllData() {
-      // 🐛 DEBUG: Check if the modal is open and data is available
       console.log('Modal useEffect triggered.');
       if (!isOpen || !initialDataPoint) {
         console.log('Modal is not open or initialDataPoint is null. Exiting useEffect.');
@@ -100,17 +101,14 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 
       const fetchImages = async () => {
         setImagesLoading(true);
-        // 🐛 DEBUG: Check the state of initialDataPoint.images before mapping
         console.log('Attempting to fetch images. initialDataPoint.images:', initialDataPoint.images);
         
-        // This is the CRITICAL FIX/CHECK: ensure initialDataPoint.images is an array before mapping
         const urls = Array.isArray(initialDataPoint.images)
           ? initialDataPoint.images.map(imagePath =>
               `https://wbkzczcqlorsewoofwqe.supabase.co/storage/v1/object/public/submission-images-bucket/${imagePath}`
             )
           : [];
 
-        // 🐛 DEBUG: Log the generated URLs
         console.log('Generated image URLs:', urls);
         setImageUrls(urls);
         setImagesLoading(false);
@@ -127,12 +125,10 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
           supabase.from('stores').select('id, name'),
         ]);
 
-        // 🐛 DEBUG: Log the data received from Supabase for all three tables
         console.log('Supabase fetch results:', { cropsData, cropsError, brandsData, brandsError, storesData, storesError });
 
         if (cropsError || brandsError || storesError) {
           console.error('Database fetch error:', cropsError || brandsError || storesError);
-          // Don't throw a full error, just set an error state to be handled gracefully
           setError('Failed to fetch required data for editing. Some dropdowns may be empty.');
         }
 
@@ -140,22 +136,6 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         setCrops(Array.isArray(cropsData) ? cropsData : []);
         setBrands(Array.isArray(brandsData) ? brandsData : []);
         setStores(Array.isArray(storesData) ? storesData : []);
-
-        // This is the core fix: Map the BrixDataPoint prop to local state
-        setBrixLevel(initialDataPoint.brixLevel);
-        setCropType(initialDataPoint.cropType || '');
-        setVariety(initialDataPoint.variety || '');
-        setLocationName(initialDataPoint.locationName || '');
-        setLatitude(initialDataPoint.latitude);
-        setLongitude(initialDataPoint.longitude);
-        setMeasurementDate(initialDataPoint.submittedAt ? new Date(initialDataPoint.submittedAt).toISOString().split('T')[0] : '');
-        setPurchaseDate(initialDataPoint.purchaseDate || '');
-        setOutlierNotes(initialDataPoint.outlier_notes || '');
-        setBrand(initialDataPoint.brandName || '');
-        setStore(initialDataPoint.storeName || '');
-        setVerified(initialDataPoint.verified);
-        setVerifiedBy(initialDataPoint.verifiedBy || '');
-        setVerifiedAt(initialDataPoint.verifiedAt || '');
 
       } catch (err) {
         console.error('An error occurred during data fetching:', err);
@@ -171,8 +151,8 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     fetchAllData();
   }, [isOpen, initialDataPoint, toast]);
 
-  const handleDelete = async () => { /* ... (no changes needed here) ... */ };
-  const handleSave = async () => { /* ... (no changes needed here) ... */ };
+  const handleDelete = async () => { /* ... (no changes) ... */ };
+  const handleSave = async () => { /* ... (no changes) ... */ };
 
   const handleLocationSelect = (location: { name: string, latitude: number, longitude: number }) => {
     setLocationName(location.name);
@@ -218,7 +198,6 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
           </DialogTitle>
         </DialogHeader>
 
-        {/* THIS IS THE NEW SCROLLABLE CONTENT WRAPPER */}
         <div className="max-h-[80vh] overflow-y-auto px-1">
           {error && (
             <div className="flex items-center p-4 bg-red-100 text-red-800 rounded-lg">
@@ -437,7 +416,6 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
           </div>
         </div>
         
-        {/* THIS IS THE MODAL FOOTER */}
         <div className="flex justify-between items-center pt-4 border-t border-gray-100">
             {isEditing ? (
                 <>
