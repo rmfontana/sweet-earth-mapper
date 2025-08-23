@@ -127,14 +127,19 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
           supabase.from('stores').select('id, name'),
         ]);
 
+        // 🐛 DEBUG: Log the data received from Supabase for all three tables
+        console.log('Supabase fetch results:', { cropsData, cropsError, brandsData, brandsError, storesData, storesError });
+
         if (cropsError || brandsError || storesError) {
           console.error('Database fetch error:', cropsError || brandsError || storesError);
-          throw new Error('Failed to fetch required data.');
+          // Don't throw a full error, just set an error state to be handled gracefully
+          setError('Failed to fetch required data for editing. Some dropdowns may be empty.');
         }
 
-        setCrops(cropsData || []);
-        setBrands(brandsData || []);
-        setStores(storesData || []);
+        // 🟢 FIX: Ensure the data is always an array before setting state
+        setCrops(Array.isArray(cropsData) ? cropsData : []);
+        setBrands(Array.isArray(brandsData) ? brandsData : []);
+        setStores(Array.isArray(storesData) ? storesData : []);
 
         // This is the core fix: Map the BrixDataPoint prop to local state
         setBrixLevel(initialDataPoint.brixLevel);
