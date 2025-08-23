@@ -9,7 +9,7 @@ import {
   MapPin,
   Loader2,
   Lock,
-  Plus,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { deleteSubmission } from '../../lib/fetchSubmissions';
@@ -23,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogClose,
 } from '../ui/dialog';
 import { DialogFooter } from '../ui/dialog';
 
@@ -46,7 +47,6 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
 
-  // This useEffect is good, so we'll keep it as is.
   useEffect(() => {
     let isMounted = true;
     const fetchCategoryForCrop = async () => {
@@ -117,38 +117,107 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-3xl p-0 overflow-hidden rounded-xl">
-        <div className="grid grid-cols-1 lg:grid-cols-3 max-h-[90vh] overflow-y-auto">
-          {/* Main Details Section */}
-          <div className="lg:col-span-2 p-6">
-            <DialogHeader className="pb-4 border-b border-gray-200">
-              <DialogTitle className="text-2xl font-bold text-gray-900">
-                Submission Details
-              </DialogTitle>
-              <DialogDescription className="text-gray-600">
-                Review the full details of this BRIX measurement.
-              </DialogDescription>
-            </DialogHeader>
+      <DialogContent className="sm:max-w-xl p-0 overflow-hidden rounded-xl">
+        <div className="flex flex-col max-h-[90vh] overflow-y-auto">
+          {/* Header with Close Button */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50">
+            <DialogClose asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                <X className="h-4 w-4 text-gray-500" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </DialogClose>
+            <DialogTitle className="text-xl font-bold text-gray-900 flex-1 text-center pr-8">
+              Submission Details
+            </DialogTitle>
+          </div>
 
-            <div className="py-6">
+          {/* Main Content Area */}
+          <div className="p-6">
+            {/* Submission Details Section */}
+            <div className="mb-6">
               <SubmissionDetails dataPoint={dataPoint} showImages={true} />
             </div>
 
+            {/* Quick Actions & BRIX Scale */}
+            <Card className="bg-gray-50 shadow-sm mb-6">
+              <CardHeader className="p-4 border-b border-gray-100">
+                <CardTitle className="text-lg font-semibold">Additional Information</CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-4">
+                {/* Quick Actions */}
+                <div className="space-y-3">
+                  <h3 className="font-medium text-sm text-gray-600">Quick Actions</h3>
+                  <Link to="/map" className="block">
+                    <Button variant="outline" className="w-full justify-start">
+                      <MapPin className="w-4 h-4 mr-2" />
+                      View on Map
+                    </Button>
+                  </Link>
+                  <Link to="/data" className="block">
+                    <Button variant="outline" className="w-full justify-start">
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      View All Submissions
+                    </Button>
+                  </Link>
+                </div>
+                {/* BRIX Scale */}
+                <div className="space-y-3 pt-4 border-t border-gray-100">
+                  <h3 className="font-medium text-sm text-gray-600">BRIX Scale Reference</h3>
+                  {dataPoint.excellentBrix ? (
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></div>
+                        <span>
+                          <strong className="font-medium">Poor:</strong> Less than {dataPoint.averageBrix} BRIX
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></div>
+                        <span>
+                          <strong className="font-medium">Average:</strong> {dataPoint.averageBrix} to {dataPoint.goodBrix} BRIX
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></div>
+                        <span>
+                          <strong className="font-medium">Good:</strong> {dataPoint.goodBrix} to {dataPoint.excellentBrix} BRIX
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 rounded-full bg-green-700 flex-shrink-0"></div>
+                        <span>
+                          <strong className="font-medium">Excellent:</strong> {dataPoint.excellentBrix} BRIX and above
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">
+                      BRIX scale data unavailable for this crop.
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-gray-200">
+            <div className="flex flex-col gap-3">
+              <h3 className="font-medium text-sm text-gray-600">Manage Submission</h3>
               <Button
                 variant="outline"
+                className="w-full"
                 onClick={() => {
                   navigate(`/data-point/edit/${dataPoint.id}`);
                   onClose();
                 }}
               >
                 <Edit className="w-4 h-4 mr-2" />
-                Edit
+                Edit Submission
               </Button>
               {isAdmin || canOwnerDelete ? (
                 <Button
                   variant="destructive"
+                  className="w-full"
                   onClick={handleDeleteClick}
                   disabled={isDeleting}
                 >
@@ -157,84 +226,18 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                   ) : (
                     <Trash2 className="w-4 h-4 mr-2" />
                   )}
-                  {isDeleting ? 'Deleting...' : 'Delete'}
+                  {isDeleting ? 'Deleting...' : 'Delete Submission'}
                 </Button>
               ) : (
                 isOwner &&
                 dataPoint.verified && (
-                  <span className="inline-flex items-center space-x-1 px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm italic border border-gray-200">
+                  <span className="inline-flex items-center justify-center space-x-1 px-3 py-2 rounded-lg bg-gray-100 text-gray-600 text-sm italic border border-gray-200">
                     <Lock className="w-4 h-4" />
                     <span>Verified submissions cannot be deleted.</span>
                   </span>
                 )
               )}
             </div>
-          </div>
-
-          {/* Sidebar Section */}
-          <div className="lg:col-span-1 p-6 lg:border-l border-gray-200 flex flex-col space-y-6">
-            <Card className="bg-white shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-xl font-semibold">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Link to="/map" className="block">
-                  <Button variant="outline" className="w-full justify-start">
-                    <MapPin className="w-4 h-4 mr-2" />
-                    View on Map
-                  </Button>
-                </Link>
-                <Link to="/data" className="block">
-                  <Button variant="outline" className="w-full justify-start">
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    View All Submissions
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-xl font-semibold">BRIX Scale Reference</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {dataPoint.poorBrix != null &&
-                dataPoint.averageBrix != null &&
-                dataPoint.goodBrix != null &&
-                dataPoint.excellentBrix != null ? (
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 rounded-full bg-red-500 flex-shrink-0"></div>
-                      <span>
-                        <strong className="font-medium">Poor:</strong> Less than {dataPoint.averageBrix} BRIX
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 rounded-full bg-orange-500 flex-shrink-0"></div>
-                      <span>
-                        <strong className="font-medium">Average:</strong> Between {dataPoint.averageBrix} and {dataPoint.goodBrix} BRIX
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 rounded-full bg-yellow-400 flex-shrink-0"></div>
-                      <span>
-                        <strong className="font-medium">Good:</strong> Between {dataPoint.goodBrix} and {dataPoint.excellentBrix} BRIX
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 rounded-full bg-green-700 flex-shrink-0"></div>
-                      <span>
-                        <strong className="font-medium">Excellent:</strong> {dataPoint.excellentBrix} BRIX and above
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500 italic">
-                    BRIX scale data unavailable for this crop.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
           </div>
         </div>
       </DialogContent>
