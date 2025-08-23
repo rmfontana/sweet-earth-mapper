@@ -220,75 +220,51 @@ const DataEntry = () => {
       setLocationSuggestions([]);
       return;
     }
-  
-    // Only show suggestions for manual entry, not GPS captures
-    if (!isManualLocationEntry) return;
-  
+
     const controller = new AbortController();
-  
+
     async function fetchLocations() {
       try {
-        // First, try to search for stores/POIs with retail categories
-        const storeSearchParams = new URLSearchParams({
+        const searchParams = new URLSearchParams({
           access_token: mapboxToken,
-          types: 'poi',
-          category: 'retail,shop,grocery,pharmacy,department_store,supermarket,convenience_store,gas_station',
-          limit: '8',
+          // Combine poi and place types in a single, efficient query
+          types: 'poi,place',
           country: 'US',
-          autocomplete: 'true'
+          autocomplete: 'true',
+          // Request more results to ensure you have enough to sort
+          limit: '10',
         });
-  
-        const storeRes = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-            formData.location
-          )}.json?${storeSearchParams.toString()}`,
+
+        const res = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(formData.location)}.json?${searchParams.toString()}`,
           { signal: controller.signal }
         );
-        
-        const storeData = await storeRes.json();
-        let allSuggestions = storeData.features || [];
-  
-        // If we don't have enough store results, also search general places
-        if (allSuggestions.length < 5) {
-          const generalSearchParams = new URLSearchParams({
-            access_token: mapboxToken,
-            types: 'poi,address,place',
-            limit: String(8 - allSuggestions.length),
-            country: 'US',
-            autocomplete: 'true'
-          });
-  
-          const generalRes = await fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-              formData.location
-            )}.json?${generalSearchParams.toString()}`,
-            { signal: controller.signal }
-          );
+
+        const data = await res.json();
+        const allSuggestions = data.features || [];
+
+        // Sort results to prioritize stores and retail locations
+        allSuggestions.sort((a: any, b: any) => {
+          // Use the context or properties to determine if it's a store
+          const aIsStore = a.place_type.includes('poi') && a.text.toLowerCase().includes('store');
+          const bIsStore = b.place_type.includes('poi') && b.text.toLowerCase().includes('store');
           
-          const generalData = await generalRes.json();
+          // This is a more robust way to check for relevant POIs
+          const isRetailPOI = (feature: any) =>
+            feature.place_type.includes('poi') && 
+            (feature.properties?.category?.match(/retail|grocery|pharmacy/i) || 
+            feature.text.toLowerCase().match(/walmart|target|grocery|market|store/i));
+
+          const aIsRetail = isRetailPOI(a);
+          const bIsRetail = isRetailPOI(b);
           
-          // Combine results, prioritizing stores
-          const generalFeatures = generalData.features || [];
-          
-          // Filter out duplicates and add general results
-          const existingIds = new Set(allSuggestions.map(f => f.id));
-          const uniqueGeneralFeatures = generalFeatures.filter(f => !existingIds.has(f.id));
-          
-          allSuggestions = [...allSuggestions, ...uniqueGeneralFeatures];
-        }
-  
-        // Sort results to prioritize stores/retail locations
-        allSuggestions.sort((a, b) => {
-          const aIsStore = a.place_name.toLowerCase().match(/(store|market|walmart|target|grocery|pharmacy|shop)/);
-          const bIsStore = b.place_name.toLowerCase().match(/(store|market|walmart|target|grocery|pharmacy|shop)/);
-          
-          if (aIsStore && !bIsStore) return -1;
-          if (!aIsStore && bIsStore) return 1;
+          if (aIsRetail && !bIsRetail) return -1;
+          if (!aIsRetail && bIsRetail) return 1;
           return 0;
         });
-  
+
         setLocationSuggestions(allSuggestions.slice(0, 8));
-        
+
       } catch (e) {
         if ((e as any).name !== 'AbortError') {
           console.error('Location search error:', e);
@@ -296,14 +272,14 @@ const DataEntry = () => {
         }
       }
     }
-  
-    const debounceTimeout = setTimeout(fetchLocations, 300); // Debounce for better UX
-  
+
+    const debounceTimeout = setTimeout(fetchLocations, 300);
+
     return () => {
       clearTimeout(debounceTimeout);
       controller.abort();
     };
-  }, [formData.location, mapboxToken, toast, isManualLocationEntry]);
+  }, [formData.location, mapboxToken, toast]);
 
   // Use centralized handler for location selection
   const selectLocationSuggestion = (feature: LocationFeature) => {
