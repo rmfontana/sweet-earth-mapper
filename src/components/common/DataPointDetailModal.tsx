@@ -196,240 +196,244 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
             </div>
           </DialogTitle>
         </DialogHeader>
-
-        {error && (
-          <div className="flex items-center p-4 bg-red-100 text-red-800 rounded-lg">
-            <AlertCircle className="w-5 h-5 mr-3" />
-            <p>{error}</p>
-          </div>
-        )}
-
-        <div className="space-y-6">
-          <div className="bg-gray-50 rounded-lg p-6 text-center">
-              <div className="flex items-center justify-center space-x-4 mb-4">
-                  <div className={`${colorClass} w-16 h-16 rounded-full flex items-center justify-center`}>
-                      <span className="text-white font-bold text-xl">{initialDataPoint.brixLevel}</span>
-                  </div>
-                  <div className="text-left">
-                      <p className="text-2xl font-bold text-gray-900">{initialDataPoint.brixLevel} BRIX</p>
-                      <p className="text-sm text-gray-600">Refractometer Reading</p>
-                      <Badge className={`${colorClass} mt-1 text-white`}>
-                          {qualityText} Quality
-                      </Badge>
-                  </div>
-              </div>
-          </div>
-          
-          <div className="pt-4 border-t border-gray-100">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Submission Details</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                    <Droplets className="w-5 h-5 text-gray-600" />
-                    <span>BRIX Level</span>
-                  </Label>
-                  {isEditing ? (
-                      <Input type="number" value={brixLevel} onChange={e => setBrixLevel(e.target.value === '' ? '' : Number(e.target.value))} min={0} step={0.1} />
-                  ) : (
-                      <p className="font-medium">{initialDataPoint.brixLevel}</p>
-                  )}
-              </div>
-              <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                    <Package className="w-5 h-5 text-gray-600" />
-                    <span>Crop Type</span>
-                  </Label>
-                  {isEditing ? (
-                      <Combobox
-                          items={crops}
-                          value={cropType}
-                          onSelect={setCropType}
-                          placeholder="Select Crop"
-                      />
-                  ) : (
-                      <p className="font-medium">{initialDataPoint.cropType}</p>
-                  )}
-              </div>
-              <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                    <Tag className="w-5 h-5 text-gray-600" />
-                    <span>Brand</span>
-                  </Label>
-                  {isEditing ? (
-                      <Combobox
-                          items={brands}
-                          value={brand}
-                          onSelect={setBrand}
-                          placeholder="Select Brand"
-                      />
-                  ) : (
-                      <p className="font-medium">{initialDataPoint.brandName || 'N/A'}</p>
-                  )}
-              </div>
-              <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                    <Store className="w-5 h-5 text-gray-600" />
-                    <span>Store</span>
-                  </Label>
-                  {isEditing ? (
-                      <Combobox
-                          items={stores}
-                          value={store}
-                          onSelect={setStore}
-                          placeholder="Select Store"
-                      />
-                  ) : (
-                      <p className="font-medium">{initialDataPoint.storeName || 'N/A'}</p>
-                  )}
-              </div>
-              <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                    <MapIcon className="w-5 h-5 text-gray-600" />
-                    <span>Location</span>
-                  </Label>
-                  {isEditing ? (
-                      <LocationSearch
-                          value={locationName}
-                          onLocationSelect={handleLocationSelect}
-                          onChange={(e) => setLocationName(e.target.value)}
-                          isLoading={isLocationLoading}
-                      />
-                  ) : (
-                      <>
-                          <p className="font-medium">{initialDataPoint.locationName}</p>
-                          <p className="text-xs text-gray-500">
-                              {initialDataPoint.latitude?.toFixed(4)}, {initialDataPoint.longitude?.toFixed(4)}
-                          </p>
-                      </>
-                  )}
-              </div>
-              <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                    <Calendar className="w-5 h-5 text-gray-600" />
-                    <span>Assessment Date</span>
-                  </Label>
-                  {isEditing ? (
-                      <Input type="date" value={measurementDate} onChange={e => setMeasurementDate(e.target.value)} />
-                  ) : (
-                      <p className="font-medium">{new Date(initialDataPoint.submittedAt).toLocaleDateString()}</p>
-                  )}
-              </div>
-              <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                    <Calendar className="w-5 h-5 text-gray-600" />
-                    <span>Purchase Date</span>
-                  </Label>
-                  {isEditing ? (
-                      <Input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} />
-                  ) : (
-                      <p className="font-medium">{initialDataPoint.purchaseDate || 'N/A'}</p>
-                  )}
-              </div>
-              <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                    <Tag className="w-5 h-5 text-gray-600" />
-                    <span>Variety</span>
-                  </Label>
-                  {isEditing ? (
-                      <Input type="text" value={variety} onChange={e => setVariety(e.target.value)} />
-                  ) : (
-                      <p className="font-medium">{initialDataPoint.variety || 'N/A'}</p>
-                  )}
-              </div>
+  
+        {/* THIS IS THE NEW SCROLLABLE CONTENT WRAPPER */}
+        <div className="max-h-[80vh] overflow-y-auto px-1">
+          {error && (
+            <div className="flex items-center p-4 bg-red-100 text-red-800 rounded-lg">
+              <AlertCircle className="w-5 h-5 mr-3" />
+              <p>{error}</p>
+            </div>
+          )}
+  
+          <div className="space-y-6">
+            <div className="bg-gray-50 rounded-lg p-6 text-center">
+                <div className="flex items-center justify-center space-x-4 mb-4">
+                    <div className={`${colorClass} w-16 h-16 rounded-full flex items-center justify-center`}>
+                        <span className="text-white font-bold text-xl">{initialDataPoint.brixLevel}</span>
+                    </div>
+                    <div className="text-left">
+                        <p className="text-2xl font-bold text-gray-900">{initialDataPoint.brixLevel} BRIX</p>
+                        <p className="text-sm text-gray-600">Refractometer Reading</p>
+                        <Badge className={`${colorClass} mt-1 text-white`}>
+                            {qualityText} Quality
+                        </Badge>
+                    </div>
+                </div>
             </div>
             
-            <div className="bg-gray-50 rounded-lg p-4 mt-4">
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center space-x-2">
-                    <FileText className="w-5 h-5 text-gray-600" />
-                    <span>Outlier Notes</span>
-                </h3>
-                {isEditing ? (
-                    <Textarea value={outlierNotes} onChange={e => setOutlierNotes(e.target.value)} rows={4} />
-                ) : (
-                    <p className="text-gray-700">{initialDataPoint.outlier_notes || 'No notes for this submission.'}</p>
-                )}
-            </div>
-
-            <div className="bg-gray-50 rounded-lg p-4 mt-4 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                    <CheckCircle className={`w-5 h-5 ${verified ? 'text-green-500' : 'text-gray-400'}`} />
-                    <Label htmlFor="verified-checkbox" className="text-sm font-semibold text-gray-700">
-                        Verified
+            <div className="pt-4 border-t border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Submission Details</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                      <Droplets className="w-5 h-5 text-gray-600" />
+                      <span>BRIX Level</span>
                     </Label>
+                    {isEditing ? (
+                        <Input type="number" value={brixLevel} onChange={e => setBrixLevel(e.target.value === '' ? '' : Number(e.target.value))} min={0} step={0.1} />
+                    ) : (
+                        <p className="font-medium">{initialDataPoint.brixLevel}</p>
+                    )}
                 </div>
-                {isAdmin && isEditing ? (
-                    <Input
-                        id="verified-checkbox"
-                        type="checkbox"
-                        checked={verified}
-                        onChange={(e) => setVerified(e.target.checked)}
-                        className="w-4 h-4"
-                    />
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                      <Package className="w-5 h-5 text-gray-600" />
+                      <span>Crop Type</span>
+                    </Label>
+                    {isEditing ? (
+                        <Combobox
+                            items={crops}
+                            value={cropType}
+                            onSelect={setCropType}
+                            placeholder="Select Crop"
+                        />
+                    ) : (
+                        <p className="font-medium">{initialDataPoint.cropType}</p>
+                    )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                      <Tag className="w-5 h-5 text-gray-600" />
+                      <span>Brand</span>
+                    </Label>
+                    {isEditing ? (
+                        <Combobox
+                            items={brands}
+                            value={brand}
+                            onSelect={setBrand}
+                            placeholder="Select Brand"
+                        />
+                    ) : (
+                        <p className="font-medium">{initialDataPoint.brandName || 'N/A'}</p>
+                    )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                      <Store className="w-5 h-5 text-gray-600" />
+                      <span>Store</span>
+                    </Label>
+                    {isEditing ? (
+                        <Combobox
+                            items={stores}
+                            value={store}
+                            onSelect={setStore}
+                            placeholder="Select Store"
+                        />
+                    ) : (
+                        <p className="font-medium">{initialDataPoint.storeName || 'N/A'}</p>
+                    )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                      <MapIcon className="w-5 h-5 text-gray-600" />
+                      <span>Location</span>
+                    </Label>
+                    {isEditing ? (
+                        <LocationSearch
+                            value={locationName}
+                            onLocationSelect={handleLocationSelect}
+                            onChange={(e) => setLocationName(e.target.value)}
+                            isLoading={isLocationLoading}
+                        />
+                    ) : (
+                        <>
+                            <p className="font-medium">{initialDataPoint.locationName}</p>
+                            <p className="text-xs text-gray-500">
+                                {initialDataPoint.latitude?.toFixed(4)}, {initialDataPoint.longitude?.toFixed(4)}
+                            </p>
+                        </>
+                    )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                      <Calendar className="w-5 h-5 text-gray-600" />
+                      <span>Assessment Date</span>
+                    </Label>
+                    {isEditing ? (
+                        <Input type="date" value={measurementDate} onChange={e => setMeasurementDate(e.target.value)} />
+                    ) : (
+                        <p className="font-medium">{new Date(initialDataPoint.submittedAt).toLocaleDateString()}</p>
+                    )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                      <Calendar className="w-5 h-5 text-gray-600" />
+                      <span>Purchase Date</span>
+                    </Label>
+                    {isEditing ? (
+                        <Input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} />
+                    ) : (
+                        <p className="font-medium">{initialDataPoint.purchaseDate || 'N/A'}</p>
+                    )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                      <Tag className="w-5 h-5 text-gray-600" />
+                      <span>Variety</span>
+                    </Label>
+                    {isEditing ? (
+                        <Input type="text" value={variety} onChange={e => setVariety(e.target.value)} />
+                    ) : (
+                        <p className="font-medium">{initialDataPoint.variety || 'N/A'}</p>
+                    )}
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-4 mt-4">
+                  <h3 className="font-semibold text-gray-900 mb-2 flex items-center space-x-2">
+                      <FileText className="w-5 h-5 text-gray-600" />
+                      <span>Outlier Notes</span>
+                  </h3>
+                  {isEditing ? (
+                      <Textarea value={outlierNotes} onChange={e => setOutlierNotes(e.target.value)} rows={4} />
+                  ) : (
+                      <p className="text-gray-700">{initialDataPoint.outlier_notes || 'No notes for this submission.'}</p>
+                  )}
+              </div>
+  
+              <div className="bg-gray-50 rounded-lg p-4 mt-4 flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                      <CheckCircle className={`w-5 h-5 ${verified ? 'text-green-500' : 'text-gray-400'}`} />
+                      <Label htmlFor="verified-checkbox" className="text-sm font-semibold text-gray-700">
+                          Verified
+                      </Label>
+                  </div>
+                  {isAdmin && isEditing ? (
+                      <Input
+                          id="verified-checkbox"
+                          type="checkbox"
+                          checked={verified}
+                          onChange={(e) => setVerified(e.target.checked)}
+                          className="w-4 h-4"
+                      />
+                  ) : (
+                      <Badge variant={verified ? 'default' : 'secondary'} className={`${verified ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400'}`}>
+                          {verified ? 'Yes' : 'No'}
+                      </Badge>
+                  )}
+              </div>
+  
+              {verified && (
+                  <div className="mt-2 text-sm text-gray-500 flex items-center justify-end">
+                      <User className="w-4 h-4 mr-1" />
+                      <span>Verified by: {verifiedBy || 'N/A'}</span>
+                  </div>
+              )}
+            </div>
+            
+            <div className="pt-4 border-t border-gray-100">
+                <h3 className="flex items-center space-x-2 text-lg font-bold text-gray-900 mb-4">
+                    <ImageIcon className="w-6 h-6 text-gray-600" />
+                    <span>Reference Images ({imageUrls.length})</span>
+                </h3>
+                {imagesLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                        <span className="ml-3 text-gray-600">Loading images...</span>
+                    </div>
+                ) : imageUrls.length === 0 ? (
+                    <p className="text-gray-500 italic">No images added for this submission.</p>
                 ) : (
-                    <Badge variant={verified ? 'default' : 'secondary'} className={`${verified ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400'}`}>
-                        {verified ? 'Yes' : 'No'}
-                    </Badge>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {imageUrls.map((url: string, index: number) => (
+                            <div key={index} className="relative w-full pb-[75%] rounded-lg overflow-hidden shadow-md group">
+                                <img
+                                    src={url}
+                                    alt={`Submission image ${index + 1}`}
+                                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                    onError={(e) => {
+                                        e.currentTarget.src = 'https://placehold.co/400x300/CCCCCC/333333?text=Image+Error';
+                                        e.currentTarget.alt = 'Error loading image';
+                                    }}
+                                />
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
-
-            {verified && (
-                <div className="mt-2 text-sm text-gray-500 flex items-center justify-end">
-                    <User className="w-4 h-4 mr-1" />
-                    <span>Verified by: {verifiedBy || 'N/A'}</span>
-                </div>
+          </div>
+        </div>
+        
+        {/* THIS IS THE MODAL FOOTER */}
+        <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+            {isEditing ? (
+                <>
+                    <Button onClick={handleSave} disabled={saving}>
+                        {saving ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsEditing(false)} disabled={saving}>
+                        Cancel
+                    </Button>
+                </>
+            ) : (
+                canDelete && (
+                    <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+                        {isDeleting ? 'Deleting...' : 'Delete Submission'}
+                    </Button>
+                )
             )}
-          </div>
-          
-          <div className="pt-4 border-t border-gray-100">
-              <h3 className="flex items-center space-x-2 text-lg font-bold text-gray-900 mb-4">
-                  <ImageIcon className="w-6 h-6 text-gray-600" />
-                  <span>Reference Images ({imageUrls.length})</span>
-              </h3>
-              {imagesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                      <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                      <span className="ml-3 text-gray-600">Loading images...</span>
-                  </div>
-              ) : imageUrls.length === 0 ? (
-                  <p className="text-gray-500 italic">No images added for this submission.</p>
-              ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {imageUrls.map((url: string, index: number) => (
-                          <div key={index} className="relative w-full pb-[75%] rounded-lg overflow-hidden shadow-md group">
-                              <img
-                                  src={url}
-                                  alt={`Submission image ${index + 1}`}
-                                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                  onError={(e) => {
-                                      e.currentTarget.src = 'https://placehold.co/400x300/CCCCCC/333333?text=Image+Error';
-                                      e.currentTarget.alt = 'Error loading image';
-                                  }}
-                              />
-                          </div>
-                      ))}
-                  </div>
-              )}
-          </div>
-
-          <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-              {isEditing ? (
-                  <>
-                      <Button onClick={handleSave} disabled={saving}>
-                          {saving ? 'Saving...' : 'Save Changes'}
-                      </Button>
-                      <Button variant="outline" onClick={() => setIsEditing(false)} disabled={saving}>
-                          Cancel
-                      </Button>
-                  </>
-              ) : (
-                  canDelete && (
-                      <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
-                          {isDeleting ? 'Deleting...' : 'Delete Submission'}
-                      </Button>
-                  )
-              )}
-          </div>
         </div>
       </DialogContent>
     </Dialog>
