@@ -1,3 +1,5 @@
+// src/pages/YourData.tsx
+
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Layout/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -11,17 +13,19 @@ import { fetchFormattedSubmissions, deleteSubmission } from '../lib/fetchSubmiss
 import SubmissionTableRow from '../components/common/SubmissionTableRow';
 import { BrixDataPoint } from '../types';
 import { useToast } from '../hooks/use-toast';
+import DataPointDetailModal from '../components/common/DataPointDetailModal'; // New Import
 
-const YourData = () => {
+const YourData: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const [userSubmissions, setUserSubmissions] = useState<BrixDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
-  const [submissionToDeleteId, setSubmissionToDeleteId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+
+  // New state for the modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedDataPoint, setSelectedDataPoint] = useState<BrixDataPoint | null>(null);
 
   // Fetch user submissions on mount and when user changes
   useEffect(() => {
@@ -47,51 +51,36 @@ const YourData = () => {
     loadSubmissions();
   }, [user?.id, toast]);
 
-  // Opens the confirmation modal and sets the ID of the submission to delete
-  const handleDeleteClick = (id: string) => {
-    setSubmissionToDeleteId(id);
-    setShowConfirmDeleteModal(true);
+  // Handler to open the modal with a specific data point
+  const handleOpenModal = (dataPoint: BrixDataPoint) => {
+    setSelectedDataPoint(dataPoint);
+    setIsModalOpen(true);
   };
 
-  // Handles the actual deletion after confirmation
-  const handleConfirmDelete = async () => {
-    if (!submissionToDeleteId) return;
+  // Handler to close the modal
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedDataPoint(null);
+  };
 
-    setIsDeleting(true);
+  // Handler for deletion, now that it's in the modal
+  const handleDelete = async (id: string) => {
     try {
-      // Find the submission to check its verified status *before* attempting delete
-      const submission = userSubmissions.find(s => s.id === submissionToDeleteId);
-      const isAdmin = user?.role === 'admin';
-
-      // Client-side check based on RLS for non-admins
-      if (!isAdmin && submission?.verified) {
-        toast({
-          title: 'Deletion Restricted',
-          description: 'You cannot delete verified submissions as a regular user.',
-          variant: 'destructive',
-        });
-        setShowConfirmDeleteModal(false);
-        setIsDeleting(false); // Ensure loading state is reset
-        setSubmissionToDeleteId(null);
-        return;
-      }
-
-      const success = await deleteSubmission(submissionToDeleteId);
+      const success = await deleteSubmission(id);
       if (success) {
         toast({ title: 'Submission deleted successfully!', variant: 'default' });
-        setUserSubmissions(prev => prev.filter(sub => sub.id !== submissionToDeleteId));
+        // Update local state after successful deletion
+        setUserSubmissions(prev => prev.filter(sub => sub.id !== id));
+        handleCloseModal(); // Close the modal
       } else {
         toast({ title: 'Failed to delete submission.', description: 'Please try again.', variant: 'destructive' });
       }
     } catch (error) {
       console.error('Error during deletion process:', error);
       toast({ title: 'An error occurred.', description: 'Could not delete submission.', variant: 'destructive' });
-    } finally {
-      setIsDeleting(false);
-      setShowConfirmDeleteModal(false);
-      setSubmissionToDeleteId(null);
     }
   };
+
 
   if (!user) {
     return (
@@ -188,15 +177,20 @@ const YourData = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {userSubmissions.map((submission) => (
-                          <SubmissionTableRow
-                            key={submission.id}
-                            submission={submission}
-                            onDelete={handleDeleteClick}
-                            isOwner={true}
-                            canDeleteByOwner={!submission.verified}
-                          />
-                        ))}
+                        {userSubmissions.map((submission) => {
+                          const isOwner = user?.id === submission.userId;
+                          const canDeleteByOwner = (isOwner && !submission.verified);
+                          return (
+                            <SubmissionTableRow
+                              key={submission.id}
+                              submission={submission}
+                              onDelete={() => handleDelete(submission.id)} // Pass handler for direct delete
+                              onOpenModal={() => handleOpenModal(submission)} // Pass new open modal handler
+                              isOwner={isOwner}
+                              canDeleteByOwner={canDeleteByOwner}
+                            />
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
@@ -250,44 +244,15 @@ const YourData = () => {
           </TabsContent>
         </Tabs>
 
-        {/* Delete Confirmation Modal */}
-        {showConfirmDeleteModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-md p-6 bg-white rounded-xl shadow-lg">
-              <CardHeader className="border-b pb-4 mb-4">
-                <CardTitle className="text-xl font-bold text-red-600">Confirm Deletion</CardTitle>
-              </CardHeader>
-              <CardContent className="text-gray-700 mb-6">
-                <p className="mb-4">Are you sure you want to delete this BRIX measurement?</p>
-                <p className="font-semibold">This action cannot be undone.</p>
-              </CardContent>
-              <div className="flex justify-end space-x-3">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowConfirmDeleteModal(false);
-                    setSubmissionToDeleteId(null);
-                  }}
-                  disabled={isDeleting}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleConfirmDelete}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4 mr-2" />
-                  )}
-                  {isDeleting ? 'Deleting...' : 'Delete'}
-                </Button>
-              </div>
-            </Card>
-          </div>
-        )}
+        {/* The Modal Component - now handling delete functionality */}
+        <DataPointDetailModal
+          dataPoint={selectedDataPoint}
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          onDeleteSuccess={(id) => {
+            handleDelete(id);
+          }}
+        />
       </main>
     </div>
   );

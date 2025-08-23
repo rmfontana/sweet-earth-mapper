@@ -2,9 +2,8 @@ import React from 'react';
 import { TableCell, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { MapPin, Calendar, CheckCircle, Edit, Trash2, Eye, MessageSquare, Clock, Lock, User } from 'lucide-react'; // Added User icon
-import { Link } from 'react-router-dom';
 import { BrixDataPoint } from '../../types';
+import { MapPin, Calendar, CheckCircle, Edit, Trash2, Eye, MessageSquare, Clock, Lock, User } from 'lucide-react';
 import { useBrixColorFromContext } from '../../lib/getBrixColor';
 
 interface SubmissionTableRowProps {
@@ -12,9 +11,10 @@ interface SubmissionTableRowProps {
   onDelete: (id: string) => void;
   isOwner: boolean; // Indicates if the current user is the owner (passed from parent)
   canDeleteByOwner: boolean; // Indicates if owner can delete (based on RLS and verified status, passed from parent)
+  onOpenModal: (submission: BrixDataPoint) => void;
 }
 
-const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onDelete, isOwner, canDeleteByOwner }) => {
+const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onDelete, isOwner, canDeleteByOwner, onOpenModal }) => {
   // Use the useBrixColorFromContext to get the background color class
   const brixColorClass = useBrixColorFromContext(
     submission.cropType?.toLowerCase().trim() || '',
@@ -28,6 +28,7 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
     <TableRow
       key={submission.id}
       className="hover:bg-gray-100 transition-colors duration-200"
+      onClick={() => onOpenModal(submission)} // Make the whole row clickable
     >
       {/* Crop / Variety / Brand / Store Cell */}
       <TableCell className="py-3 px-4 break-words">
@@ -108,18 +109,24 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
       {/* Actions Cell */}
       <TableCell className="text-center py-3 px-4">
         <div className="flex justify-center items-center space-x-1">
-          <Link to={`/data-point/${submission.id}`}>
-            <Button variant="ghost" size="sm" aria-label="View submission details">
-              <Eye className="w-5 h-5" />
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="View submission details"
+            onClick={() => onOpenModal(submission)}
+          >
+            <Eye className="w-5 h-5" />
             </Button>
-          </Link>
 
           {canEdit && (
-            <Link to={`/data-point/edit/${submission.id}`} state={{ from: '/your-data' }}>
-              <Button variant="ghost" size="sm" aria-label="Edit submission">
-                <Edit className="w-5 h-5" />
-              </Button>
-            </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Edit submission"
+              onClick={() => (window.location.href = `/data-point/edit/${submission.id}`)}
+            >
+              <Edit className="w-5 h-5" />
+            </Button>
           )}
 
           {/* Delete Button / Locked Indicator */}

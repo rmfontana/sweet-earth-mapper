@@ -8,7 +8,6 @@ import { AuthProvider } from "./contexts/AuthContext";
 import Index from "./pages/Index";
 import MapView from "./pages/MapView";
 import DataBrowser from "./pages/DataBrowser";
-import DataPointDetail from "./pages/DataPointDetail";
 import DataEntry from "./pages/DataEntry";
 import YourData from "./pages/YourData";
 import Login from "./pages/Login";
@@ -51,14 +50,6 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <DataBrowser />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/data-point/:id"
-              element={
-                <ProtectedRoute>
-                  <DataPointDetail />
                 </ProtectedRoute>
               }
             />

@@ -24,13 +24,14 @@ import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
 import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext';
 import { applyFilters, getFilterSummary } from '../../lib/filterUtils';
 import SubmissionTableRow from '../common/SubmissionTableRow';
-import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext'; // NEW: Import useAuth
 
 // New imports for the expanded filter UI (from shadcn/ui and react-range)
 import { Command, CommandInput, CommandItem, CommandList, CommandEmpty } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Range, getTrackBackground } from 'react-range'; // For Brix Range Slider
+
+import DataPointDetailModal from '../common/DataPointDetailModal'; // NEW: Import the modal
 
 // Constants for Brix Range Slider
 const STEP = 0.5;
@@ -116,7 +117,6 @@ const DataTable: React.FC = () => {
   const [sortBy, setSortBy] = useState<keyof BrixDataPoint>('submittedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
   // States for filter dropdown search queries
@@ -131,6 +131,9 @@ const DataTable: React.FC = () => {
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [availableStores, setAvailableStores] = useState<string[]>([]);
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedDataPoint, setSelectedDataPoint] = useState<BrixDataPoint | null>(null);
 
 
   // Fetch submissions and filter options on mount
@@ -303,12 +306,21 @@ const DataTable: React.FC = () => {
   // this general browser should also optimistically update the main data.
   // For now, it will just log. If you want full deletion from here,
   // we'd need to expand this, possibly introducing a confirmation modal here as well.
-  const handleDelete = (id: string) => {
-    console.log('Delete submission from DataTable:', id);
-    // You would typically refetch data or remove from local state after a successful delete
-    // For now, it's a placeholder. If you need full delete functionality here, let me know!
+  const handleOpenModal = (dataPoint: BrixDataPoint) => {
+    setSelectedDataPoint(dataPoint);
+    setIsModalOpen(true);
   };
 
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedDataPoint(null);
+  };
+
+  const handleDeleteSuccess = (deletedId: string) => {
+    // Update local state after a successful delete
+    setData(currentData => currentData.filter(dp => dp.id !== deletedId));
+    handleCloseModal(); // Close modal after delete
+  };
 
   if (loading) {
     return (
@@ -701,9 +713,10 @@ const DataTable: React.FC = () => {
                       <SubmissionTableRow
                         key={submission.id}
                         submission={submission}
-                        onDelete={handleDelete} // Placeholder for now, can be wired up later
+                        onDelete={handleDeleteSuccess}
                         isOwner={isOwner}
                         canDeleteByOwner={canDeleteByOwner} // Pass the newly calculated prop
+                        onOpenModal={handleOpenModal}
                       />
                     );
                   })
@@ -734,6 +747,14 @@ const DataTable: React.FC = () => {
           Next <ChevronRight className="w-4 h-4 ml-2" />
         </Button>
       </div>
+
+      {/* The Modal Component */}
+      <DataPointDetailModal
+        dataPoint={selectedDataPoint}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onDeleteSuccess={handleDeleteSuccess}
+      /> 
     </div>
   );
 };
