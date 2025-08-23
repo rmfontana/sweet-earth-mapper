@@ -196,14 +196,16 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 
               <div className="flex flex-col space-y-3">
                 <h3 className="font-semibold text-gray-600 border-b border-gray-100 pb-2">Navigation</h3>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleViewOnMap}
-                >
-                  <MapPin className="w-4 h-4 mr-2" />
-                  View on Map
-                </Button>
+                {dataPoint.verified && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleViewOnMap}
+                  >
+                    <MapPin className="w-4 h-4 mr-2" />
+                    View on Map
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   className="w-full"
@@ -220,40 +222,40 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
             
             {/* BRIX Scale */}
             <div className="space-y-3 pt-6 border-t border-gray-100">
-                <h3 className="font-semibold text-gray-600">BRIX Scale Reference</h3>
-                {dataPoint.excellentBrix ? (
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></div>
-                      <span>
-                        <strong className="font-medium">Poor:</strong> Less than {dataPoint.averageBrix} BRIX
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></div>
-                      <span>
-                        <strong className="font-medium">Average:</strong> {dataPoint.averageBrix} to {dataPoint.goodBrix} BRIX
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></div>
-                      <span>
-                        <strong className="font-medium">Good:</strong> {dataPoint.goodBrix} to {dataPoint.excellentBrix} BRIX
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full bg-green-700 flex-shrink-0"></div>
-                      <span>
-                        <strong className="font-medium">Excellent:</strong> {dataPoint.excellentBrix} BRIX and above
-                      </span>
-                    </div>
+              <h3 className="font-semibold text-gray-600">BRIX Scale Reference</h3>
+              {dataPoint.excellentBrix ? (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></div>
+                    <span>
+                      <strong className="font-medium">Poor:</strong> Less than {dataPoint.averageBrix} BRIX
+                    </span>
                   </div>
-                ) : (
-                  <p className="text-sm text-gray-500 italic">
-                    BRIX scale data unavailable for this crop.
-                  </p>
-                )}
-              </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></div>
+                    <span>
+                      <strong className="font-medium">Average:</strong> {dataPoint.averageBrix} to {dataPoint.goodBrix} BRIX
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></div>
+                    <span>
+                      <strong className="font-medium">Good:</strong> {dataPoint.goodBrix} to {dataPoint.excellentBrix} BRIX
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-green-700 flex-shrink-0"></div>
+                    <span>
+                      <strong className="font-medium">Excellent:</strong> {dataPoint.excellentBrix} BRIX and above
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 italic">
+                  BRIX scale data unavailable for this crop.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </DialogContent>

@@ -8,8 +8,8 @@ import { applyFilters } from '../../lib/filterUtils';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { MapPin, Calendar, User, CheckCircle, Eye } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom'; // Corrected: Added useLocation
+import { MapPin, Calendar, User, CheckCircle, Eye, X } from 'lucide-react'; // Corrected: Added X
+import { Link, useLocation } from 'react-router-dom';
 import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
 import type { GeoJSON } from 'geojson';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
@@ -87,8 +87,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   nearMeTriggered,
   onNearMeHandled
 }) => {
-  const location = useLocation(); // Corrected: Added useLocation
-  const { highlightedPoint } = location.state || {}; // Corrected: Destructure highlightedPoint from state
+  const location = useLocation();
+  const { highlightedPoint } = location.state || {};
   const { filters, isAdmin } = useFilters();
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -243,12 +243,28 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       marker.addTo(mapRef.current!);
       markersRef.current.push(marker);
       
-      markerElement.addEventListener('click', () => {
+      // Stop propagation on marker click to prevent map's click-away behavior
+      markerElement.addEventListener('click', (e) => {
+        e.stopPropagation();
         setSelectedPoint(point);
       });
     });
 
+    // Added: Click event listener to the map to clear the selected point
+    const mapClickListener = () => setSelectedPoint(null);
+    mapRef.current.on('click', mapClickListener);
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.off('click', mapClickListener);
+      }
+    };
   }, [filteredData, isMapLoaded, getColor]);
+
+  // Handler for the close button
+  const handleClose = () => {
+    setSelectedPoint(null);
+  };
 
   return (
     <div className="relative w-full h-full flex flex-col">
@@ -257,6 +273,15 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <div className="absolute top-2 right-2 z-10 w-80 max-h-screen overflow-y-auto">
           <Card className="shadow-lg">
             <CardContent className="p-4">
+              {/* Added: Close button for the info card */}
+              <button
+                onClick={handleClose}
+                className="absolute top-2 right-2 p-1 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
               <h3 className="text-lg font-bold">
                 {selectedPoint.name_normalized || selectedPoint.cropType}
               </h3>
