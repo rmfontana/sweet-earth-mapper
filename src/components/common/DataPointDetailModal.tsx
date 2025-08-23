@@ -84,7 +84,6 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [dataPoint, setDataPoint] = useState<BrixDataPoint | null>(initialDataPoint);
   const [error, setError] = useState<string | null>(null);
 
   const [assessmentDate, setAssessmentDate] = useState('');
@@ -107,6 +106,8 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   // Combined useEffect for data fetching and state population
   useEffect(() => {
     async function fetchAllData() {
+      // The crucial change: Check if initialDataPoint exists
+      // If it doesn't, no data fetching or state population should occur
       if (!isOpen || !initialDataPoint) return;
 
       setError(null);
@@ -159,7 +160,6 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
           setBrandId(isValidJoinedData(submissionData.brand) ? submissionData.brand.id : '');
           setVerifiedById(isValidJoinedData(submissionData.verifier) ? submissionData.verifier.id : '');
         } else {
-          // This case should be rare, but good to handle
           console.error('Submission data is null or undefined.');
           setError('Failed to load submission details.');
         }
@@ -176,19 +176,19 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       }
     }
     fetchAllData();
-  }, [isOpen, initialDataPoint, isAdmin, toast]);
+  }, [isOpen, initialDataPoint, isAdmin, toast]); // Dependency array is correct
 
   const handleDelete = async () => {
-    if (!dataPoint || !user) return;
+    if (!initialDataPoint || !user) return;
     setIsDeleting(true);
     try {
-      const success = await deleteSubmission(dataPoint.id);
+      const success = await deleteSubmission(initialDataPoint.id);
       if (success) {
         toast({
           title: 'Submission Deleted',
-          description: `The submission for ${dataPoint.cropType} has been permanently deleted.`,
+          description: `The submission for ${initialDataPoint.cropType} has been permanently deleted.`,
         });
-        onDeleteSuccess?.(dataPoint.id);
+        onDeleteSuccess?.(initialDataPoint.id);
       } else {
         throw new Error('Deletion failed');
       }
@@ -205,7 +205,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   };
 
   const handleSave = async () => {
-    if (!dataPoint) return;
+    if (!initialDataPoint) return;
     setSaving(true);
     try {
       const updateData: any = {
@@ -227,7 +227,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       const { error } = await supabase
         .from('submissions')
         .update(updateData)
-        .eq('id', dataPoint.id);
+        .eq('id', initialDataPoint.id);
 
       if (error) throw error;
       
@@ -238,7 +238,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       const updatedVerifiedByName = users.find(u => u.id === verifiedById)?.display_name || '';
 
       const updatedData: BrixDataPoint = {
-        ...dataPoint,
+        ...initialDataPoint,
         variety: cropVariety,
         brixLevel: brixLevel as number,
         submittedAt: assessmentDate,
@@ -275,57 +275,58 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     }
   };
 
-  if (!dataPoint) {
+  // Now we check initialDataPoint directly, which is always up-to-date
+  if (!initialDataPoint) {
     return null;
   }
 
-  const isOwner = user?.id === dataPoint.userId;
-  const canEdit = isAdmin || (isOwner && !dataPoint.verified);
-  const canDelete = isAdmin || (isOwner && !dataPoint.verified);
+  const isOwner = user?.id === initialDataPoint.userId;
+  const canEdit = isAdmin || (isOwner && !initialDataPoint.verified);
+  const canDelete = isAdmin || (isOwner && !initialDataPoint.verified);
   
   const brixColor = (brix: number): string => {
     if (
-      dataPoint.excellentBrix &&
-      brix >= dataPoint.excellentBrix
+      initialDataPoint.excellentBrix &&
+      brix >= initialDataPoint.excellentBrix
     )
       return 'bg-green-500 text-white';
-    if (dataPoint.goodBrix && brix >= dataPoint.goodBrix)
+    if (initialDataPoint.goodBrix && brix >= initialDataPoint.goodBrix)
       return 'bg-lime-500 text-white';
-    if (dataPoint.averageBrix && brix >= dataPoint.averageBrix)
+    if (initialDataPoint.averageBrix && brix >= initialDataPoint.averageBrix)
       return 'bg-yellow-500';
-    if (dataPoint.poorBrix && brix >= dataPoint.poorBrix)
+    if (initialDataPoint.poorBrix && brix >= initialDataPoint.poorBrix)
       return 'bg-orange-500';
     return 'bg-red-500 text-white';
   };
 
   const getBrixQuality = (brix: number): string => {
     if (
-      dataPoint.excellentBrix &&
-      brix >= dataPoint.excellentBrix
+      initialDataPoint.excellentBrix &&
+      brix >= initialDataPoint.excellentBrix
     )
       return 'Excellent';
-    if (dataPoint.goodBrix && brix >= dataPoint.goodBrix)
+    if (initialDataPoint.goodBrix && brix >= initialDataPoint.goodBrix)
       return 'Good';
-    if (dataPoint.averageBrix && brix >= dataPoint.averageBrix)
+    if (initialDataPoint.averageBrix && brix >= initialDataPoint.averageBrix)
       return 'Average';
-    if (dataPoint.poorBrix && brix >= dataPoint.poorBrix)
+    if (initialDataPoint.poorBrix && brix >= initialDataPoint.poorBrix)
       return 'Poor';
     return 'Very Poor';
   };
 
-  const formattedDate = new Date(dataPoint.submittedAt).toLocaleDateString();
-  const formattedTime = new Date(dataPoint.submittedAt).toLocaleTimeString([], {
+  const formattedDate = new Date(initialDataPoint.submittedAt).toLocaleDateString();
+  const formattedTime = new Date(initialDataPoint.submittedAt).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
   });
-  const googleMapsUrl = `http://maps.google.com/?q=${dataPoint.latitude},${dataPoint.longitude}`;
+  const googleMapsUrl = `http://maps.google.com/?q=${initialDataPoint.latitude},${initialDataPoint.longitude}`;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md md:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex justify-between items-center">
-            {isEditing ? `Edit Submission for ${dataPoint.cropType}` : `Details for ${dataPoint.cropType}`}
+            {isEditing ? `Edit Submission for ${initialDataPoint.cropType}` : `Details for ${initialDataPoint.cropType}`}
             {canEdit && !isEditing && (
               <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
                 <Edit className="w-4 h-4" />
@@ -433,7 +434,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
-              {dataPoint.images && dataPoint.images.length > 0 ? (
+              {initialDataPoint.images && initialDataPoint.images.length > 0 ? (
                 <div className="h-48 w-full bg-gray-100 flex items-center justify-center rounded-lg text-gray-400">
                   Image Placeholder
                 </div>
@@ -455,13 +456,13 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                       <div className="flex items-center gap-2">
                         <Badge
                           className={`text-lg px-3 py-1 ${brixColor(
-                            dataPoint.brixLevel,
+                            initialDataPoint.brixLevel,
                           )}`}
                         >
-                          {dataPoint.brixLevel.toFixed(1)}°
+                          {initialDataPoint.brixLevel.toFixed(1)}°
                         </Badge>
                         <span className="text-sm text-gray-500">
-                          ({getBrixQuality(dataPoint.brixLevel)})
+                          ({getBrixQuality(initialDataPoint.brixLevel)})
                         </span>
                       </div>
                     </TableCell>
@@ -472,7 +473,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                       <strong>Crop</strong>
                     </TableCell>
                     <TableCell>
-                      {dataPoint.variety || dataPoint.cropType}
+                      {initialDataPoint.variety || initialDataPoint.cropType}
                     </TableCell>
                   </TableRow>
                   <TableRow>
@@ -480,14 +481,14 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                       <Store className="inline-block h-4 w-4 mr-2" />
                       <strong>Store</strong>
                     </TableCell>
-                    <TableCell>{dataPoint.storeName || 'N/A'}</TableCell>
+                    <TableCell>{initialDataPoint.storeName || 'N/A'}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell>
                       <Tag className="inline-block h-4 w-4 mr-2" />
                       <strong>Brand</strong>
                     </TableCell>
-                    <TableCell>{dataPoint.brandName || 'N/A'}</TableCell>
+                    <TableCell>{initialDataPoint.brandName || 'N/A'}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell>
@@ -496,8 +497,8 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center">
-                        {dataPoint.locationName || 'N/A'}
-                        {dataPoint.latitude && dataPoint.longitude && (
+                        {initialDataPoint.locationName || 'N/A'}
+                        {initialDataPoint.latitude && initialDataPoint.longitude && (
                           <a
                             href={googleMapsUrl}
                             target="_blank"
@@ -530,27 +531,27 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                       <User className="inline-block h-4 w-4 mr-2" />
                       <strong>Submitted By</strong>
                     </TableCell>
-                    <TableCell>{dataPoint.submittedBy}</TableCell>
+                    <TableCell>{initialDataPoint.submittedBy}</TableCell>
                   </TableRow>
-                  {dataPoint.verified && (
+                  {initialDataPoint.verified && (
                     <TableRow>
                       <TableCell>
                         <Check className="inline-block h-4 w-4 mr-2 text-green-500" />
                         <strong>Verified</strong>
                       </TableCell>
                       <TableCell>
-                        Yes by {dataPoint.verifiedBy} at{' '}
-                        {dataPoint.verifiedAt ? new Date(dataPoint.verifiedAt).toLocaleDateString() : ''}
+                        Yes by {initialDataPoint.verifiedBy} at{' '}
+                        {initialDataPoint.verifiedAt ? new Date(initialDataPoint.verifiedAt).toLocaleDateString() : ''}
                       </TableCell>
                     </TableRow>
                   )}
-                  {dataPoint.outlier_notes && (
+                  {initialDataPoint.outlier_notes && (
                     <TableRow>
                       <TableCell>
                         <MessageCircle className="inline-block h-4 w-4 mr-2" />
                         <strong>Notes</strong>
                       </TableCell>
-                      <TableCell>{dataPoint.outlier_notes}</TableCell>
+                      <TableCell>{initialDataPoint.outlier_notes}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
