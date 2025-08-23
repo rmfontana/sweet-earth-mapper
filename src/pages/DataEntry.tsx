@@ -93,6 +93,8 @@ const DataEntry = () => {
 
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
   const [locationSuggestions, setLocationSuggestions] = useState<LocationFeature[]>([]);
+  // Store the user's current GPS location to use for proximity search
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const [showCropDropdown, setShowCropDropdown] = useState(false);
   const [showBrandDropdown, setShowBrandDropdown] = useState(false);
@@ -219,42 +221,39 @@ const DataEntry = () => {
   };
 
   // Refactored useEffect for location suggestions (best practice)
+  // This is the key change to make the search more relevant
   useEffect(() => {
     const controller = new AbortController();
     const timeout = setTimeout(async () => {
       const query = formData.location.trim();
-      if (!mapboxToken || query.length < 3) {
+      
+      // The search only runs if we have a token, a query, and the user's location
+      if (!mapboxToken || query.length < 3 || !userLocation) {
         setLocationSuggestions([]);
         return;
       }
 
       try {
-        const storeTypes = 'poi.retail,poi.grocery,poi.pharmacy';
-        const generalTypes = 'poi,address,place';
-
-        const [storesResponse, generalResponse] = await Promise.all([
-          fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&types=${storeTypes}&limit=5&autocomplete=true&country=US`,
-            { signal: controller.signal }
-          ),
-          fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&types=${generalTypes}&limit=5&autocomplete=true&country=US`,
-            { signal: controller.signal }
-          ),
-        ]);
-
-        const [storesData, generalData] = await Promise.all([
-          storesResponse.json(),
-          generalResponse.json(),
-        ]);
-
-        const allFeatures = [...(storesData.features || []), ...(generalData.features || [])];
-
-        const uniqueFeatures = allFeatures.filter(
-          (item, index, self) => index === self.findIndex(t => t.place_name === item.place_name)
+        const searchParams = new URLSearchParams({
+          access_token: mapboxToken,
+          country: 'US',
+          autocomplete: 'true',
+          // CRITICAL: Bias search results towards the user's location
+          proximity: `${userLocation.longitude},${userLocation.latitude}`, 
+          // CRITICAL: Prioritize Points of Interest (stores, etc.) over general places
+          types: 'poi,address,place', 
+          limit: '5',
+        });
+        
+        const res = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?${searchParams.toString()}`,
+          { signal: controller.signal }
         );
 
-        setLocationSuggestions(uniqueFeatures.slice(0, 5) as LocationFeature[]);
+        const data = await res.json();
+        const allSuggestions = data.features || [];
+
+        setLocationSuggestions(allSuggestions);
       } catch (e) {
         if ((e as any).name !== 'AbortError') {
           console.error('Location search error:', e);
@@ -267,7 +266,7 @@ const DataEntry = () => {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [formData.location, mapboxToken, toast]);
+  }, [formData.location, mapboxToken, userLocation, toast]); // userLocation is now a dependency
 
   // Use centralized handler for location selection
   const selectLocationSuggestion = (feature: LocationFeature) => {
@@ -297,6 +296,8 @@ const DataEntry = () => {
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
         const { latitude, longitude } = coords;
+        // IMPORTANT: Store the user's location for use in the search function
+        setUserLocation({ latitude, longitude });
         try {
           const res = await fetch(
             `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxToken}`
@@ -740,7 +741,7 @@ const DataEntry = () => {
                         )}
                       </Button>
                     </div>
-                    
+
                     {/* Store/Location suggestions dropdown */}
                     {locationSuggestions.length > 0 && isManualLocationEntry && (
                       <ul className="absolute z-30 w-full max-h-48 overflow-auto rounded-xl border-2 border-gray-200 bg-white shadow-xl mt-1">
@@ -752,11 +753,11 @@ const DataEntry = () => {
                           >
                             <div className="flex items-start space-x-3">
                               {/* Show different icons based on feature type */}
-                              {feature.place_name.toLowerCase().includes('store') || 
-                              feature.place_name.toLowerCase().includes('market') ||
-                              feature.place_name.toLowerCase().includes('walmart') ||
-                              feature.place_name.toLowerCase().includes('target') ||
-                              feature.place_name.toLowerCase().includes('grocery') ? (
+                              {feature.place_name.toLowerCase().includes('store') ||
+                                feature.place_name.toLowerCase().includes('market') ||
+                                feature.place_name.toLowerCase().includes('walmart') ||
+                                feature.place_name.toLowerCase().includes('target') ||
+                                feature.place_name.toLowerCase().includes('grocery') ? (
                                 <Store className="w-4 h-4 text-blue-500 mt-1 flex-shrink-0" />
                               ) : (
                                 <MapPin className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
@@ -774,7 +775,7 @@ const DataEntry = () => {
                         ))}
                       </ul>
                     )}
-                    
+
                     {/* Show coordinates when location is selected */}
                     {formData.latitude !== 0 && formData.longitude !== 0 && (
                       <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -787,7 +788,7 @@ const DataEntry = () => {
                         </div>
                       </div>
                     )}
-                    
+
                     {errors.location && (
                       <p className="text-red-600 text-sm mt-2 flex items-center">
                         <X className="w-4 h-4 mr-1" />
@@ -796,8 +797,53 @@ const DataEntry = () => {
                     )}
                   </div>
                 </div>
+              </div>
 
-                {/* Row 4: Dates */}
+              {/* Optional Fields Section */}
+              <div className="border-l-4 border-purple-500 pl-6 pt-8">
+                <div className="flex items-center space-x-2 mb-6">
+                  <h3 className="text-xl font-bold text-gray-900">Optional Information</h3>
+                  <div className="px-3 py-1 bg-purple-100 text-purple-800 text-sm font-medium rounded-full">
+                    Optional
+                  </div>
+                </div>
+
+                {/* Row 4: Variety and Farm Location */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                  {/* Variety */}
+                  <div>
+                    <Label htmlFor="variety" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                      <Package className="inline w-4 h-4 mr-2" />
+                      Variety
+                    </Label>
+                    <Input
+                      id="variety"
+                      type="text"
+                      placeholder="e.g., Roma, Honeycrisp"
+                      value={formData.variety}
+                      onChange={e => handleInputChange('variety', e.target.value)}
+                      className="w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-purple-200 hover:border-gray-300 border-gray-200 focus:border-purple-500 bg-white"
+                    />
+                  </div>
+
+                  {/* Farm Location */}
+                  <div>
+                    <Label htmlFor="farmLocation" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                      <MapPin className="inline w-4 h-4 mr-2" />
+                      Farm Location (if known)
+                    </Label>
+                    <Input
+                      id="farmLocation"
+                      type="text"
+                      placeholder="e.g., Local farm in Springfield"
+                      value={formData.farmLocation}
+                      onChange={e => handleInputChange('farmLocation', e.target.value)}
+                      className="w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-purple-200 hover:border-gray-300 border-gray-200 focus:border-purple-500 bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 5: Dates */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                   {/* Purchase Date */}
                   <div>
@@ -843,51 +889,6 @@ const DataEntry = () => {
                         {errors.measurementDate}
                       </p>
                     )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Optional Fields Section */}
-              <div className="border-l-4 border-purple-500 pl-6 pt-8">
-                <div className="flex items-center space-x-2 mb-6">
-                  <h3 className="text-xl font-bold text-gray-900">Optional Information</h3>
-                  <div className="px-3 py-1 bg-purple-100 text-purple-800 text-sm font-medium rounded-full">
-                    Optional
-                  </div>
-                </div>
-
-                {/* Row 5: Variety and Farm Location */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                  {/* Variety */}
-                  <div>
-                    <Label htmlFor="variety" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
-                      <Package className="inline w-4 h-4 mr-2" />
-                      Variety
-                    </Label>
-                    <Input
-                      id="variety"
-                      type="text"
-                      placeholder="e.g., Roma, Honeycrisp"
-                      value={formData.variety}
-                      onChange={e => handleInputChange('variety', e.target.value)}
-                      className="w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-purple-200 hover:border-gray-300 border-gray-200 focus:border-purple-500 bg-white"
-                    />
-                  </div>
-
-                  {/* Farm Location */}
-                  <div>
-                    <Label htmlFor="farmLocation" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
-                      <MapPin className="inline w-4 h-4 mr-2" />
-                      Farm Location (if known)
-                    </Label>
-                    <Input
-                      id="farmLocation"
-                      type="text"
-                      placeholder="e.g., Local farm in Springfield"
-                      value={formData.farmLocation}
-                      onChange={e => handleInputChange('farmLocation', e.target.value)}
-                      className="w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-purple-200 hover:border-gray-300 border-gray-200 focus:border-purple-500 bg-white"
-                    />
                   </div>
                 </div>
 
@@ -944,7 +945,6 @@ const DataEntry = () => {
                     accept="image/jpeg,image/png,image/webp"
                     multiple
                     onChange={handleImageUpload}
-                    // Adjusted height for better visibility of native file input button
                     className="h-14 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                   />
                   {errors.images && (
