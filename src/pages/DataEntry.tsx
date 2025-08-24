@@ -17,28 +17,23 @@ import {
   Store,
   Droplets,
   Camera,
-  Clock, // <-- Correct import
+  Clock,
   FileText,
 } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 import { supabase } from '../integrations/supabase/client';
 import { getSupabaseUrl, getPublishableKey } from '@/lib/utils';
-import Combobox from '../components/ui/combo-box'; // Correct path to your Combobox
-import LocationSearch from '../components/common/LocationSearch'; // Assuming this component exists
-import { fetchCropTypes } from '../lib/fetchCropTypes'; // Returns string[]
-import { fetchBrands } from '../lib/fetchBrands'; // Returns string[]
-import { fetchStores } from '../lib/fetchStores'; // Returns string[]
-
-// The Item interface used by your Combobox component
-interface Item {
-  id?: string;
-  name: string;
-}
+import Combobox from '../components/ui/combo-box';
+import LocationSearch from '../components/common/LocationSearch';
+import { useStaticData } from '../hooks/useStaticData'; // Updated import
 
 const DataEntry = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Use the shared static data hook
+  const { crops, brands, stores, isLoading: staticDataLoading, error: staticDataError } = useStaticData();
 
   const [formData, setFormData] = useState({
     cropType: '',
@@ -57,11 +52,6 @@ const DataEntry = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  
-  // State for the fetched data, to be converted for the Combobox
-  const [fetchedCropTypes, setFetchedCropTypes] = useState<string[]>([]);
-  const [fetchedBrands, setFetchedBrands] = useState<string[]>([]);
-  const [fetchedStores, setFetchedStores] = useState<string[]>([]);
 
   // Redirect if not authorized
   useEffect(() => {
@@ -70,25 +60,16 @@ const DataEntry = () => {
     }
   }, [user, navigate]);
 
-  // Fetch all static data on mount
+  // Show static data errors
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setFetchedCropTypes(await fetchCropTypes());
-        setFetchedBrands(await fetchBrands());
-        setFetchedStores(await fetchStores());
-      } catch (err) {
-        console.error('Failed to load form data:', err);
-        toast({ title: 'Error loading form options', description: 'Failed to fetch crops, brands, or stores.', variant: 'destructive' });
-      }
-    };
-    loadData();
-  }, [toast]);
-
-  // Convert the string arrays into the Item[] format for the Combobox
-  const cropItems: Item[] = fetchedCropTypes.map((name) => ({ name }));
-  const brandItems: Item[] = fetchedBrands.map((name) => ({ name }));
-  const storeItems: Item[] = fetchedStores.map((name) => ({ name }));
+    if (staticDataError) {
+      toast({ 
+        title: 'Error loading form options', 
+        description: staticDataError, 
+        variant: 'destructive' 
+      });
+    }
+  }, [staticDataError, toast]);
 
   // Centralized input change handler
   const handleInputChange = (field: keyof typeof formData, value: any) => {
@@ -276,6 +257,19 @@ const DataEntry = () => {
 
   if (!user || (user.role !== 'contributor' && user.role !== 'admin')) return null;
 
+  // Show loading if static data is still loading
+  if (staticDataLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+        <Header />
+        <main className="max-w-5xl mx-auto p-6 lg:p-8 pb-24 text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto" />
+          <p className="mt-4 text-gray-600">Loading form data...</p>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <Header />
@@ -318,7 +312,7 @@ const DataEntry = () => {
                       Crop Type <span className="ml-1 text-red-600">*</span>
                     </Label>
                     <Combobox
-                      items={cropItems} // <-- Mapped data
+                      items={crops}
                       value={formData.cropType}
                       onSelect={(value) => handleInputChange('cropType', value)}
                       placeholder="Select or enter crop type"
@@ -333,7 +327,7 @@ const DataEntry = () => {
                       Farm/Brand Name <span className="ml-1 text-red-600">*</span>
                     </Label>
                     <Combobox
-                      items={brandItems} // <-- Mapped data
+                      items={brands}
                       value={formData.brand}
                       onSelect={(value) => handleInputChange('brand', value)}
                       placeholder="Select or enter farm/brand"
@@ -350,7 +344,7 @@ const DataEntry = () => {
                       Point of Purchase <span className="ml-1 text-red-600">*</span>
                     </Label>
                     <Combobox
-                      items={storeItems} // <-- Mapped data
+                      items={stores}
                       value={formData.store}
                       onSelect={(value) => handleInputChange('store', value)}
                       placeholder="Select or enter store"

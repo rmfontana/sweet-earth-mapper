@@ -37,11 +37,7 @@ import { getBrixQuality } from '../../lib/getBrixQuality';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import Combobox from '../ui/combo-box';
 import LocationSearch from './LocationSearch';
-
-interface DatabaseItem {
-  id?: string;
-  name: string;
-}
+import { useStaticData } from '../../hooks/useStaticData'; // Add this import
 
 interface DataPointDetailModalProps {
   dataPoint: BrixDataPoint | null;
@@ -61,6 +57,10 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
   const { cache: thresholdsCache } = useCropThresholds();
+  
+  // Use the shared static data hook instead of fetching separately
+  const { crops, brands, stores, isLoading: staticDataLoading, error: staticDataError } = useStaticData();
+  
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -69,8 +69,8 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const [isLocationLoading, setIsLocationLoading] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   
-  // 🟢 FIX: Add a new state for overall loading
-  const [isLoading, setIsLoading] = useState(true);
+  // Remove the isLoading state since we're using staticDataLoading
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // State for form data
   const [brixLevel, setBrixLevel] = useState<number | ''>('');
@@ -88,16 +88,11 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const [verifiedBy, setVerifiedBy] = useState('');
   const [verifiedAt, setVerifiedAt] = useState('');
 
-  // State for Combobox data
-  const [crops, setCrops] = useState<DatabaseItem[]>([]);
-  const [brands, setBrands] = useState<DatabaseItem[]>([]);
-  const [stores, setStores] = useState<DatabaseItem[]>([]);
-
   useEffect(() => {
-    async function fetchAllData() {
+    async function initializeModalData() {
       console.log('Modal useEffect triggered.');
       if (!isOpen || !initialDataPoint) {
-        setIsLoading(false); // Stop loading if modal is closed or data is null
+        setIsInitializing(false);
         // Reset state when modal is not open to prepare for next opening
         setBrixLevel('');
         setCropType('');
@@ -121,7 +116,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         return;
       }
       
-      setIsLoading(true); // Start loading when modal opens with data
+      setIsInitializing(true);
       console.log('Modal is open with initialDataPoint:', initialDataPoint);
 
       // Populate form state from prop immediately
@@ -140,45 +135,18 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       setVerifiedBy(initialDataPoint.verifiedBy || '');
       setVerifiedAt(initialDataPoint.verifiedAt || '');
 
-      try {
-        const [
-          { data: cropsData, error: cropsError },
-          { data: brandsData, error: brandsError },
-          { data: storesData, error: storesError },
-        ] = await Promise.all([
-          supabase.from('crops').select('id, name'),
-          supabase.from('brands').select('id, name'),
-          supabase.from('stores').select('id, name'),
-        ]);
-
-        console.log('Supabase fetch results:', { cropsData, cropsError, brandsData, brandsError, storesData, storesError });
-
-        if (cropsError || brandsError || storesError) {
-          console.error('Database fetch error:', cropsError || brandsError || storesError);
-          setError('Failed to fetch required data for editing. Some dropdowns may be empty.');
-        }
-
-        setCrops(Array.isArray(cropsData) ? cropsData : []);
-        setBrands(Array.isArray(brandsData) ? brandsData : []);
-        setStores(Array.isArray(storesData) ? storesData : []);
-      } catch (err) {
-        console.error('An error occurred during data fetching:', err);
-        setError('Failed to load data for editing.');
-        toast({
-          title: 'Error',
-          description: `Failed to load data for editing: ${err instanceof Error ? err.message : 'Unknown error'}`,
-          variant: 'destructive',
-        });
-      } finally {
-        // 🟢 FIX: Ensure loading state is set to false after all fetches
-        setIsLoading(false);
+      // Set any static data errors
+      if (staticDataError) {
+        setError(staticDataError);
       }
+
+      setIsInitializing(false);
     }
-    fetchAllData();
-  }, [isOpen, initialDataPoint, toast]);
+    initializeModalData();
+  }, [isOpen, initialDataPoint, staticDataError]);
 
   useEffect(() => {
-    // 🟢 FIX: Separate image fetching into its own effect to prevent state reset race conditions
+    // Separate image fetching into its own effect to prevent state reset race conditions
     const fetchImages = async () => {
       if (!isOpen || !initialDataPoint) return;
       setImagesLoading(true);
@@ -198,9 +166,117 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     fetchImages();
   }, [isOpen, initialDataPoint]);
 
+  const handleDelete = async () => {
+    if (!initialDataPoint) return;
+    
+    setIsDeleting(true);
+    try {
+      const success = await deleteSubmission(initialDataPoint.id);
+      if (success) {
+        toast({
+          title: 'Success',
+          description: 'Submission deleted successfully',
+        });
+        onDeleteSuccess?.(initialDataPoint.id);
+        onClose();
+      } else {
+        throw new Error('Delete operation failed');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete submission',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
-  const handleDelete = async () => { /* ... (no changes) ... */ };
-  const handleSave = async () => { /* ... (no changes) ... */ };
+  const handleSave = async () => {
+    if (!initialDataPoint) return;
+    
+    setSaving(true);
+    try {
+      // Find the actual IDs from the static data
+      const cropId = crops.find(c => c.name === cropType)?.id;
+      const brandId = brands.find(b => b.name === brand)?.id;
+      const storeId = stores.find(s => s.name === store)?.id;
+
+      const updateData: any = {
+        brix_level: typeof brixLevel === 'number' ? brixLevel : parseFloat(brixLevel as string),
+        variety: variety || null,
+        location_name: locationName,
+        latitude: latitude,
+        longitude: longitude,
+        submitted_at: measurementDate ? new Date(measurementDate + 'T00:00:00.000Z').toISOString() : initialDataPoint.submittedAt,
+        purchase_date: purchaseDate || null,
+        outlier_notes: outlierNotes || null,
+      };
+
+      // Only update IDs if we found them, otherwise keep existing values
+      if (cropId) updateData.crop_id = cropId;
+      if (brandId) updateData.brand_id = brandId;
+      if (storeId) updateData.store_id = storeId;
+      
+      // Only admin can update verification status
+      if (isAdmin) {
+        updateData.verified = verified;
+        if (verified && !initialDataPoint.verified) {
+          updateData.verified_by = user?.email || null;
+          updateData.verified_at = new Date().toISOString();
+        }
+      }
+
+      const { data, error: updateError } = await supabase
+        .from('submissions')
+        .update(updateData)
+        .eq('id', initialDataPoint.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Submission updated successfully',
+      });
+
+      // Create updated data point for callback
+      const updatedDataPoint: BrixDataPoint = {
+        ...initialDataPoint,
+        brixLevel: typeof brixLevel === 'number' ? brixLevel : parseFloat(brixLevel as string),
+        cropType: cropType,
+        variety: variety || '',
+        locationName: locationName,
+        latitude: latitude,
+        longitude: longitude,
+        submittedAt: measurementDate ? new Date(measurementDate + 'T00:00:00.000Z').toISOString() : initialDataPoint.submittedAt,
+        purchaseDate: purchaseDate || '',
+        outlier_notes: outlierNotes || '',
+        brandName: brand,
+        storeName: store,
+        verified: isAdmin ? verified : initialDataPoint.verified,
+        verifiedBy: updateData.verified_by || initialDataPoint.verifiedBy,
+        verifiedAt: updateData.verified_at || initialDataPoint.verifiedAt,
+      };
+
+      onUpdateSuccess?.(updatedDataPoint);
+      setIsEditing(false);
+    } catch (error: any) {
+      console.error('Save error:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to update submission: ${error.message}`,
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleLocationSelect = (location: { name: string, latitude: number, longitude: number }) => {
     setLocationName(location.name);
@@ -213,7 +289,9 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     return null;
   }
   
-  // 🟢 FIX: Render loading state if data is being fetched
+  // Show loading state if static data is still loading or modal is initializing
+  const isLoading = staticDataLoading || isInitializing;
+  
   if (isLoading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -258,12 +336,11 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
           </DialogTitle>
         </DialogHeader>
         
-        {/* ... The rest of the component's JSX remains the same ... */}
         <div className="max-h-[80vh] overflow-y-auto px-1">
-          {error && (
+          {(error || staticDataError) && (
             <div className="flex items-center p-4 bg-red-100 text-red-800 rounded-lg">
               <AlertCircle className="w-5 h-5 mr-3" />
-              <p>{error}</p>
+              <p>{error || staticDataError}</p>
             </div>
           )}
 
