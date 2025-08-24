@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import {
@@ -37,7 +38,7 @@ import { getBrixQuality } from '../../lib/getBrixQuality';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import Combobox from '../ui/combo-box';
 import LocationSearch from './LocationSearch';
-import { useStaticData } from '../../hooks/useStaticData'; // Add this import
+import { useStaticData } from '../../hooks/useStaticData';
 
 interface DataPointDetailModalProps {
   dataPoint: BrixDataPoint | null;
@@ -156,7 +157,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 
         setIsInitializing(false);
         console.log('=== MODAL INITIALIZATION COMPLETE ===');
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error during modal initialization:', err);
         setError(`Modal initialization failed: ${err.message}`);
         setIsInitializing(false);
@@ -226,70 +227,114 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       return;
     }
     
+    // Normalize and validate BRIX
+    const normalizeBrix = (val: number | ''): number | null => {
+      if (val === '') return null;
+      const n = typeof val === 'number' ? val : Number(val);
+      return Number.isFinite(n) ? n : null;
+    };
+    const newBrix = normalizeBrix(brixLevel);
+    const brixToSave = newBrix ?? initialDataPoint.brixLevel;
+
+    if (!Number.isFinite(brixToSave)) {
+      toast({
+        title: 'Invalid BRIX value',
+        description: 'Please enter a valid number for BRIX.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate date strings
+    const toISODateOrExisting = (dateStr: string, existingISO: string) => {
+      if (!dateStr) return existingISO;
+      const d = new Date(`${dateStr}T00:00:00.000Z`);
+      return isNaN(d.getTime()) ? existingISO : d.toISOString();
+    };
+
     setSaving(true);
     try {
       console.log('Looking for matching items in static data...');
       
-      // Add safety checks for static data arrays
       const safecrops = Array.isArray(crops) ? crops : [];
       const safebrands = Array.isArray(brands) ? brands : [];
       const safestores = Array.isArray(stores) ? stores : [];
       
-      console.log('Safe arrays:', { safecrops: safecrops.length, safebrands: safebrands.length, safestores: safestores.length });
-      
-      // Find the actual IDs from the static data
-      const cropItem = safecrops.find(c => c?.name === cropType);
-      const brandItem = safebrands.find(b => b?.name === brand);
-      const storeItem = safestores.find(s => s?.name === store);
-      
-      console.log('Found items:', { cropItem, brandItem, storeItem });
-      
-      const cropId = cropItem?.id;
-      const brandId = brandItem?.id;
-      const storeId = storeItem?.id;
+      // Resolve IDs only when values changed; crop is required if changed
+      let cropIdToSet: string | undefined;
+      let brandIdToSet: string | null | undefined;
+      let storeIdToSet: string | null | undefined;
 
-      console.log('Extracted IDs:', { cropId, brandId, storeId });
+      if (cropType !== initialDataPoint.cropType) {
+        const cropItem = safecrops.find(c => c?.name === cropType);
+        if (!cropItem?.id) {
+          toast({
+            title: 'Invalid crop',
+            description: 'Please select a valid crop from the list.',
+            variant: 'destructive',
+          });
+          setSaving(false);
+          return;
+        }
+        cropIdToSet = cropItem.id;
+      }
 
-      const updateData: any = {
-        brix_value: typeof brixLevel === 'number' ? brixLevel : parseFloat(brixLevel as string),
+      if (brand !== initialDataPoint.brandName) {
+        if (!brand) {
+          brandIdToSet = null; // allow clearing brand
+        } else {
+          const brandItem = safebrands.find(b => b?.name === brand);
+          if (!brandItem?.id) {
+            toast({
+              title: 'Invalid brand',
+              description: 'Please select a valid brand from the list or clear the field.',
+              variant: 'destructive',
+            });
+            setSaving(false);
+            return;
+          }
+          brandIdToSet = brandItem.id;
+        }
+      }
+
+      if (store !== initialDataPoint.storeName) {
+        if (!store) {
+          storeIdToSet = null; // allow clearing store
+        } else {
+          const storeItem = safestores.find(s => s?.name === store);
+          if (!storeItem?.id) {
+            toast({
+              title: 'Invalid store',
+              description: 'Please select a valid store from the list or clear the field.',
+              variant: 'destructive',
+            });
+            setSaving(false);
+            return;
+          }
+          storeIdToSet = storeItem.id;
+        }
+      }
+
+      // Build update payload (only include fields that can change)
+      const updateData: Record<string, any> = {
+        brix_value: brixToSave,
         crop_variety: variety || null,
-        assessment_date: measurementDate ? new Date(measurementDate + 'T00:00:00.000Z').toISOString() : initialDataPoint.submittedAt,
+        assessment_date: toISODateOrExisting(measurementDate, initialDataPoint.submittedAt),
         purchase_date: purchaseDate || null,
         outlier_notes: outlierNotes || null,
       };
 
-      console.log('Base update data:', updateData);
+      if (typeof cropIdToSet === 'string') updateData.crop_id = cropIdToSet;
+      if (brandIdToSet !== undefined) updateData.brand_id = brandIdToSet;
+      if (storeIdToSet !== undefined) updateData.store_id = storeIdToSet;
 
-      // Only update IDs if we found them, otherwise keep existing values
-      if (cropId) {
-        updateData.crop_id = cropId;
-        console.log('Adding crop_id:', cropId);
-      } else {
-        console.warn('No crop ID found for cropType:', cropType);
-      }
-      
-      if (brandId) {
-        updateData.brand_id = brandId;
-        console.log('Adding brand_id:', brandId);
-      } else {
-        console.warn('No brand ID found for brand:', brand);
-      }
-      
-      if (storeId) {
-        updateData.store_id = storeId;
-        console.log('Adding store_id:', storeId);
-      } else {
-        console.warn('No store ID found for store:', store);
-      }
-      
       // Only admin can update verification status
       if (isAdmin) {
         updateData.verified = verified;
         if (verified && !initialDataPoint.verified) {
-          updateData.verified_by = user?.id || null;
+          updateData.verified_by = user?.id || null; // store user id
           updateData.verified_at = new Date().toISOString();
         }
-        console.log('Admin verification updates:', { verified, verified_by: updateData.verified_by });
       }
 
       console.log('Final update data:', updateData);
@@ -300,7 +345,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         .update(updateData)
         .eq('id', initialDataPoint.id)
         .select()
-        .single();
+        .maybeSingle(); // avoid hard throw when no row returned
 
       if (updateError) {
         console.error('Supabase update error:', updateError);
@@ -314,26 +359,25 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         description: 'Submission updated successfully',
       });
 
-      // Create updated data point for callback
+      // Build updated data point for UI
       const updatedDataPoint: BrixDataPoint = {
         ...initialDataPoint,
-        brixLevel: typeof brixLevel === 'number' ? brixLevel : parseFloat(brixLevel as string),
+        brixLevel: brixToSave,
         cropType: cropType,
         variety: variety || '',
         locationName: locationName,
         latitude: latitude,
         longitude: longitude,
-        submittedAt: measurementDate ? new Date(measurementDate + 'T00:00:00.000Z').toISOString() : initialDataPoint.submittedAt,
+        submittedAt: toISODateOrExisting(measurementDate, initialDataPoint.submittedAt),
         purchaseDate: purchaseDate || null,
         outlier_notes: outlierNotes || '',
         brandName: brand,
         storeName: store,
         verified: isAdmin ? verified : initialDataPoint.verified,
-        verifiedBy: updateData.verified_by || initialDataPoint.verifiedBy,
-        verifiedAt: updateData.verified_at || initialDataPoint.verifiedAt,
+        // Keep display name stable; don't overwrite with a UUID
+        verifiedBy: initialDataPoint.verifiedBy,
+        verifiedAt: (isAdmin && verified && !initialDataPoint.verified) ? new Date().toISOString() : initialDataPoint.verifiedAt,
       };
-
-      console.log('Created updated data point:', updatedDataPoint);
 
       onUpdateSuccess?.(updatedDataPoint);
       setIsEditing(false);
@@ -341,8 +385,6 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     } catch (error: any) {
       console.error('=== SAVE OPERATION ERROR ===');
       console.error('Error details:', error);
-      console.error('Error message:', error?.message);
-      console.error('Error stack:', error?.stack);
       toast({
         title: 'Error',
         description: `Failed to update submission: ${error?.message || 'Unknown error'}`,
@@ -409,6 +451,9 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
               </Button>
             </div>
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            View and edit a BRIX measurement submission.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="max-h-[80vh] overflow-y-auto px-1">
