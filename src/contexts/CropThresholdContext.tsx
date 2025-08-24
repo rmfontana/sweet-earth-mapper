@@ -24,20 +24,20 @@ export const CropThresholdProvider: React.FC<CropThresholdProviderProps> = ({ ch
   const reloadCache = async () => {
     setLoading(true);
 
-    // Fetch crop names dynamically from DB
-    const cropNames = await fetchCropTypes();
+    // Fetch crop types dynamically from DB
+    const cropTypes = await fetchCropTypes();
 
     const newCache: CropThresholdCache = {};
 
     await Promise.all(
-      cropNames.map(async (name) => {
+      cropTypes.map(async (cropType) => {
         try {
-          const cropData = await fetchBrixByCrop(name);
+          const cropData = await fetchBrixByCrop(cropType.name);
           if (cropData?.brixLevels) {
-            newCache[name] = cropData.brixLevels;
+            newCache[cropType.name] = cropData.brixLevels;
           }
         } catch (error) {
-          console.error(`Failed to fetch brix for ${name}`, error);
+          console.error(`Failed to fetch brix for ${cropType.name}`, error);
         }
       })
     );

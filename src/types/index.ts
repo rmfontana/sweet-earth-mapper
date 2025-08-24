@@ -24,6 +24,7 @@ export interface BrixDataPoint {
   goodBrix: number | null;
   excellentBrix: number | null;
   name_normalized?: string; // Added the name_normalized field here
+  purchaseDate: string | null; // ISO timestamp
 
   // ADD THESE NEW FIELDS
   locationId: string;

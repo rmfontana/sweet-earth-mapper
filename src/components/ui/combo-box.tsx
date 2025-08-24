@@ -19,7 +19,8 @@ interface ComboboxProps {
 
 const Combobox: React.FC<ComboboxProps> = ({ items, value, onSelect, placeholder }) => {
   const [open, setOpen] = useState(false);
-  const selectedItem = items.find((item) => item.name === value);
+  const safeItems = Array.isArray(items) ? items : [];
+  const selectedItem = safeItems.find((item) => item.name === value);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -39,7 +40,7 @@ const Combobox: React.FC<ComboboxProps> = ({ items, value, onSelect, placeholder
           <CommandInput placeholder={placeholder} />
           <CommandEmpty>No item found.</CommandEmpty>
           <CommandGroup>
-            {items.map((item) => (
+            {safeItems.map((item) => (
               <CommandItem
                 key={item.id || item.name}
                 value={item.name}

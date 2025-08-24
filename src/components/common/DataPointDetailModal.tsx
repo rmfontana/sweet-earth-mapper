@@ -251,12 +251,9 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       console.log('Extracted IDs:', { cropId, brandId, storeId });
 
       const updateData: any = {
-        brix_level: typeof brixLevel === 'number' ? brixLevel : parseFloat(brixLevel as string),
-        variety: variety || null,
-        location_name: locationName,
-        latitude: latitude,
-        longitude: longitude,
-        submitted_at: measurementDate ? new Date(measurementDate + 'T00:00:00.000Z').toISOString() : initialDataPoint.submittedAt,
+        brix_value: typeof brixLevel === 'number' ? brixLevel : parseFloat(brixLevel as string),
+        crop_variety: variety || null,
+        assessment_date: measurementDate ? new Date(measurementDate + 'T00:00:00.000Z').toISOString() : initialDataPoint.submittedAt,
         purchase_date: purchaseDate || null,
         outlier_notes: outlierNotes || null,
       };
@@ -289,7 +286,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       if (isAdmin) {
         updateData.verified = verified;
         if (verified && !initialDataPoint.verified) {
-          updateData.verified_by = user?.email || null;
+          updateData.verified_by = user?.id || null;
           updateData.verified_at = new Date().toISOString();
         }
         console.log('Admin verification updates:', { verified, verified_by: updateData.verified_by });
@@ -327,7 +324,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         latitude: latitude,
         longitude: longitude,
         submittedAt: measurementDate ? new Date(measurementDate + 'T00:00:00.000Z').toISOString() : initialDataPoint.submittedAt,
-        purchaseDate: purchaseDate || '',
+        purchaseDate: purchaseDate || null,
         outlier_notes: outlierNotes || '',
         brandName: brand,
         storeName: store,
