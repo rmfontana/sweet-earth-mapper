@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '../ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '../ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { ChevronsUpDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils'; // Assuming this utility function exists
 
@@ -35,30 +35,32 @@ const Combobox: React.FC<ComboboxProps> = ({ items, value, onSelect, placeholder
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0">
+      <PopoverContent className="z-50 w-[300px] p-0 bg-popover">
         <Command>
           <CommandInput placeholder={placeholder} />
-          <CommandEmpty>No item found.</CommandEmpty>
-          <CommandGroup>
-            {safeItems.map((item) => (
-              <CommandItem
-                key={item.id || item.name}
-                value={item.name}
-                onSelect={(currentValue) => {
-                  onSelect(currentValue);
-                  setOpen(false);
-                }}
-              >
-                <Check
-                  className={cn(
-                    "mr-2 h-4 w-4",
-                    value === item.name ? "opacity-100" : "opacity-0"
-                  )}
-                />
-                {item.name}
-              </CommandItem>
-            ))}
-          </CommandGroup>
+          <CommandList>
+            <CommandEmpty>No item found.</CommandEmpty>
+            <CommandGroup>
+              {safeItems.map((item) => (
+                <CommandItem
+                  key={item.id || item.name}
+                  value={item.name}
+                  onSelect={(currentValue) => {
+                    onSelect(currentValue);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === item.name ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {item.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
         </Command>
       </PopoverContent>
     </Popover>
