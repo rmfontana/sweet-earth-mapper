@@ -69,21 +69,24 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const [isLocationLoading, setIsLocationLoading] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   
-  // 🟢 FIX: Initialize state with the prop data or a fallback
-  const [brixLevel, setBrixLevel] = useState<number | ''>(initialDataPoint?.brixLevel ?? '');
-  const [cropType, setCropType] = useState(initialDataPoint?.cropType || '');
-  const [variety, setVariety] = useState(initialDataPoint?.variety || '');
-  const [locationName, setLocationName] = useState(initialDataPoint?.locationName || '');
-  const [latitude, setLatitude] = useState<number | null>(initialDataPoint?.latitude ?? null);
-  const [longitude, setLongitude] = useState<number | null>(initialDataPoint?.longitude ?? null);
-  const [measurementDate, setMeasurementDate] = useState(initialDataPoint?.submittedAt ? new Date(initialDataPoint.submittedAt).toISOString().split('T')[0] : '');
-  const [purchaseDate, setPurchaseDate] = useState(initialDataPoint?.purchaseDate || '');
-  const [outlierNotes, setOutlierNotes] = useState(initialDataPoint?.outlier_notes || '');
-  const [brand, setBrand] = useState(initialDataPoint?.brandName || '');
-  const [store, setStore] = useState(initialDataPoint?.storeName || '');
-  const [verified, setVerified] = useState(initialDataPoint?.verified ?? false);
-  const [verifiedBy, setVerifiedBy] = useState(initialDataPoint?.verifiedBy || '');
-  const [verifiedAt, setVerifiedAt] = useState(initialDataPoint?.verifiedAt || '');
+  // 🟢 FIX: Add a new state for overall loading
+  const [isLoading, setIsLoading] = useState(true);
+
+  // State for form data
+  const [brixLevel, setBrixLevel] = useState<number | ''>('');
+  const [cropType, setCropType] = useState('');
+  const [variety, setVariety] = useState('');
+  const [locationName, setLocationName] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [measurementDate, setMeasurementDate] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState('');
+  const [outlierNotes, setOutlierNotes] = useState('');
+  const [brand, setBrand] = useState('');
+  const [store, setStore] = useState('');
+  const [verified, setVerified] = useState(false);
+  const [verifiedBy, setVerifiedBy] = useState('');
+  const [verifiedAt, setVerifiedAt] = useState('');
 
   // State for Combobox data
   const [crops, setCrops] = useState<DatabaseItem[]>([]);
@@ -94,25 +97,48 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     async function fetchAllData() {
       console.log('Modal useEffect triggered.');
       if (!isOpen || !initialDataPoint) {
+        setIsLoading(false); // Stop loading if modal is closed or data is null
+        // Reset state when modal is not open to prepare for next opening
+        setBrixLevel('');
+        setCropType('');
+        setVariety('');
+        setLocationName('');
+        setLatitude(null);
+        setLongitude(null);
+        setMeasurementDate('');
+        setPurchaseDate('');
+        setOutlierNotes('');
+        setBrand('');
+        setStore('');
+        setVerified(false);
+        setVerifiedBy('');
+        setVerifiedAt('');
+        setImageUrls([]);
+        setImagesLoading(false);
+        setError(null);
+        setIsEditing(false);
         console.log('Modal is not open or initialDataPoint is null. Exiting useEffect.');
         return;
       }
+      
+      setIsLoading(true); // Start loading when modal opens with data
       console.log('Modal is open with initialDataPoint:', initialDataPoint);
 
-      const fetchImages = async () => {
-        setImagesLoading(true);
-        console.log('Attempting to fetch images. initialDataPoint.images:', initialDataPoint.images);
-        
-        const urls = Array.isArray(initialDataPoint.images)
-          ? initialDataPoint.images.map(imagePath =>
-              `https://wbkzczcqlorsewoofwqe.supabase.co/storage/v1/object/public/submission-images-bucket/${imagePath}`
-            )
-          : [];
-
-        console.log('Generated image URLs:', urls);
-        setImageUrls(urls);
-        setImagesLoading(false);
-      };
+      // Populate form state from prop immediately
+      setBrixLevel(initialDataPoint.brixLevel ?? '');
+      setCropType(initialDataPoint.cropType || '');
+      setVariety(initialDataPoint.variety || '');
+      setLocationName(initialDataPoint.locationName || '');
+      setLatitude(initialDataPoint.latitude ?? null);
+      setLongitude(initialDataPoint.longitude ?? null);
+      setMeasurementDate(initialDataPoint.submittedAt ? new Date(initialDataPoint.submittedAt).toISOString().split('T')[0] : '');
+      setPurchaseDate(initialDataPoint.purchaseDate || '');
+      setOutlierNotes(initialDataPoint.outlier_notes || '');
+      setBrand(initialDataPoint.brandName || '');
+      setStore(initialDataPoint.storeName || '');
+      setVerified(initialDataPoint.verified ?? false);
+      setVerifiedBy(initialDataPoint.verifiedBy || '');
+      setVerifiedAt(initialDataPoint.verifiedAt || '');
 
       try {
         const [
@@ -132,11 +158,9 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
           setError('Failed to fetch required data for editing. Some dropdowns may be empty.');
         }
 
-        // 🟢 FIX: Ensure the data is always an array before setting state
         setCrops(Array.isArray(cropsData) ? cropsData : []);
         setBrands(Array.isArray(brandsData) ? brandsData : []);
         setStores(Array.isArray(storesData) ? storesData : []);
-
       } catch (err) {
         console.error('An error occurred during data fetching:', err);
         setError('Failed to load data for editing.');
@@ -145,11 +169,35 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
           description: `Failed to load data for editing: ${err instanceof Error ? err.message : 'Unknown error'}`,
           variant: 'destructive',
         });
+      } finally {
+        // 🟢 FIX: Ensure loading state is set to false after all fetches
+        setIsLoading(false);
       }
-      fetchImages();
     }
     fetchAllData();
   }, [isOpen, initialDataPoint, toast]);
+
+  useEffect(() => {
+    // 🟢 FIX: Separate image fetching into its own effect to prevent state reset race conditions
+    const fetchImages = async () => {
+      if (!isOpen || !initialDataPoint) return;
+      setImagesLoading(true);
+      console.log('Attempting to fetch images. initialDataPoint.images:', initialDataPoint.images);
+      
+      const urls = Array.isArray(initialDataPoint.images)
+        ? initialDataPoint.images.map(imagePath =>
+            `https://wbkzczcqlorsewoofwqe.supabase.co/storage/v1/object/public/submission-images-bucket/${imagePath}`
+          )
+        : [];
+
+      console.log('Generated image URLs:', urls);
+      setImageUrls(urls);
+      setImagesLoading(false);
+    };
+
+    fetchImages();
+  }, [isOpen, initialDataPoint]);
+
 
   const handleDelete = async () => { /* ... (no changes) ... */ };
   const handleSave = async () => { /* ... (no changes) ... */ };
@@ -163,6 +211,18 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   if (!initialDataPoint) {
     console.log('initialDataPoint is null, returning early.');
     return null;
+  }
+  
+  // 🟢 FIX: Render loading state if data is being fetched
+  if (isLoading) {
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-md md:max-w-3xl flex flex-col items-center justify-center h-64">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+          <p className="mt-4 text-gray-600">Loading data...</p>
+        </DialogContent>
+      </Dialog>
+    );
   }
 
   const isOwner = user?.id === initialDataPoint.userId;
@@ -197,7 +257,8 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
             </div>
           </DialogTitle>
         </DialogHeader>
-
+        
+        {/* ... The rest of the component's JSX remains the same ... */}
         <div className="max-h-[80vh] overflow-y-auto px-1">
           {error && (
             <div className="flex items-center p-4 bg-red-100 text-red-800 rounded-lg">
