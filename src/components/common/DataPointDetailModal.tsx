@@ -90,7 +90,16 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 
   useEffect(() => {
     async function initializeModalData() {
+      console.log('=== MODAL INITIALIZATION DEBUG ===');
       console.log('Modal useEffect triggered.');
+      console.log('isOpen:', isOpen);
+      console.log('initialDataPoint exists:', !!initialDataPoint);
+      console.log('staticDataLoading:', staticDataLoading);
+      console.log('staticDataError:', staticDataError);
+      console.log('crops length:', crops?.length);
+      console.log('brands length:', brands?.length);
+      console.log('stores length:', stores?.length);
+      
       if (!isOpen || !initialDataPoint) {
         setIsInitializing(false);
         // Reset state when modal is not open to prepare for next opening
@@ -118,32 +127,43 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       
       setIsInitializing(true);
       console.log('Modal is open with initialDataPoint:', initialDataPoint);
+      console.log('Static data status - crops:', crops, 'brands:', brands, 'stores:', stores);
 
-      // Populate form state from prop immediately
-      setBrixLevel(initialDataPoint.brixLevel ?? '');
-      setCropType(initialDataPoint.cropType || '');
-      setVariety(initialDataPoint.variety || '');
-      setLocationName(initialDataPoint.locationName || '');
-      setLatitude(initialDataPoint.latitude ?? null);
-      setLongitude(initialDataPoint.longitude ?? null);
-      setMeasurementDate(initialDataPoint.submittedAt ? new Date(initialDataPoint.submittedAt).toISOString().split('T')[0] : '');
-      setPurchaseDate(initialDataPoint.purchaseDate || '');
-      setOutlierNotes(initialDataPoint.outlier_notes || '');
-      setBrand(initialDataPoint.brandName || '');
-      setStore(initialDataPoint.storeName || '');
-      setVerified(initialDataPoint.verified ?? false);
-      setVerifiedBy(initialDataPoint.verifiedBy || '');
-      setVerifiedAt(initialDataPoint.verifiedAt || '');
+      try {
+        // Populate form state from prop immediately
+        console.log('Setting form state...');
+        setBrixLevel(initialDataPoint.brixLevel ?? '');
+        setCropType(initialDataPoint.cropType || '');
+        setVariety(initialDataPoint.variety || '');
+        setLocationName(initialDataPoint.locationName || '');
+        setLatitude(initialDataPoint.latitude ?? null);
+        setLongitude(initialDataPoint.longitude ?? null);
+        setMeasurementDate(initialDataPoint.submittedAt ? new Date(initialDataPoint.submittedAt).toISOString().split('T')[0] : '');
+        setPurchaseDate(initialDataPoint.purchaseDate || '');
+        setOutlierNotes(initialDataPoint.outlier_notes || '');
+        setBrand(initialDataPoint.brandName || '');
+        setStore(initialDataPoint.storeName || '');
+        setVerified(initialDataPoint.verified ?? false);
+        setVerifiedBy(initialDataPoint.verifiedBy || '');
+        setVerifiedAt(initialDataPoint.verifiedAt || '');
+        console.log('Form state set successfully');
 
-      // Set any static data errors
-      if (staticDataError) {
-        setError(staticDataError);
+        // Set any static data errors
+        if (staticDataError) {
+          console.log('Setting static data error:', staticDataError);
+          setError(staticDataError);
+        }
+
+        setIsInitializing(false);
+        console.log('=== MODAL INITIALIZATION COMPLETE ===');
+      } catch (err) {
+        console.error('Error during modal initialization:', err);
+        setError(`Modal initialization failed: ${err.message}`);
+        setIsInitializing(false);
       }
-
-      setIsInitializing(false);
     }
     initializeModalData();
-  }, [isOpen, initialDataPoint, staticDataError]);
+  }, [isOpen, initialDataPoint, staticDataError, staticDataLoading, crops, brands, stores]);
 
   useEffect(() => {
     // Separate image fetching into its own effect to prevent state reset race conditions
@@ -195,14 +215,40 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   };
 
   const handleSave = async () => {
-    if (!initialDataPoint) return;
+    console.log('=== SAVE OPERATION DEBUG ===');
+    console.log('Starting save operation...');
+    console.log('initialDataPoint:', initialDataPoint);
+    console.log('Form state:', { brixLevel, cropType, variety, locationName, latitude, longitude, measurementDate, purchaseDate, outlierNotes, brand, store, verified });
+    console.log('Static data:', { crops, brands, stores });
+    
+    if (!initialDataPoint) {
+      console.error('No initialDataPoint available for save operation');
+      return;
+    }
     
     setSaving(true);
     try {
+      console.log('Looking for matching items in static data...');
+      
+      // Add safety checks for static data arrays
+      const safecrops = Array.isArray(crops) ? crops : [];
+      const safebrands = Array.isArray(brands) ? brands : [];
+      const safestores = Array.isArray(stores) ? stores : [];
+      
+      console.log('Safe arrays:', { safecrops: safecrops.length, safebrands: safebrands.length, safestores: safestores.length });
+      
       // Find the actual IDs from the static data
-      const cropId = crops.find(c => c.name === cropType)?.id;
-      const brandId = brands.find(b => b.name === brand)?.id;
-      const storeId = stores.find(s => s.name === store)?.id;
+      const cropItem = safecrops.find(c => c?.name === cropType);
+      const brandItem = safebrands.find(b => b?.name === brand);
+      const storeItem = safestores.find(s => s?.name === store);
+      
+      console.log('Found items:', { cropItem, brandItem, storeItem });
+      
+      const cropId = cropItem?.id;
+      const brandId = brandItem?.id;
+      const storeId = storeItem?.id;
+
+      console.log('Extracted IDs:', { cropId, brandId, storeId });
 
       const updateData: any = {
         brix_level: typeof brixLevel === 'number' ? brixLevel : parseFloat(brixLevel as string),
@@ -215,10 +261,29 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         outlier_notes: outlierNotes || null,
       };
 
+      console.log('Base update data:', updateData);
+
       // Only update IDs if we found them, otherwise keep existing values
-      if (cropId) updateData.crop_id = cropId;
-      if (brandId) updateData.brand_id = brandId;
-      if (storeId) updateData.store_id = storeId;
+      if (cropId) {
+        updateData.crop_id = cropId;
+        console.log('Adding crop_id:', cropId);
+      } else {
+        console.warn('No crop ID found for cropType:', cropType);
+      }
+      
+      if (brandId) {
+        updateData.brand_id = brandId;
+        console.log('Adding brand_id:', brandId);
+      } else {
+        console.warn('No brand ID found for brand:', brand);
+      }
+      
+      if (storeId) {
+        updateData.store_id = storeId;
+        console.log('Adding store_id:', storeId);
+      } else {
+        console.warn('No store ID found for store:', store);
+      }
       
       // Only admin can update verification status
       if (isAdmin) {
@@ -227,7 +292,11 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
           updateData.verified_by = user?.email || null;
           updateData.verified_at = new Date().toISOString();
         }
+        console.log('Admin verification updates:', { verified, verified_by: updateData.verified_by });
       }
+
+      console.log('Final update data:', updateData);
+      console.log('Updating submission with ID:', initialDataPoint.id);
 
       const { data, error: updateError } = await supabase
         .from('submissions')
@@ -237,8 +306,11 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         .single();
 
       if (updateError) {
+        console.error('Supabase update error:', updateError);
         throw updateError;
       }
+
+      console.log('Supabase update successful, returned data:', data);
 
       toast({
         title: 'Success',
@@ -264,13 +336,19 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         verifiedAt: updateData.verified_at || initialDataPoint.verifiedAt,
       };
 
+      console.log('Created updated data point:', updatedDataPoint);
+
       onUpdateSuccess?.(updatedDataPoint);
       setIsEditing(false);
+      console.log('=== SAVE OPERATION COMPLETE ===');
     } catch (error: any) {
-      console.error('Save error:', error);
+      console.error('=== SAVE OPERATION ERROR ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error?.message);
+      console.error('Error stack:', error?.stack);
       toast({
         title: 'Error',
-        description: `Failed to update submission: ${error.message}`,
+        description: `Failed to update submission: ${error?.message || 'Unknown error'}`,
         variant: 'destructive',
       });
     } finally {
@@ -381,12 +459,14 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                       <span>Crop Type</span>
                     </Label>
                     {isEditing ? (
-                        <Combobox
-                            items={crops}
-                            value={cropType}
-                            onSelect={setCropType}
-                            placeholder="Select Crop"
-                        />
+                        <div>
+                          <Combobox
+                              items={Array.isArray(crops) ? crops : []}
+                              value={cropType}
+                              onSelect={setCropType}
+                              placeholder="Select Crop"
+                          />
+                        </div>
                     ) : (
                         <p className="font-medium">{initialDataPoint.cropType}</p>
                     )}
@@ -397,12 +477,14 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                       <span>Brand</span>
                     </Label>
                     {isEditing ? (
-                        <Combobox
-                            items={brands}
-                            value={brand}
-                            onSelect={setBrand}
-                            placeholder="Select Brand"
-                        />
+                        <div>
+                          <Combobox
+                              items={Array.isArray(brands) ? brands : []}
+                              value={brand}
+                              onSelect={setBrand}
+                              placeholder="Select Brand"
+                          />
+                        </div>
                     ) : (
                         <p className="font-medium">{initialDataPoint.brandName || 'N/A'}</p>
                     )}
@@ -413,12 +495,14 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
                       <span>Store</span>
                     </Label>
                     {isEditing ? (
-                        <Combobox
-                            items={stores}
-                            value={store}
-                            onSelect={setStore}
-                            placeholder="Select Store"
-                        />
+                        <div>
+                          <Combobox
+                              items={Array.isArray(stores) ? stores : []}
+                              value={store}
+                              onSelect={setStore}
+                              placeholder="Select Store"
+                          />
+                        </div>
                     ) : (
                         <p className="font-medium">{initialDataPoint.storeName || 'N/A'}</p>
                     )}
