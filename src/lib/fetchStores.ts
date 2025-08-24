@@ -1,11 +1,20 @@
-// lib/fetchStores.ts
 import { supabase } from '../integrations/supabase/client';
 
-export async function fetchStores(): Promise<string[]> {
-  const { data, error } = await supabase.from('stores').select('name');
+export interface Store {
+  id: string;
+  name: string;
+}
+
+export const fetchStores = async (): Promise<Store[]> => {
+  const { data, error } = await supabase
+    .from('stores') 
+    .select('id, name')
+    .order('name');
+
   if (error) {
     console.error('Error fetching stores:', error);
-    return [];
+    throw error;
   }
-  return data.map(store => store.name).filter(Boolean);
-}
+
+  return data || [];
+};

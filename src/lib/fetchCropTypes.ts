@@ -1,11 +1,20 @@
-// lib/fetchCropTypes.ts
 import { supabase } from '../integrations/supabase/client';
 
-export async function fetchCropTypes(): Promise<string[]> {
-  const { data, error } = await supabase.from('crops').select('name');
-  if (error) {
-    console.error('Error fetching crops:', error);
-    return [];
-  }
-  return data.map(crop => crop.name).filter(Boolean);
+export interface CropType {
+  id: string;
+  name: string;
 }
+
+export const fetchCropTypes = async (): Promise<CropType[]> => {
+  const { data, error } = await supabase
+    .from('crops') // or whatever your table name is
+    .select('id, name')
+    .order('name');
+
+  if (error) {
+    console.error('Error fetching crop types:', error);
+    throw error;
+  }
+
+  return data || [];
+};

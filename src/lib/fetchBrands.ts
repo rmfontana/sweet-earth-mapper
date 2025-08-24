@@ -1,11 +1,20 @@
-// lib/fetchBrands.ts
 import { supabase } from '../integrations/supabase/client';
 
-export async function fetchBrands(): Promise<string[]> {
-  const { data, error } = await supabase.from('brands').select('name');
+export interface Brand {
+  id: string;
+  name: string;
+}
+
+export const fetchBrands = async (): Promise<Brand[]> => {
+  const { data, error } = await supabase
+    .from('brands') 
+    .select('id, name')
+    .order('name');
+
   if (error) {
     console.error('Error fetching brands:', error);
-    return [];
+    throw error;
   }
-  return data.map(brand => brand.name).filter(Boolean);
-}
+
+  return data || [];
+};
