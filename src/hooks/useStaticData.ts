@@ -34,6 +34,46 @@ const updateSubscribers = (newData: StaticData) => {
   subscribers.forEach(setter => setter(newData));
 };
 
+// Helper function to safely convert any data to DatabaseItem format
+const normalizeToItems = (data: any[], type: string): DatabaseItem[] => {
+  if (!Array.isArray(data) || data.length === 0) {
+    return [];
+  }
+
+  return data.map((item, index) => {
+    // If it's already a proper object with id and name
+    if (item && typeof item === 'object' && 'id' in item && 'name' in item && typeof item.name === 'string') {
+      return {
+        id: String(item.id),
+        name: item.name
+      };
+    }
+    
+    // If it's a string
+    if (typeof item === 'string') {
+      return {
+        id: `temp-${type}-${index}`,
+        name: item
+      };
+    }
+    
+    // If it's an object but without proper structure, try to extract name
+    if (item && typeof item === 'object') {
+      const name = item.name || item.title || item.label || String(item);
+      return {
+        id: `temp-${type}-${index}`,
+        name: typeof name === 'string' ? name : `Unknown ${type} ${index}`
+      };
+    }
+    
+    // Fallback for any other type
+    return {
+      id: `temp-${type}-${index}`,
+      name: `Unknown ${type} ${index}`
+    };
+  });
+};
+
 export const useStaticData = (): StaticData => {
   const [data, setData] = useState<StaticData>(staticDataCache);
 
@@ -59,47 +99,39 @@ export const useStaticData = (): StaticData => {
       isFetching = true;
       
       try {
-        const [crops, brands, stores] = await Promise.all([
-          fetchCropTypes(),
-          fetchBrands(),
-          fetchStores(),
+        console.log('Fetching static data...');
+        
+        const [cropsResult, brandsResult, storesResult] = await Promise.all([
+          fetchCropTypes().catch(e => {
+            console.error('Error fetching crops:', e);
+            return [];
+          }),
+          fetchBrands().catch(e => {
+            console.error('Error fetching brands:', e);
+            return [];
+          }),
+          fetchStores().catch(e => {
+            console.error('Error fetching stores:', e);
+            return [];
+          }),
         ]);
 
-        console.log('Raw fetched data:', { crops, brands, stores });
+        console.log('Raw fetched results:', { 
+          cropsResult: cropsResult?.slice(0, 3), // Log first 3 items for debugging
+          brandsResult: brandsResult?.slice(0, 3),
+          storesResult: storesResult?.slice(0, 3)
+        });
 
-        // Check if the fetched data already contains objects with id and name properties
-        // If fetchCropTypes returns objects like { id: 'uuid', name: 'apple' }, use them directly
-        // If it returns strings like ['apple', 'banana'], we need to handle that differently
-        
-        let formattedCrops: DatabaseItem[];
-        let formattedBrands: DatabaseItem[];
-        let formattedStores: DatabaseItem[];
+        // Normalize all data to consistent format
+        const formattedCrops = normalizeToItems(cropsResult, 'crop');
+        const formattedBrands = normalizeToItems(brandsResult, 'brand');
+        const formattedStores = normalizeToItems(storesResult, 'store');
 
-        // Check if crops is an array of objects with id and name, or just strings
-        if (crops.length > 0 && crops[0] !== null && typeof crops[0] === 'object' && 'id' in crops[0] && 'name' in crops[0]) {
-          formattedCrops = crops as DatabaseItem[];
-        } else {
-          // If it's an array of strings, we need to fetch the actual objects with IDs
-          console.warn('fetchCropTypes returned strings instead of objects with IDs. This needs to be fixed in the fetch function.');
-          // For now, create temporary IDs, but this should be fixed at the source
-          formattedCrops = (crops as unknown as string[]).map((name, index) => ({ id: `temp-crop-${index}`, name }));
-        }
-
-        if (brands.length > 0 && brands[0] !== null && typeof brands[0] === 'object' && 'id' in brands[0] && 'name' in brands[0]) {
-          formattedBrands = brands as DatabaseItem[];
-        } else {
-          console.warn('fetchBrands returned strings instead of objects with IDs. This needs to be fixed in the fetch function.');
-          formattedBrands = (brands as unknown as string[]).map((name, index) => ({ id: `temp-brand-${index}`, name }));
-        }
-
-        if (stores.length > 0 && stores[0] !== null && typeof stores[0] === 'object' && 'id' in stores[0] && 'name' in stores[0]) {
-          formattedStores = stores as DatabaseItem[];
-        } else {
-          console.warn('fetchStores returned strings instead of objects with IDs. This needs to be fixed in the fetch function.');
-          formattedStores = (stores as unknown as string[]).map((name, index) => ({ id: `temp-store-${index}`, name }));
-        }
-
-        console.log('Formatted data:', { formattedCrops, formattedBrands, formattedStores });
+        console.log('Formatted data:', { 
+          formattedCrops: formattedCrops.slice(0, 3),
+          formattedBrands: formattedBrands.slice(0, 3),
+          formattedStores: formattedStores.slice(0, 3)
+        });
 
         staticDataCache = {
           crops: formattedCrops,
@@ -108,13 +140,15 @@ export const useStaticData = (): StaticData => {
           isLoading: false,
           error: null,
         };
+        
         updateSubscribers(staticDataCache);
+        console.log('Static data cache updated successfully');
       } catch (e) {
         console.error('Failed to fetch static data:', e);
         staticDataCache = {
           ...staticDataCache,
           isLoading: false,
-          error: 'Failed to load static data.',
+          error: `Failed to load static data: ${e instanceof Error ? e.message : 'Unknown error'}`,
         };
         updateSubscribers(staticDataCache);
       } finally {
