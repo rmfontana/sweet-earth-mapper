@@ -11,7 +11,7 @@ import { fetchBrands } from '@/lib/fetchBrands';
 import { fetchStores } from '@/lib/fetchStores';
 import { fetchCropCategories } from '@/lib/fetchCropCategories';
 import { Range, getTrackBackground } from 'react-range';
-import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext'; // Import DEFAULT_MAP_FILTERS
+import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext';
 
 import {
   Command,
@@ -30,6 +30,11 @@ import {
 const STEP = 0.5;
 const MIN = 0;
 const MAX = 100;
+
+interface DatabaseItem {
+  id: string;
+  name: string;
+}
 
 const BrixRangeSlider = ({
   brixRange,
@@ -90,10 +95,10 @@ const BrixRangeSlider = ({
 
 const MapFilters: React.FC = () => {
   const { filters, setFilters, isAdmin } = useFilters();
-  // Data options for dropdowns
-  const [availableCrops, setAvailableCrops] = useState<string[]>([]);
-  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
-  const [availableStores, setAvailableStores] = useState<string[]>([]);
+  // Data options for dropdowns - now using DatabaseItem objects
+  const [availableCrops, setAvailableCrops] = useState<DatabaseItem[]>([]);
+  const [availableBrands, setAvailableBrands] = useState<DatabaseItem[]>([]);
+  const [availableStores, setAvailableStores] = useState<DatabaseItem[]>([]);
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
 
   // Search queries for filtering dropdowns
@@ -111,10 +116,13 @@ const MapFilters: React.FC = () => {
           fetchStores(),
           fetchCropCategories()
         ]);
+        
+        console.log('Loaded filter data:', { crops, brands, stores, categories });
+        
         setAvailableCrops(crops);
         setAvailableBrands(brands);
         setAvailableStores(stores);
-        setAvailableCategories(categories);
+        setAvailableCategories(categories); // Assuming categories is still strings
       } catch (err) {
         console.error('Failed to fetch filters:', err);
       }
@@ -122,7 +130,7 @@ const MapFilters: React.FC = () => {
     loadFilters();
   }, []);
 
-  // Memoize filtered dropdown items for performance
+  // Memoize filtered dropdown items for performance - now filtering by name property
   const filteredCategories = useMemo(() =>
     availableCategories.filter(cat =>
       cat.toLowerCase().includes(cropCategoryQuery.toLowerCase())
@@ -130,38 +138,37 @@ const MapFilters: React.FC = () => {
 
   const filteredBrands = useMemo(() =>
     availableBrands.filter(brand =>
-      brand.toLowerCase().includes(brandQuery.toLowerCase())
+      brand.name.toLowerCase().includes(brandQuery.toLowerCase())
     ), [availableBrands, brandQuery]);
 
   const filteredStores = useMemo(() =>
     availableStores.filter(store =>
-      store.toLowerCase().includes(storeQuery.toLowerCase())
+      store.name.toLowerCase().includes(storeQuery.toLowerCase())
     ), [availableStores, storeQuery]);
 
   const filteredCrops = useMemo(() =>
     availableCrops.filter(crop =>
-      crop.toLowerCase().includes(cropQuery.toLowerCase())
+      crop.name.toLowerCase().includes(cropQuery.toLowerCase())
     ), [availableCrops, cropQuery]);
 
   // Update filters helper
-  // This now accepts a partial update or full MapFilter as an updater function
   const updateFilters = (key: keyof typeof filters, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  // Crop type add/remove helpers
-  const addCropType = (crop: string) => {
+  // Crop type add/remove helpers - now using crop name
+  const addCropType = (cropName: string) => {
     setFilters(prev => {
-      if (!prev.cropTypes.includes(crop)) {
-        return { ...prev, cropTypes: [...prev.cropTypes, crop] };
+      if (!prev.cropTypes.includes(cropName)) {
+        return { ...prev, cropTypes: [...prev.cropTypes, cropName] };
       }
       return prev;
     });
   };
-  const removeCropType = (crop: string) => {
+  const removeCropType = (cropName: string) => {
     setFilters(prev => ({
       ...prev,
-      cropTypes: prev.cropTypes.filter(c => c !== crop)
+      cropTypes: prev.cropTypes.filter(c => c !== cropName)
     }));
   };
 
@@ -239,19 +246,19 @@ const MapFilters: React.FC = () => {
                 <CommandList>
                   <CommandEmpty>No crops found.</CommandEmpty>
                   {filteredCrops.map((crop) => {
-                    const selected = filters.cropTypes.includes(crop);
+                    const selected = filters.cropTypes.includes(crop.name);
                     return (
                       <CommandItem
-                        key={crop}
+                        key={crop.id}
                         onSelect={() => {
-                          selected ? removeCropType(crop) : addCropType(crop);
+                          selected ? removeCropType(crop.name) : addCropType(crop.name);
                           setCropQuery('');
                         }}
                         className="flex justify-between items-center"
                         aria-selected={selected}
                         role="option"
                       >
-                        <span>{crop}</span>
+                        <span>{crop.name}</span>
                         {selected && <Check className="h-4 w-4" />}
                       </CommandItem>
                     );
@@ -388,17 +395,17 @@ const MapFilters: React.FC = () => {
                   <CommandEmpty>No brands found.</CommandEmpty>
                   {filteredBrands.map((brand) => (
                     <CommandItem
-                      key={brand}
+                      key={brand.id}
                       onSelect={() => {
-                        updateFilters('brand', brand === filters.brand ? '' : brand);
+                        updateFilters('brand', brand.name === filters.brand ? '' : brand.name);
                         setBrandQuery('');
                       }}
-                      aria-selected={filters.brand === brand}
+                      aria-selected={filters.brand === brand.name}
                       role="option"
                       className="flex justify-between items-center"
                     >
-                      <span>{brand}</span>
-                      {filters.brand === brand && <Check className="h-4 w-4" />}
+                      <span>{brand.name}</span>
+                      {filters.brand === brand.name && <Check className="h-4 w-4" />}
                     </CommandItem>
                   ))}
                 </CommandList>
@@ -435,17 +442,17 @@ const MapFilters: React.FC = () => {
                   <CommandEmpty>No stores found.</CommandEmpty>
                   {filteredStores.map((store) => (
                     <CommandItem
-                      key={store}
+                      key={store.id}
                       onSelect={() => {
-                        updateFilters('store', store === filters.store ? '' : store);
+                        updateFilters('store', store.name === filters.store ? '' : store.name);
                         setStoreQuery('');
                       }}
-                      aria-selected={filters.store === store}
+                      aria-selected={filters.store === store.name}
                       role="option"
                       className="flex justify-between items-center"
                     >
-                      <span>{store}</span>
-                      {filters.store === store && <Check className="h-4 w-4" />}
+                      <span>{store.name}</span>
+                      {filters.store === store.name && <Check className="h-4 w-4" />}
                     </CommandItem>
                   ))}
                 </CommandList>
