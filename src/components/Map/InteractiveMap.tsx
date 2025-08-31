@@ -10,7 +10,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { MapPin, Calendar, User, CheckCircle, Eye, X } from 'lucide-react'; // Corrected: Added X
 import { Link, useLocation } from 'react-router-dom';
-import { getSupabaseUrl, getPublishableKey } from "@/lib/utils.ts";
+import { getMapboxToken } from '@/lib/getMapboxToken';
 import type { GeoJSON } from 'geojson';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor } from '../../lib/getBrixColor';
@@ -22,25 +22,6 @@ interface InteractiveMapProps {
   onNearMeHandled?: () => void;
 }
 
-async function getMapboxToken() {
-  try {
-    const supabaseUrl = getSupabaseUrl();
-    const publishKey = getPublishableKey();
-    const response = await fetch(`${supabaseUrl}/functions/v1/mapbox-token`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${publishKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    const data = await response.json();
-    return data.token;
-  } catch (error) {
-    console.error('Failed to fetch Mapbox token:', error);
-    return null;
-  }
-}
 
 const SUPABASE_PROJECT_REF = 'wbkzczcqlorsewoofwqe';
 
@@ -271,7 +252,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   return (
     <div className="relative w-full h-full flex flex-col">
-      <div ref={mapContainer} className="flex-grow rounded-md shadow-md" />
+      <div ref={mapContainer} className="absolute inset-0 rounded-md shadow-md" />
       {selectedPoint && (
         <div className="absolute top-2 right-2 z-10 w-80 max-h-screen overflow-y-auto">
           <Card className="shadow-lg">

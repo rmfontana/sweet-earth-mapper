@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Input } from '../ui/input';
 import { Loader2, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils'; // Utility for conditional classes
+import { getMapboxToken } from '@/lib/getMapboxToken';
 
 interface LocationSuggestion {
   mapbox_id: string;
@@ -23,18 +24,18 @@ const LocationSearch: React.FC<LocationSearchProps> = ({ value, onChange, onLoca
   const [isSearching, setIsSearching] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
 
-  // In a real app, this should be fetched or loaded from a config
-  // For this example, we'll use a placeholder.
-  useEffect(() => {
-    // Implement your getMapboxToken logic here
-    const fetchToken = async () => {
-      // This is a placeholder. You'll need to use your actual method.
-      // Example: const token = await getMapboxToken();
-      const token = 'YOUR_MAPBOX_TOKEN_HERE';
+useEffect(() => {
+  const fetchToken = async () => {
+    try {
+      const token = await getMapboxToken();
       setMapboxToken(token);
-    };
-    fetchToken();
-  }, []);
+    } catch (e) {
+      console.error('Failed to load Mapbox token for search:', e);
+      setMapboxToken(null);
+    }
+  };
+  fetchToken();
+}, []);
 
   useEffect(() => {
     const controller = new AbortController();
