@@ -17,21 +17,18 @@ export type Database = {
       brands: {
         Row: {
           id: string
-          machine_name: string | null
+          label: string | null
           name: string
-          name_normalized: string | null
         }
         Insert: {
           id?: string
-          machine_name?: string | null
+          label?: string | null
           name: string
-          name_normalized?: string | null
         }
         Update: {
           id?: string
-          machine_name?: string | null
+          label?: string | null
           name?: string
-          name_normalized?: string | null
         }
         Relationships: []
       }
@@ -42,8 +39,8 @@ export type Database = {
           excellent_brix: number | null
           good_brix: number | null
           id: string
+          label: string | null
           name: string
-          name_normalized: string | null
           poor_brix: number | null
         }
         Insert: {
@@ -52,8 +49,8 @@ export type Database = {
           excellent_brix?: number | null
           good_brix?: number | null
           id?: string
+          label?: string | null
           name: string
-          name_normalized?: string | null
           poor_brix?: number | null
         }
         Update: {
@@ -62,36 +59,39 @@ export type Database = {
           excellent_brix?: number | null
           good_brix?: number | null
           id?: string
+          label?: string | null
           name?: string
-          name_normalized?: string | null
           poor_brix?: number | null
         }
         Relationships: []
       }
       locations: {
         Row: {
-          geom: unknown | null
+          city: string | null
           id: string
+          label: string | null
           latitude: number
           longitude: number
-          name: string | null
-          place_id: string | null
+          state: string | null
+          street_address: string | null
         }
         Insert: {
-          geom?: unknown | null
+          city?: string | null
           id?: string
+          label?: string | null
           latitude: number
           longitude: number
-          name?: string | null
-          place_id?: string | null
+          state?: string | null
+          street_address?: string | null
         }
         Update: {
-          geom?: unknown | null
+          city?: string | null
           id?: string
+          label?: string | null
           latitude?: number
           longitude?: number
-          name?: string | null
-          place_id?: string | null
+          state?: string | null
+          street_address?: string | null
         }
         Relationships: []
       }
@@ -122,24 +122,21 @@ export type Database = {
       stores: {
         Row: {
           id: string
+          label: string | null
           location_id: string | null
-          machine_name: string | null
           name: string
-          name_normalized: string | null
         }
         Insert: {
           id?: string
+          label?: string | null
           location_id?: string | null
-          machine_name?: string | null
           name: string
-          name_normalized?: string | null
         }
         Update: {
           id?: string
+          label?: string | null
           location_id?: string | null
-          machine_name?: string | null
           name?: string
-          name_normalized?: string | null
         }
         Relationships: [
           {
