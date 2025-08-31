@@ -97,7 +97,7 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     averageBrix: item.crop?.average_brix,
     goodBrix: item.crop?.good_brix,
     excellentBrix: item.crop?.excellent_brix,
-    name_normalized: item.crop?.label ?? item.crop?.name ?? undefined,
+    name_normalized: item.crop?.label ?? item.crop?.name ?? 'Unknown',
     
     // Map the IDs from the nested objects
     locationId: item.location?.id ?? '',
