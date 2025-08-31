@@ -1,4 +1,5 @@
 import { supabase } from '../integrations/supabase/client';
+import { BrixThresholds } from './getBrixQuality';
 
 export interface CropType {
   id: string;
@@ -12,7 +13,7 @@ export interface Crop {
   id: string;
   name: string;
   label: string | null;
-  brixLevels: BrixLevels;
+  brixLevels: BrixThresholds;
 }
 
 /**
