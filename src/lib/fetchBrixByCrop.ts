@@ -3,8 +3,8 @@ import { supabase } from '../integrations/supabase/client';
 export async function fetchBrixByCrop(cropName: string) {
   const { data, error } = await supabase
     .from('crops')
-    .select('id, name, poor_brix, average_brix, good_brix, excellent_brix')
-    .eq('name_normalized', cropName.toLowerCase())
+    .select('id, name, label, poor_brix, average_brix, good_brix, excellent_brix')
+    .eq('name', cropName.toLowerCase())
     .single();
 
   if (error) {

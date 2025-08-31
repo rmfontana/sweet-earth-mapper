@@ -12,10 +12,10 @@ const SUBMISSIONS_SELECT_QUERY_STRING = `
   crop_variety,
   outlier_notes,
   purchase_date,
-  location:location_id(id,name,latitude,longitude,place_id),
-  crop:crop_id(id,name,poor_brix,average_brix,good_brix,excellent_brix,category,name_normalized),
-  store:store_id(id,name,location_id),
-  brand:brand_id(id,name),
+  location:location_id(id,label,latitude,longitude),
+  crop:crop_id(id,name,label,poor_brix,average_brix,good_brix,excellent_brix,category),
+  store:store_id(id,name,label),
+  brand:brand_id(id,name,label),
   user:users!user_id(id,display_name),
   verifier:users!verified_by(id,display_name),
   submission_images(image_url)
@@ -32,29 +32,29 @@ interface SupabaseSubmissionRow {
   purchase_date: string | null;
   location: {
     id: string;
-    name: string;
+    label: string;
     latitude: number;
     longitude: number;
-    place_id: string | null;
   } | null;
   crop: {
     id: string;
     name: string;
+    label: string | null;
     poor_brix: number | null;
     average_brix: number | null;
     good_brix: number | null;
     excellent_brix: number | null;
     category: string | null;
-    name_normalized: string | null;
   } | null;
   store: {
     id: string;
     name: string;
-    location_id: string;
+    label: string | null;
   } | null;
   brand: {
     id: string;
     name: string;
+    label: string | null;
   } | null;
   user: {
     id: string;
@@ -83,9 +83,9 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     category: item.crop?.category ?? '',
     latitude: item.location?.latitude ?? null,
     longitude: item.location?.longitude ?? null,
-    locationName: item.location?.name ?? '',
-    storeName: item.store?.name ?? '',
-    brandName: item.brand?.name ?? '',
+    locationName: item.location?.label ?? '',
+    storeName: item.store?.label ?? item.store?.name ?? '',
+    brandName: item.brand?.label ?? item.brand?.name ?? '',
     submittedBy: item.user?.display_name ?? 'Anonymous',
     userId: item.user?.id ?? undefined,
     verifiedBy: item.verifier?.display_name ?? '',
@@ -97,7 +97,7 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     averageBrix: item.crop?.average_brix,
     goodBrix: item.crop?.good_brix,
     excellentBrix: item.crop?.excellent_brix,
-    name_normalized: item.crop?.name_normalized ?? undefined,
+    name_normalized: item.crop?.label ?? item.crop?.name ?? undefined,
     
     // Map the IDs from the nested objects
     locationId: item.location?.id ?? '',
