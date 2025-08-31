@@ -79,10 +79,12 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     verified: item.verified,
     verifiedAt: item.verified_at,
     variety: item.crop_variety ?? '',
+    // Use `name` as the unique identifier for the crop type
     cropType: item.crop?.name ?? 'Unknown',
     category: item.crop?.category ?? '',
     latitude: item.location?.latitude ?? null,
     longitude: item.location?.longitude ?? null,
+    // Use `label` for the display names of locations, stores, and brands
     locationName: item.location?.label ?? '',
     storeName: item.store?.label ?? item.store?.name ?? '',
     brandName: item.brand?.label ?? item.brand?.name ?? '',
@@ -97,6 +99,7 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     averageBrix: item.crop?.average_brix,
     goodBrix: item.crop?.good_brix,
     excellentBrix: item.crop?.excellent_brix,
+    // Use `label` for the normalized, human-readable name of the crop
     name_normalized: item.crop?.label ?? item.crop?.name ?? 'Unknown',
     
     // Map the IDs from the nested objects
