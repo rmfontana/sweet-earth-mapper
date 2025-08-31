@@ -1,0 +1,1 @@
+TRUNCATE TABLE public.submissions CASCADE;
