@@ -1,5 +1,5 @@
 // src/components/common/LocationSearch.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from '../ui/input';
 import { Loader2, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,14 @@ interface LocationSearchProps {
   isLoading?: boolean;
 }
 
+// A simple utility to generate a UUID for the session token
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 const LocationSearch: React.FC<LocationSearchProps> = ({ 
   value, 
   onChange, 
@@ -28,13 +36,15 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
+  const sessionRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Generate a new session token when the component mounts
+    sessionRef.current = generateUUID();
+
     const fetchToken = async () => {
       try {
-        console.log('Fetching Mapbox token...');
         const token = await getMapboxToken();
-        console.log('Mapbox token received:', token ? 'Success' : 'Failed');
         setMapboxToken(token);
       } catch (e) {
         console.error('Failed to load Mapbox token for search:', e);
@@ -45,48 +55,42 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   }, []);
 
   const searchLocations = useCallback(async (query: string, signal: AbortSignal) => {
-    if (!mapboxToken || query.length < 2) {
+    if (!mapboxToken || !sessionRef.current || query.length < 2) {
       setSuggestions([]);
       return;
     }
-  
+
     setIsSearching(true);
     try {
-      console.log('Searching for:', query);
-  
-      // Use the Search Box API for better POI results
       const url = `https://api.mapbox.com/search/searchbox/v1/suggest`;
       const params = new URLSearchParams({
-        q: query, // Use the 'q' parameter for the query
+        q: query,
         access_token: mapboxToken,
+        session_token: sessionRef.current,
         limit: '5',
         language: 'en',
-        // The types are handled by the API's internal logic, but you can hint at them
-        // 'poi' is the most relevant type for your use case
-        types: 'poi', 
+        // Include multiple types for comprehensive results
+        types: 'address,poi,place,locality'
       });
-  
+
       const response = await fetch(`${url}?${params}`, { 
         signal,
         headers: {
           'Content-Type': 'application/json'
         }
       });
-  
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Mapbox API error: ${response.status} - ${errorText}`);
       }
-  
+
       const data = await response.json();
-      console.log('Search results:', data);
-  
-      // The Search Box API returns suggestions directly
-      const transformedSuggestions = data.suggestions?.map((s: any) => ({
+      const transformedSuggestions: LocationSuggestion[] = data.suggestions?.map((s: any) => ({
         mapbox_id: s.mapbox_id,
         name: s.name,
         full_address: s.full_address,
-        place_formatted: s.place_formatted, // Use place_formatted for cleaner display
+        place_formatted: s.place_formatted,
       })) || [];
       
       setSuggestions(transformedSuggestions);
@@ -99,7 +103,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       setIsSearching(false);
     }
   }, [mapboxToken]);
-  
+
   useEffect(() => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -119,34 +123,34 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   }, [value, searchLocations]);
 
   const handleSelect = async (suggestion: LocationSuggestion) => {
-    if (!mapboxToken) return;
-
+    if (!mapboxToken || !sessionRef.current) return;
+    setSuggestions([]);
+    setIsSearching(true);
+  
     try {
-      // For geocoding API, we can get coordinates directly from the original search
-      // Let's search again for the specific item to get coordinates
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(suggestion.full_address || suggestion.name)}.json`;
-      const params = new URLSearchParams({
+      // Use the /retrieve endpoint to get the full details, including coordinates
+      const retrieveUrl = `https://api.mapbox.com/search/searchbox/v1/retrieve/${suggestion.mapbox_id}`;
+      const retrieveParams = new URLSearchParams({
         access_token: mapboxToken,
-        limit: '1'
+        session_token: sessionRef.current,
       });
-      
-      const response = await fetch(`${url}?${params}`);
+  
+      const response = await fetch(`${retrieveUrl}?${retrieveParams}`);
       if (!response.ok) {
-        throw new Error(`Failed to get coordinates: ${response.status}`);
+        throw new Error(`Failed to retrieve coordinates: ${response.status}`);
       }
-      
+  
       const data = await response.json();
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
         const [longitude, latitude] = feature.geometry.coordinates;
         const locationName = feature.place_name || suggestion.full_address || suggestion.name;
-        
+  
         onLocationSelect({ 
           name: locationName, 
           latitude, 
           longitude 
         });
-        setSuggestions([]);
       }
     } catch (e) {
       console.error('Failed to get location coordinates:', e);
@@ -156,7 +160,8 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
         latitude: 0, 
         longitude: 0 
       });
-      setSuggestions([]);
+    } finally {
+      setIsSearching(false);
     }
   };
 
