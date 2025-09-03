@@ -1,4 +1,3 @@
-// src/components/common/LocationSearch.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from '../ui/input';
 import { Loader2, MapPin } from 'lucide-react';
@@ -19,7 +18,6 @@ interface LocationSearchProps {
   isLoading?: boolean;
 }
 
-// A simple utility to generate a UUID for the session token
 const generateUUID = () => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -37,9 +35,9 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
   const sessionRef = useRef<string | null>(null);
+  const [inputValue, setInputValue] = useState(value);
 
   useEffect(() => {
-    // Generate a new session token when the component mounts
     sessionRef.current = generateUUID();
 
     const fetchToken = async () => {
@@ -53,6 +51,11 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
     };
     fetchToken();
   }, []);
+
+  // Sync the external `value` prop with the internal `inputValue` state
+  useEffect(() => {
+    setInputValue(value);
+  }, [value]);
 
   const searchLocations = useCallback(async (query: string, signal: AbortSignal) => {
     if (!mapboxToken || !sessionRef.current || query.length < 2) {
@@ -69,7 +72,6 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
         session_token: sessionRef.current,
         limit: '5',
         language: 'en',
-        // Include multiple types for comprehensive results
         types: 'address,poi,place,locality'
       });
 
@@ -107,12 +109,11 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   useEffect(() => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      const query = value.trim();
-      if (query) {
+      const query = inputValue.trim();
+      if (query && suggestions.length === 0) {
         searchLocations(query, controller.signal);
-      } else {
+      } else if (!query) {
         setSuggestions([]);
-        setIsSearching(false);
       }
     }, 300);
 
@@ -120,15 +121,19 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [value, searchLocations]);
+  }, [inputValue, searchLocations]);
 
   const handleSelect = async (suggestion: LocationSuggestion) => {
     if (!mapboxToken || !sessionRef.current) return;
+    
+    // Immediately clear suggestions and update input value
+    const locationName = suggestion.full_address || suggestion.name;
+    setInputValue(locationName);
     setSuggestions([]);
+    
     setIsSearching(true);
   
     try {
-      // Use the /retrieve endpoint to get the full details, including coordinates
       const retrieveUrl = `https://api.mapbox.com/search/searchbox/v1/retrieve/${suggestion.mapbox_id}`;
       const retrieveParams = new URLSearchParams({
         access_token: mapboxToken,
@@ -144,7 +149,6 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
         const [longitude, latitude] = feature.geometry.coordinates;
-        const locationName = feature.place_name || suggestion.full_address || suggestion.name;
   
         onLocationSelect({ 
           name: locationName, 
@@ -154,14 +158,24 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       }
     } catch (e) {
       console.error('Failed to get location coordinates:', e);
-      // Fallback: just use the name without coordinates
       onLocationSelect({ 
-        name: suggestion.full_address || suggestion.name, 
+        name: locationName, 
         latitude: 0, 
         longitude: 0 
       });
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setInputValue(newValue);
+    onChange(e); // Propagate change to parent
+    
+    // Clear suggestions if the user starts typing again after a selection
+    if (suggestions.length > 0) {
+      setSuggestions([]);
     }
   };
 
@@ -171,8 +185,8 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
         <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
           type="text"
-          value={value}
-          onChange={onChange}
+          value={inputValue}
+          onChange={handleInputChange}
           placeholder="Enter an address or store name"
           className="pl-10"
         />
@@ -202,7 +216,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
         </div>
       )}
       
-      {value.length >= 2 && !isSearching && suggestions.length === 0 && (
+      {inputValue.length >= 2 && !isSearching && suggestions.length === 0 && (
         <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 p-3">
           <div className="text-sm text-gray-500">
             No locations found. Try a different search term.

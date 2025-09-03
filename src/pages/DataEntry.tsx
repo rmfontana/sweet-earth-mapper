@@ -76,7 +76,6 @@ const DataEntry = () => {
     }
   };
 
-  // Combined handler for both slider and input
   const handleBrixChange = (value: number | number[]) => {
     const brixValue = Array.isArray(value) ? value[0] : value;
     handleInputChange('brixLevel', brixValue);
@@ -159,8 +158,30 @@ const DataEntry = () => {
     }
     
     setIsLoading(true);
-    
+
     try {
+      // Step 1: Find or create the Place record
+      let placeId = null;
+      if (formData.location && formData.latitude && formData.longitude) {
+        const { data: places, error: placesError } = await supabase
+          .from('places')
+          .upsert({ 
+            label: formData.location, 
+            latitude: formData.latitude, 
+            longitude: formData.longitude 
+          })
+          .select()
+          .single();
+
+        if (placesError) {
+          throw new Error('Failed to create or find place record: ' + placesError.message);
+        }
+        placeId = places.id;
+      } else {
+        throw new Error('Location, latitude, and longitude are required.');
+      }
+
+      // Step 2: Prepare the final payload with place_id
       const payload = {
         cropName: formData.cropType,
         brandName: formData.brand,
@@ -170,12 +191,11 @@ const DataEntry = () => {
         assessmentDate: new Date(formData.measurementDate + 'T00:00:00.000Z').toISOString(),
         purchaseDate: new Date(formData.purchaseDate + 'T00:00:00.000Z').toISOString(),
         outlierNotes: formData.outlierNotes,
-        latitude: formData.latitude,
-        longitude: formData.longitude,
-        locationName: formData.location,
+        placeId: placeId,
         userId: user?.id,
       };
-      
+
+      // Step 3: Call the Edge Function with the new payload
       const supabaseUrl = getSupabaseUrl();
       const publishKey = getPublishableKey();
       const response = await fetch(`${supabaseUrl}/functions/v1/auto-verify-submission`, {
