@@ -34,8 +34,8 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
-  const [localValue, setLocalValue] = useState(value); // New local state for the input
   const sessionRef = useRef<string | null>(null);
+  const selectedValueRef = useRef<string | null>(null); // New ref to store the selected value
 
   useEffect(() => {
     sessionRef.current = generateUUID();
@@ -56,6 +56,12 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
     if (!mapboxToken || !sessionRef.current || query.length < 2) {
       setSuggestions([]);
       return;
+    }
+
+    // Don't search if the query is the same as the last selected value
+    if (query === selectedValueRef.current) {
+        setSuggestions([]);
+        return;
     }
 
     setIsSearching(true);
@@ -101,21 +107,14 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
     }
   }, [mapboxToken]);
 
-  // Use a ref to track if a selection was just made
-  const justSelectedRef = useRef(false);
-
   useEffect(() => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      const query = localValue.trim();
-      // Only trigger a search if the value is not an empty string
-      // and a selection was not just made.
-      if (query && !justSelectedRef.current) {
+      const query = value.trim();
+      if (query) {
         searchLocations(query, controller.signal);
       } else {
         setSuggestions([]);
-        // Reset the flag immediately after the useEffect finishes
-        justSelectedRef.current = false;
       }
     }, 300);
 
@@ -123,24 +122,17 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [localValue, searchLocations]);
-
-  // Keep the local state in sync with the external prop when it changes
-  // This handles the initial state and external resets
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
+  }, [value, searchLocations]);
 
   const handleSelect = async (suggestion: LocationSuggestion) => {
     if (!mapboxToken || !sessionRef.current) return;
     
     const locationName = suggestion.full_address || suggestion.name;
+
+    // Store the selected value in the ref before updating the state
+    selectedValueRef.current = locationName;
     
-    // Set the flag to true to prevent the next search from running
-    justSelectedRef.current = true;
-    
-    // Update both local and parent state
-    setLocalValue(locationName);
+    // Update the parent component's state, which will trigger a re-render
     onChange({
       target: { value: locationName }
     } as React.ChangeEvent<HTMLInputElement>);
@@ -186,9 +178,9 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setLocalValue(newValue); // Update local state for input control
-    onChange(e); // Propagate change to the parent component
+    // Reset the selected value ref when the user types
+    selectedValueRef.current = null;
+    onChange(e); 
   };
 
   return (
@@ -197,7 +189,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
         <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
           type="text"
-          value={localValue} // Controlled by local state
+          value={value}
           onChange={handleInputChange}
           placeholder="Enter an address or store name"
           className="pl-10"
@@ -228,7 +220,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
         </div>
       )}
       
-      {localValue.length >= 2 && !isSearching && suggestions.length === 0 && (
+      {value.length >= 2 && !isSearching && suggestions.length === 0 && (
         <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 p-3">
           <div className="text-sm text-gray-500">
             No locations found. Try a different search term.
