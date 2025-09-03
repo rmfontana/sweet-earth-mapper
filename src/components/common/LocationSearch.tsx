@@ -49,41 +49,44 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       setSuggestions([]);
       return;
     }
-
+  
     setIsSearching(true);
     try {
       console.log('Searching for:', query);
-      
-      // Use the geocoding API instead of searchbox for better compatibility
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`;
+  
+      // Use the Search Box API for better POI results
+      const url = `https://api.mapbox.com/search/searchbox/v1/suggest`;
       const params = new URLSearchParams({
+        q: query, // Use the 'q' parameter for the query
         access_token: mapboxToken,
         limit: '5',
-        types: 'place,locality,neighborhood,address,poi'
+        language: 'en',
+        // The types are handled by the API's internal logic, but you can hint at them
+        // 'poi' is the most relevant type for your use case
+        types: 'poi', 
       });
-      
+  
       const response = await fetch(`${url}?${params}`, { 
         signal,
         headers: {
           'Content-Type': 'application/json'
         }
       });
-      
+  
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Mapbox API error:', response.status, response.statusText, errorText);
-        throw new Error(`Mapbox API error: ${response.status} ${response.statusText}`);
+        throw new Error(`Mapbox API error: ${response.status} - ${errorText}`);
       }
-      
+  
       const data = await response.json();
       console.log('Search results:', data);
-      
-      // Transform geocoding results to match our expected format
-      const transformedSuggestions: LocationSuggestion[] = data.features?.map((feature: any) => ({
-        mapbox_id: feature.id,
-        name: feature.text || feature.place_name,
-        full_address: feature.place_name,
-        place_formatted: feature.place_name
+  
+      // The Search Box API returns suggestions directly
+      const transformedSuggestions = data.suggestions?.map((s: any) => ({
+        mapbox_id: s.mapbox_id,
+        name: s.name,
+        full_address: s.full_address,
+        place_formatted: s.place_formatted, // Use place_formatted for cleaner display
       })) || [];
       
       setSuggestions(transformedSuggestions);
@@ -96,7 +99,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       setIsSearching(false);
     }
   }, [mapboxToken]);
-
+  
   useEffect(() => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -165,7 +168,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
           type="text"
           value={value}
           onChange={onChange}
-          placeholder="Search for a location (e.g., Oswego, NY)"
+          placeholder="Search for a store or location (e.g., 'Walmart', 'Target Oswego NY')"
           className="pl-10"
         />
         {(isLoading || isSearching) && (
