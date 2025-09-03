@@ -33,7 +33,7 @@ const DataEntry = () => {
   const { toast } = useToast();
 
   // Use the shared static data hook
-  const { crops, brands, stores, isLoading: staticDataLoading, error: staticDataError } = useStaticData();
+  const { crops, brands, locations, isLoading: staticDataLoading, error: staticDataError } = useStaticData();
 
   const [formData, setFormData] = useState({
     cropType: '',
@@ -344,7 +344,7 @@ const DataEntry = () => {
                       Point of Purchase <span className="ml-1 text-red-600">*</span>
                     </Label>
                     <Combobox
-                      items={stores}
+                      items={locations}
                       value={formData.store}
                       onSelect={(value) => handleInputChange('store', value)}
                       placeholder="Select or enter store"

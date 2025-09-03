@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { MapPin, Calendar, User, CheckCircle, AlertCircle, MessageSquare, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { MapPin, Calendar, User, CheckCircle, AlertCircle, MessageSquare, Image as ImageIcon, Loader2, Tag, Building } from 'lucide-react';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor } from '../../lib/getBrixColor';
 import { getBrixQuality } from '../../lib/getBrixQuality';
@@ -127,25 +127,25 @@ const SubmissionDetails: React.FC<SubmissionDetailsProps> = ({ dataPoint, showIm
           <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
             <MapPin className="w-5 h-5 text-gray-600" />
             <div>
-              <p className="text-sm text-gray-600">Location</p>
-              <p className="font-medium">{dataPoint.locationName}</p>
+              <p className="text-sm text-gray-600">Place</p>
+              <p className="font-medium">{dataPoint.placeName || 'N/A'}</p>
               <p className="text-xs text-gray-500">
                 {dataPoint.latitude?.toFixed(4)}, {dataPoint.longitude?.toFixed(4)}
               </p>
             </div>
           </div>
-          {dataPoint.storeName && (
+          {dataPoint.locationName && (
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
-              <MapPin className="w-5 h-5 text-gray-600" />
+              <Building className="w-5 h-5 text-gray-600" />
               <div>
                 <p className="text-sm text-gray-600">Store</p>
-                <p className="font-medium">{dataPoint.storeName}</p>
+                <p className="font-medium">{dataPoint.locationName}</p>
               </div>
             </div>
           )}
           {dataPoint.brandName && (
             <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
-              <User className="w-5 h-5 text-gray-600" />
+              <Tag className="w-5 h-5 text-gray-600" />
               <div>
                 <p className="text-sm text-gray-600">Brand</p>
                 <p className="font-medium">{dataPoint.brandName}</p>

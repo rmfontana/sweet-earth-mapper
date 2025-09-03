@@ -95,8 +95,8 @@ const DataTable: React.FC = () => {
   const { filters, setFilters, isAdmin, setFilteredCount } = useFilters();
   const { user } = useAuth();
 
-  // Corrected destructuring: useStaticData hook does not return 'categories'.
-  const { crops, brands, stores, isLoading: isLoadingStaticData } = useStaticData();
+  // Corrected destructuring: useStaticData hook returns 'locations' not 'stores'.
+  const { crops, brands, locations, isLoading: isLoadingStaticData } = useStaticData();
 
   // Re-added local state for categories since the hook doesn't provide it.
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
@@ -117,7 +117,8 @@ const DataTable: React.FC = () => {
   // Queries for searching within filter popovers
   const [cropCategoryQuery, setCropCategoryQuery] = useState('');
   const [brandQuery, setBrandQuery] = useState('');
-  const [storeQuery, setStoreQuery] = useState('');
+  // Refactored state from 'storeQuery' to 'locationQuery'
+  const [locationQuery, setLocationQuery] = useState('');
   const [cropQuery, setCropQuery] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -161,8 +162,8 @@ const DataTable: React.FC = () => {
         const matches =
           (point.cropType && point.cropType.toLowerCase().includes(searchLower)) ||
           (point.submittedBy && point.submittedBy.toLowerCase().includes(searchLower)) ||
+          // Refactored search term from `storeName` to `locationName`
           (point.locationName && point.locationName.toLowerCase().includes(searchLower)) ||
-          (point.storeName && point.storeName.toLowerCase().includes(searchLower)) ||
           (point.brandName && point.brandName.toLowerCase().includes(searchLower)) ||
           (point.outlier_notes && point.outlier_notes.toLowerCase().includes(searchLower));
         return matches;
@@ -238,7 +239,8 @@ const DataTable: React.FC = () => {
     setSearchTerm('');
     setCropCategoryQuery('');
     setBrandQuery('');
-    setStoreQuery('');
+    // Refactored state from 'setStoreQuery' to 'setLocationQuery'
+    setLocationQuery('');
     setCropQuery('');
   };
 
@@ -252,10 +254,11 @@ const DataTable: React.FC = () => {
       brand.name.toLowerCase().includes(brandQuery.toLowerCase())
     ), [brands, brandQuery]);
 
-  const filteredStores = useMemo(() =>
-    stores.filter(store =>
-      store.name.toLowerCase().includes(storeQuery.toLowerCase())
-    ), [stores, storeQuery]);
+  // Refactored memoized filter from `filteredStores` to `filteredLocations`
+  const filteredLocations = useMemo(() =>
+    locations.filter(location =>
+      location.name.toLowerCase().includes(locationQuery.toLowerCase())
+    ), [locations, locationQuery]);
 
   const filteredCrops = useMemo(() =>
     crops.filter(crop =>
@@ -533,7 +536,7 @@ const DataTable: React.FC = () => {
             </div>
 
             <div>
-              <Label className="text-sm font-medium mb-2 block">Store Name</Label>
+              <Label className="text-sm font-medium mb-2 block">Location Name</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -541,34 +544,34 @@ const DataTable: React.FC = () => {
                     className="w-full justify-between text-sm"
                     aria-haspopup="listbox"
                   >
-                    {filters.store || 'Select Store'}
+                    {filters.place || 'Select Location'}
                     <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[300px] p-0">
                   <Command>
                     <CommandInput
-                      placeholder="Search store..."
+                      placeholder="Search location..."
                       className="h-9"
-                      value={storeQuery}
-                      onValueChange={setStoreQuery}
-                      aria-label="Search store"
+                      value={locationQuery}
+                      onValueChange={setLocationQuery}
+                      aria-label="Search location"
                     />
-                    <CommandList role="listbox" aria-label="Stores">
-                      <CommandEmpty>No stores found.</CommandEmpty>
-                      {filteredStores.map((store) => (
+                    <CommandList role="listbox" aria-label="Locations">
+                      <CommandEmpty>No locations found.</CommandEmpty>
+                      {filteredLocations.map((location) => (
                         <CommandItem
-                          key={store.id}
+                          key={location.id}
                           onSelect={() => {
-                            handleFilterChange('store', store.name === filters.store ? '' : store.name);
-                            setStoreQuery('');
+                            handleFilterChange('place', location.name === filters.place ? '' : location.name);
+                            setLocationQuery('');
                           }}
-                          aria-selected={filters.store === store.name}
+                          aria-selected={filters.place === location.name}
                           role="option"
                           className="flex justify-between items-center"
                         >
-                          <span>{store.name}</span>
-                          {filters.store === store.name && <Check className="h-4 w-4" />}
+                          <span>{location.name}</span>
+                          {filters.place === location.name && <Check className="h-4 w-4" />}
                         </CommandItem>
                       ))}
                     </CommandList>
@@ -620,28 +623,28 @@ const DataTable: React.FC = () => {
                     className="cursor-pointer"
                     onClick={() => handleSort('cropType')}
                   >
-                    Crop / Variety / Brand / Store{' '}
+                    Crop / Variety / Brand / Location
                     {sortBy === 'cropType' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </TableHead>
                   <TableHead
                     className="text-center cursor-pointer"
                     onClick={() => handleSort('brixLevel')}
                   >
-                    BRIX{' '}
+                    BRIX
                     {sortBy === 'brixLevel' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </TableHead>
                   <TableHead
                     className="cursor-pointer"
                     onClick={() => handleSort('locationName')}
                   >
-                    Location / Notes{' '}
+                    Place / Notes
                     {sortBy === 'locationName' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </TableHead>
                   <TableHead
                     className="whitespace-nowrap cursor-pointer"
                     onClick={() => handleSort('submittedAt')}
                   >
-                    Assessment Date{' '}
+                    Assessment Date
                     {sortBy === 'submittedAt' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </TableHead>
                   <TableHead className="text-center">Verified?</TableHead>

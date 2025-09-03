@@ -67,11 +67,34 @@ export type Database = {
       }
       locations: {
         Row: {
+          id: string
+          label: string | null
+          name: string
+          type: string | null
+        }
+        Insert: {
+          id?: string
+          label?: string | null
+          name: string
+          type?: string | null
+        }
+        Update: {
+          id?: string
+          label?: string | null
+          name?: string
+          type?: string | null
+        }
+        Relationships: []
+      }
+      places: {
+        Row: {
           city: string | null
           id: string
           label: string | null
           latitude: number
+          location_id: string | null
           longitude: number
+          normalized_address: string | null
           state: string | null
           street_address: string | null
         }
@@ -80,7 +103,9 @@ export type Database = {
           id?: string
           label?: string | null
           latitude: number
+          location_id?: string | null
           longitude: number
+          normalized_address?: string | null
           state?: string | null
           street_address?: string | null
         }
@@ -89,11 +114,21 @@ export type Database = {
           id?: string
           label?: string | null
           latitude?: number
+          location_id?: string | null
           longitude?: number
+          normalized_address?: string | null
           state?: string | null
           street_address?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "places_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       spatial_ref_sys: {
         Row: {
@@ -118,35 +153,6 @@ export type Database = {
           srtext?: string | null
         }
         Relationships: []
-      }
-      stores: {
-        Row: {
-          id: string
-          label: string | null
-          location_id: string | null
-          name: string
-        }
-        Insert: {
-          id?: string
-          label?: string | null
-          location_id?: string | null
-          name: string
-        }
-        Update: {
-          id?: string
-          label?: string | null
-          location_id?: string | null
-          name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "stores_location_id_fkey"
-            columns: ["location_id"]
-            isOneToOne: false
-            referencedRelation: "locations"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       submission_images: {
         Row: {
@@ -195,10 +201,10 @@ export type Database = {
           farm_location: string | null
           harvest_time: string | null
           id: string
-          location_id: string
+          location_id: string | null
           outlier_notes: string | null
+          place_id: string
           purchase_date: string | null
-          store_id: string | null
           user_id: string | null
           verified: boolean
           verified_at: string | null
@@ -214,10 +220,10 @@ export type Database = {
           farm_location?: string | null
           harvest_time?: string | null
           id?: string
-          location_id: string
+          location_id?: string | null
           outlier_notes?: string | null
+          place_id: string
           purchase_date?: string | null
-          store_id?: string | null
           user_id?: string | null
           verified?: boolean
           verified_at?: string | null
@@ -233,10 +239,10 @@ export type Database = {
           farm_location?: string | null
           harvest_time?: string | null
           id?: string
-          location_id?: string
+          location_id?: string | null
           outlier_notes?: string | null
+          place_id?: string
           purchase_date?: string | null
-          store_id?: string | null
           user_id?: string | null
           verified?: boolean
           verified_at?: string | null
@@ -265,10 +271,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "submissions_store_id_fkey"
-            columns: ["store_id"]
+            foreignKeyName: "submissions_place_id_fkey"
+            columns: ["place_id"]
             isOneToOne: false
-            referencedRelation: "stores"
+            referencedRelation: "places"
             referencedColumns: ["id"]
           },
           {
@@ -398,16 +404,16 @@ export type Database = {
           },
           {
             foreignKeyName: "submissions_location_id_fkey"
-            columns: ["location_id"]
+            columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "locations"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "submissions_store_id_fkey"
-            columns: ["store_id"]
+            foreignKeyName: "submissions_place_id_fkey"
+            columns: ["location_id"]
             isOneToOne: false
-            referencedRelation: "stores"
+            referencedRelation: "places"
             referencedColumns: ["id"]
           },
         ]
@@ -897,6 +903,10 @@ export type Database = {
       longtransactionsenabled: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      normalize_address: {
+        Args: { address: string }
+        Returns: string
       }
       path: {
         Args: { "": unknown }

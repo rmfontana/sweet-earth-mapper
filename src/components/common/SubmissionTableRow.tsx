@@ -43,10 +43,10 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
             <div className="text-xs text-gray-800 mt-1">Brand: {submission.brandName}</div>
           )}
 
-          {submission.storeName && (
+          {submission.locationName && (
             <div className="text-xs text-gray-700 flex items-center space-x-1 mt-1">
               <MapPin className="w-3 h-3 text-gray-500" />
-              <span>{submission.storeName}</span>
+              <span>{submission.locationName}</span>
             </div>
           )}
 

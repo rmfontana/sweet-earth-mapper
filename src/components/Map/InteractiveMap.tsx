@@ -40,7 +40,7 @@ const FALLBACK_ICON_RAW_NAME = 'default';
 const FALLBACK_ICON_ID = getMapboxIconIdFromPoint({
   cropType: FALLBACK_ICON_RAW_NAME,
   id: '', brixLevel: 0, verified: false, variety: '', category: '',
-  latitude: null, longitude: null, locationName: '', storeName: '', brandName: '',
+  latitude: null, longitude: null, locationName: '', brandName: '',
   submittedBy: '', verifiedBy: '', submittedAt: '', outlier_notes: '', images: []
 } as BrixDataPoint);
 

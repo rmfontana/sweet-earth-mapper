@@ -9,7 +9,7 @@ export const DEFAULT_MAP_FILTERS: MapFilter = {
   dateRange: ['', ''],
   verifiedOnly: true,
   submittedBy: '',
-  store: '',
+  place: '',
   brand: '',
   hasImage: false,
   category: '',

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchCropTypes } from '../lib/fetchCropTypes';
 import { fetchBrands } from '../lib/fetchBrands';
-import { fetchStores } from '../lib/fetchStores';
+import { fetchLocations } from '../lib/fetchLocations'; // Updated import
 
 interface DatabaseItem {
   id: string;
@@ -11,7 +11,7 @@ interface DatabaseItem {
 interface StaticData {
   crops: DatabaseItem[];
   brands: DatabaseItem[];
-  stores: DatabaseItem[];
+  locations: DatabaseItem[]; // Renamed from 'stores' to 'locations'
   isLoading: boolean;
   error: string | null;
 }
@@ -19,7 +19,7 @@ interface StaticData {
 const initialData = {
   crops: [],
   brands: [],
-  stores: [],
+  locations: [], // Renamed from 'stores' to 'locations'
   isLoading: true,
   error: null,
 };
@@ -45,31 +45,31 @@ const normalizeToItems = (data: any[], type: string): DatabaseItem[] => {
     if (item && typeof item === 'object' && 'id' in item && 'name' in item && typeof item.name === 'string') {
       return {
         id: String(item.id),
-        name: item.name
+        name: item.name,
       };
     }
-    
+
     // If it's a string
     if (typeof item === 'string') {
       return {
         id: `temp-${type}-${index}`,
-        name: item
+        name: item,
       };
     }
-    
+
     // If it's an object but without proper structure, try to extract name
     if (item && typeof item === 'object') {
       const name = item.name || item.title || item.label || String(item);
       return {
         id: `temp-${type}-${index}`,
-        name: typeof name === 'string' ? name : `Unknown ${type} ${index}`
+        name: typeof name === 'string' ? name : `Unknown ${type} ${index}`,
       };
     }
-    
+
     // Fallback for any other type
     return {
       id: `temp-${type}-${index}`,
-      name: `Unknown ${type} ${index}`
+      name: `Unknown ${type} ${index}`,
     };
   });
 };
@@ -97,11 +97,11 @@ export const useStaticData = (): StaticData => {
     const fetchData = async () => {
       if (isFetching) return;
       isFetching = true;
-      
+
       try {
         console.log('Fetching static data...');
-        
-        const [cropsResult, brandsResult, storesResult] = await Promise.all([
+
+        const [cropsResult, brandsResult, locationsResult] = await Promise.all([
           fetchCropTypes().catch(e => {
             console.error('Error fetching crops:', e);
             return [];
@@ -110,37 +110,37 @@ export const useStaticData = (): StaticData => {
             console.error('Error fetching brands:', e);
             return [];
           }),
-          fetchStores().catch(e => {
-            console.error('Error fetching stores:', e);
+          fetchLocations().catch(e => {
+            console.error('Error fetching locations:', e); // Updated log message
             return [];
           }),
         ]);
 
-        console.log('Raw fetched results:', { 
+        console.log('Raw fetched results:', {
           cropsResult: cropsResult?.slice(0, 3), // Log first 3 items for debugging
           brandsResult: brandsResult?.slice(0, 3),
-          storesResult: storesResult?.slice(0, 3)
+          locationsResult: locationsResult?.slice(0, 3), // Updated log name
         });
 
         // Normalize all data to consistent format
         const formattedCrops = normalizeToItems(cropsResult, 'crop');
         const formattedBrands = normalizeToItems(brandsResult, 'brand');
-        const formattedStores = normalizeToItems(storesResult, 'store');
+        const formattedLocations = normalizeToItems(locationsResult, 'location'); // Corrected type and variable
 
-        console.log('Formatted data:', { 
+        console.log('Formatted data:', {
           formattedCrops: formattedCrops.slice(0, 3),
           formattedBrands: formattedBrands.slice(0, 3),
-          formattedStores: formattedStores.slice(0, 3)
+          formattedLocations: formattedLocations.slice(0, 3), // Updated log name
         });
 
         staticDataCache = {
           crops: formattedCrops,
           brands: formattedBrands,
-          stores: formattedStores,
+          locations: formattedLocations, // Updated key to 'locations'
           isLoading: false,
           error: null,
         };
-        
+
         updateSubscribers(staticDataCache);
         console.log('Static data cache updated successfully');
       } catch (e) {

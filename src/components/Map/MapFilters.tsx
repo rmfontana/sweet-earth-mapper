@@ -8,7 +8,7 @@ import { Switch } from '../ui/switch';
 import { ChevronDown, Check, Calendar, X } from 'lucide-react';
 import { fetchCropTypes } from '@/lib/fetchCropTypes';
 import { fetchBrands } from '@/lib/fetchBrands';
-import { fetchStores } from '@/lib/fetchStores';
+import { fetchStores } from '@/lib/fetchLocations';
 import { fetchCropCategories } from '@/lib/fetchCropCategories';
 import { Range, getTrackBackground } from 'react-range';
 import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext';

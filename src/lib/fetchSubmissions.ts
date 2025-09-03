@@ -1,8 +1,7 @@
-// src/lib/fetchSubmissions.ts
-
 import { supabase } from '../integrations/supabase/client';
 import { BrixDataPoint } from '../types';
 
+// This query selects a flat list of submission fields and joins related tables.
 const SUBMISSIONS_SELECT_QUERY_STRING = `
   id,
   assessment_date,
@@ -12,15 +11,16 @@ const SUBMISSIONS_SELECT_QUERY_STRING = `
   crop_variety,
   outlier_notes,
   purchase_date,
-  location:location_id(id,label,latitude,longitude),
-  crop:crop_id(id,name,label,poor_brix,average_brix,good_brix,excellent_brix,category),
-  store:store_id(id,name,label),
+  place:place_id(id,label,latitude,longitude),
+  location:location_id(id,name,label),
   brand:brand_id(id,name,label),
   user:users!user_id(id,display_name),
   verifier:users!verified_by(id,display_name),
-  submission_images(image_url)
+  submission_images(image_url),
+  crop:crop_id(id,name,label,poor_brix,average_brix,good_brix,excellent_brix,category)
 `;
 
+// This interface reflects the structure of the data returned by the Supabase query.
 interface SupabaseSubmissionRow {
   id: string;
   assessment_date: string;
@@ -30,23 +30,15 @@ interface SupabaseSubmissionRow {
   crop_variety: string | null;
   outlier_notes: string | null;
   purchase_date: string | null;
-  location: {
+  // The 'place' property now holds the latitude, longitude, and label from the 'places' table.
+  place: {
     id: string;
     label: string;
     latitude: number;
     longitude: number;
   } | null;
-  crop: {
-    id: string;
-    name: string;
-    label: string | null;
-    poor_brix: number | null;
-    average_brix: number | null;
-    good_brix: number | null;
-    excellent_brix: number | null;
-    category: string | null;
-  } | null;
-  store: {
+  // The 'location' property now holds the name and label from the new 'locations' table (the old 'stores' table).
+  location: {
     id: string;
     name: string;
     label: string | null;
@@ -67,6 +59,17 @@ interface SupabaseSubmissionRow {
   submission_images: {
     image_url: string;
   }[];
+  // The 'crop' property is unchanged, but included here for completeness.
+  crop: {
+    id: string;
+    name: string;
+    label: string | null;
+    poor_brix: number | null;
+    average_brix: number | null;
+    good_brix: number | null;
+    excellent_brix: number | null;
+    category: string | null;
+  } | null;
 }
 
 /**
@@ -82,11 +85,12 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     // Use `name` as the unique identifier for the crop type
     cropType: item.crop?.name ?? 'Unknown',
     category: item.crop?.category ?? '',
-    latitude: item.location?.latitude ?? null,
-    longitude: item.location?.longitude ?? null,
+    // The latitude and longitude now come from the 'place' property
+    latitude: item.place?.latitude ?? null,
+    longitude: item.place?.longitude ?? null,
     // Use `label` for the display names of locations, stores, and brands
-    locationName: item.location?.label ?? '',
-    storeName: item.store?.label ?? item.store?.name ?? '',
+    placeName: item.place?.label ?? '',
+    locationName: item.location?.label ?? item.location?.name ?? '',
     brandName: item.brand?.label ?? item.brand?.name ?? '',
     submittedBy: item.user?.display_name ?? 'Anonymous',
     userId: item.user?.id ?? undefined,
@@ -101,11 +105,11 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     excellentBrix: item.crop?.excellent_brix,
     // Use `label` for the normalized, human-readable name of the crop
     name_normalized: item.crop?.label ?? item.crop?.name ?? 'Unknown',
-    
+
     // Map the IDs from the nested objects
+    placeId: item.place?.id ?? '',
     locationId: item.location?.id ?? '',
     cropId: item.crop?.id ?? '',
-    storeId: item.store?.id ?? '',
     brandId: item.brand?.id ?? '',
     verifiedByUserId: item.verifier?.id ?? '',
   };

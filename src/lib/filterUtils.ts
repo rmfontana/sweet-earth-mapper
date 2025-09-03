@@ -41,9 +41,9 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
       return false;
     }
 
-    // Store filter
-    // Check if a store is set AND it's different from the default (empty string)
-    if (filters.store && filters.store !== DEFAULT_MAP_FILTERS.store && point.storeName !== filters.store) {
+    // Place filter
+    // Check if a place is set AND it's different from the default (empty string)
+    if (filters.place && filters.place !== DEFAULT_MAP_FILTERS.place && point.placeName !== filters.place) {
       return false;
     }
 
@@ -99,7 +99,7 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
     brixRange: filters.brixRange,
     dateRange: filters.dateRange,
     brand: filters.brand,
-    store: filters.store,
+    place: filters.place,
     category: filters.category,
     hasImage: filters.hasImage
   });
@@ -130,8 +130,8 @@ export function getFilterSummary(filters: MapFilter, isAdmin: boolean): string {
     activeFilters.push(`brand: ${filters.brand}`);
   }
   
-  if (filters.store && filters.store !== DEFAULT_MAP_FILTERS.store) {
-    activeFilters.push(`store: ${filters.store}`);
+  if (filters.place && filters.place !== DEFAULT_MAP_FILTERS.place) {
+    activeFilters.push(`place: ${filters.place}`);
   }
   
   // Brix range: check if either bound is different from default

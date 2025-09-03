@@ -1,5 +1,4 @@
 // Core TypeScript interfaces for the BRIX platform
-// Core TypeScript interfaces for the BRIX platform
 export interface BrixDataPoint {
   id: string;
   brixLevel: number;
@@ -10,8 +9,8 @@ export interface BrixDataPoint {
   category: string; // Category of the crop (e.g., vegetable, fruit)
   latitude: number | null;
   longitude: number | null;
-  locationName: string; // Human-readable location
-  storeName: string;
+  locationName: string; // Human-readable location (e.g., "Whole Foods Market")
+  placeName: string; // Human-readable place (e.g., "123 Main St, Anytown")
   brandName: string;
   submittedBy: string; // Display name of the user who submitted it
   userId?: string; // Add userId for internal filtering/linking to users
@@ -26,10 +25,10 @@ export interface BrixDataPoint {
   name_normalized?: string; // Added the name_normalized field here
   purchaseDate: string | null; // ISO timestamp
 
-  // ADD THESE NEW FIELDS
+  // NEW/UPDATED FIELDS
   locationId: string;
   cropId: string;
-  storeId: string;
+  placeId: string;
   brandId: string;
   verifiedByUserId: string;
 }
@@ -46,23 +45,23 @@ export interface FormattedSubmission {
   latitude: number | null;
   longitude: number | null;
   locationName: string;
-  storeName: string;
+  placeName: string;
   brandName: string;
   submittedBy: string;
   verifiedBy: string;
   submittedAt: string;
   images: string[];
   notes: string | null;
-  location: { id: string; name: string; } | null;
+  place: { id: string; label: string; latitude: number | null; longitude: number | null; } | null;
   crop: { id: string; name: string; category: string; excellent_brix: number | null; good_brix: number | null; average_brix: number | null; } | null;
-  store: { id: string; name: string; } | null;
+  location: { id: string; name: string; } | null;
   brand: { id: string; name: string; } | null;
   user: { id: string; display_name: string; } | null;
   verifier: { id: string; display_name: string; } | null;
   excellentBrix: number | null;
   goodBrix: number | null;
   averageBrix: number | null;
-  poorBrix: number | null; // ADD THIS LINE 🌟
+  poorBrix: number | null;
   userId: string;
   outlier_notes: string | null;
   variety: string | null;
@@ -108,7 +107,7 @@ export interface MapFilter {
   dateRange: [string, string];
   verifiedOnly: boolean;
   submittedBy: string;
-  store: string;
+  place: string;
   brand: string;
   hasImage: boolean;
   category: string;

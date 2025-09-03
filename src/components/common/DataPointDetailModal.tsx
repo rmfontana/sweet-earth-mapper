@@ -1,4 +1,3 @@
-// src/components/common/DataPointDetailModal.tsx
 import React, { useState, useEffect } from 'react';
 import { BrixDataPoint } from '../../types';
 import { Button } from '../ui/button';
@@ -20,11 +19,11 @@ import {
   X,
   Edit,
   Droplets,
-  Store,
   Tag,
   Package,
   MapIcon,
-  FileText
+  FileText,
+  Building,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { deleteSubmission } from '../../lib/fetchSubmissions';
@@ -58,10 +57,10 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
   const { cache: thresholdsCache } = useCropThresholds();
-  
-  // Use the shared static data hook instead of fetching separately
-  const { crops, brands, stores, isLoading: staticDataLoading, error: staticDataError } = useStaticData();
-  
+
+  // Use the shared static data hook and destructure the new 'locations' property
+  const { crops, brands, locations, isLoading: staticDataLoading, error: staticDataError } = useStaticData();
+
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -69,7 +68,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const [imagesLoading, setImagesLoading] = useState(false);
   const [isLocationLoading, setIsLocationLoading] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
-  
+
   // Remove the isLoading state since we're using staticDataLoading
   const [isInitializing, setIsInitializing] = useState(true);
 
@@ -77,6 +76,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const [brixLevel, setBrixLevel] = useState<number | ''>('');
   const [cropType, setCropType] = useState('');
   const [variety, setVariety] = useState('');
+  const [placeName, setPlaceName] = useState('');
   const [locationName, setLocationName] = useState('');
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
@@ -84,7 +84,6 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const [purchaseDate, setPurchaseDate] = useState('');
   const [outlierNotes, setOutlierNotes] = useState('');
   const [brand, setBrand] = useState('');
-  const [store, setStore] = useState('');
   const [verified, setVerified] = useState(false);
   const [verifiedBy, setVerifiedBy] = useState('');
   const [verifiedAt, setVerifiedAt] = useState('');
@@ -99,14 +98,15 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       console.log('staticDataError:', staticDataError);
       console.log('crops length:', crops?.length);
       console.log('brands length:', brands?.length);
-      console.log('stores length:', stores?.length);
-      
+      console.log('locations length:', locations?.length); // Updated log name
+
       if (!isOpen || !initialDataPoint) {
         setIsInitializing(false);
         // Reset state when modal is not open to prepare for next opening
         setBrixLevel('');
         setCropType('');
         setVariety('');
+        setPlaceName('');
         setLocationName('');
         setLatitude(null);
         setLongitude(null);
@@ -114,7 +114,6 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         setPurchaseDate('');
         setOutlierNotes('');
         setBrand('');
-        setStore('');
         setVerified(false);
         setVerifiedBy('');
         setVerifiedAt('');
@@ -125,10 +124,10 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         console.log('Modal is not open or initialDataPoint is null. Exiting useEffect.');
         return;
       }
-      
+
       setIsInitializing(true);
       console.log('Modal is open with initialDataPoint:', initialDataPoint);
-      console.log('Static data status - crops:', crops, 'brands:', brands, 'stores:', stores);
+      console.log('Static data status - crops:', crops, 'brands:', brands, 'locations:', locations); // Updated log name
 
       try {
         // Populate form state from prop immediately
@@ -136,6 +135,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         setBrixLevel(initialDataPoint.brixLevel ?? '');
         setCropType(initialDataPoint.cropType || '');
         setVariety(initialDataPoint.variety || '');
+        setPlaceName(initialDataPoint.placeName || '');
         setLocationName(initialDataPoint.locationName || '');
         setLatitude(initialDataPoint.latitude ?? null);
         setLongitude(initialDataPoint.longitude ?? null);
@@ -143,7 +143,6 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         setPurchaseDate(initialDataPoint.purchaseDate || '');
         setOutlierNotes(initialDataPoint.outlier_notes || '');
         setBrand(initialDataPoint.brandName || '');
-        setStore(initialDataPoint.storeName || '');
         setVerified(initialDataPoint.verified ?? false);
         setVerifiedBy(initialDataPoint.verifiedBy || '');
         setVerifiedAt(initialDataPoint.verifiedAt || '');
@@ -164,7 +163,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       }
     }
     initializeModalData();
-  }, [isOpen, initialDataPoint, staticDataError, staticDataLoading, crops, brands, stores]);
+  }, [isOpen, initialDataPoint, staticDataError, staticDataLoading, crops, brands, locations]); // Updated dependency array to 'locations'
 
   useEffect(() => {
     // Separate image fetching into its own effect to prevent state reset race conditions
@@ -172,7 +171,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
       if (!isOpen || !initialDataPoint) return;
       setImagesLoading(true);
       console.log('Attempting to fetch images. initialDataPoint.images:', initialDataPoint.images);
-      
+
       const urls = Array.isArray(initialDataPoint.images)
         ? initialDataPoint.images.map(imagePath =>
             `https://wbkzczcqlorsewoofwqe.supabase.co/storage/v1/object/public/submission-images-bucket/${imagePath}`
@@ -189,7 +188,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 
   const handleDelete = async () => {
     if (!initialDataPoint) return;
-    
+
     setIsDeleting(true);
     try {
       const success = await deleteSubmission(initialDataPoint.id);
@@ -219,14 +218,14 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     console.log('=== SAVE OPERATION DEBUG ===');
     console.log('Starting save operation...');
     console.log('initialDataPoint:', initialDataPoint);
-    console.log('Form state:', { brixLevel, cropType, variety, locationName, latitude, longitude, measurementDate, purchaseDate, outlierNotes, brand, store, verified });
-    console.log('Static data:', { crops, brands, stores });
-    
+    console.log('Form state:', { brixLevel, cropType, variety, placeName, locationName, latitude, longitude, measurementDate, purchaseDate, outlierNotes, brand, verified });
+    console.log('Static data:', { crops, brands, locations }); // Updated log name
+
     if (!initialDataPoint) {
       console.error('No initialDataPoint available for save operation');
       return;
     }
-    
+
     // Normalize and validate BRIX
     const normalizeBrix = (val: number | ''): number | null => {
       if (val === '') return null;
@@ -255,15 +254,16 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     setSaving(true);
     try {
       console.log('Looking for matching items in static data...');
-      
+
       const safecrops = Array.isArray(crops) ? crops : [];
       const safebrands = Array.isArray(brands) ? brands : [];
-      const safestores = Array.isArray(stores) ? stores : [];
-      
+      const safelocations = Array.isArray(locations) ? locations : []; // Updated variable name
+
       // Resolve IDs only when values changed; crop is required if changed
       let cropIdToSet: string | undefined;
       let brandIdToSet: string | null | undefined;
-      let storeIdToSet: string | null | undefined;
+      let locationIdToSet: string | null | undefined;
+      let placeIdToSet: string | null | undefined;
 
       if (cropType !== initialDataPoint.cropType) {
         const cropItem = safecrops.find(c => c?.name === cropType);
@@ -297,21 +297,21 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         }
       }
 
-      if (store !== initialDataPoint.storeName) {
-        if (!store) {
-          storeIdToSet = null; // allow clearing store
+      if (locationName !== initialDataPoint.locationName) {
+        if (!locationName) {
+          locationIdToSet = null;
         } else {
-          const storeItem = safestores.find(s => s?.name === store);
-          if (!storeItem?.id) {
+          const locationItem = safelocations.find(s => s?.name === locationName);
+          if (!locationItem?.id) {
             toast({
-              title: 'Invalid store',
-              description: 'Please select a valid store from the list or clear the field.',
+              title: 'Invalid location',
+              description: 'Please select a valid location from the list or clear the field.',
               variant: 'destructive',
             });
             setSaving(false);
             return;
           }
-          storeIdToSet = storeItem.id;
+          locationIdToSet = locationItem.id;
         }
       }
 
@@ -326,7 +326,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 
       if (typeof cropIdToSet === 'string') updateData.crop_id = cropIdToSet;
       if (brandIdToSet !== undefined) updateData.brand_id = brandIdToSet;
-      if (storeIdToSet !== undefined) updateData.store_id = storeIdToSet;
+      if (locationIdToSet !== undefined) updateData.location_id = locationIdToSet;
 
       // Only admin can update verification status
       if (isAdmin) {
@@ -366,13 +366,13 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
         cropType: cropType,
         variety: variety || '',
         locationName: locationName,
+        placeName: placeName,
         latitude: latitude,
         longitude: longitude,
         submittedAt: toISODateOrExisting(measurementDate, initialDataPoint.submittedAt),
         purchaseDate: purchaseDate || null,
         outlier_notes: outlierNotes || '',
         brandName: brand,
-        storeName: store,
         verified: isAdmin ? verified : initialDataPoint.verified,
         // Keep display name stable; don't overwrite with a UUID
         verifiedBy: initialDataPoint.verifiedBy,
@@ -395,20 +395,21 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     }
   };
 
-  const handleLocationSelect = (location: { name: string, latitude: number, longitude: number }) => {
-    setLocationName(location.name);
-    setLatitude(location.latitude);
-    setLongitude(location.longitude);
+  const handlePlaceSelect = (place: { name: string, latitude: number, longitude: number, locationName: string }) => {
+    setPlaceName(place.name);
+    setLocationName(place.locationName);
+    setLatitude(place.latitude);
+    setLongitude(place.longitude);
   };
 
   if (!initialDataPoint) {
     console.log('initialDataPoint is null, returning early.');
     return null;
   }
-  
+
   // Show loading state if static data is still loading or modal is initializing
   const isLoading = staticDataLoading || isInitializing;
-  
+
   if (isLoading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -423,7 +424,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
   const isOwner = user?.id === initialDataPoint.userId;
   const canEdit = isAdmin || (isOwner && !initialDataPoint.verified);
   const canDelete = isAdmin || (isOwner && !initialDataPoint.verified);
-  
+
   const cropThresholds = initialDataPoint.cropType ? (thresholdsCache[initialDataPoint.cropType] || {
     poor: initialDataPoint.poorBrix,
     average: initialDataPoint.averageBrix,
@@ -442,12 +443,12 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
             {isEditing ? `Edit Submission` : `Details for ${initialDataPoint.cropType}`}
             <div className="flex space-x-2">
               {!isEditing && canEdit && (
-                  <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
-                      <Edit className="w-5 h-5" />
-                  </Button>
+                <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
+                  <Edit className="w-5 h-5" />
+                </Button>
               )}
               <Button variant="ghost" size="icon" onClick={onClose}>
-                  <X className="w-5 h-5" />
+                <X className="w-5 h-5" />
               </Button>
             </div>
           </DialogTitle>
@@ -455,7 +456,7 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
             View and edit a BRIX measurement submission.
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="max-h-[80vh] overflow-y-auto px-1">
           {(error || staticDataError) && (
             <div className="flex items-center p-4 bg-red-100 text-red-800 rounded-lg">
@@ -466,237 +467,237 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
 
           <div className="space-y-6">
             <div className="bg-gray-50 rounded-lg p-6 text-center">
-                <div className="flex items-center justify-center space-x-4 mb-4">
-                    <div className={`${colorClass} w-16 h-16 rounded-full flex items-center justify-center`}>
-                        <span className="text-white font-bold text-xl">{initialDataPoint.brixLevel}</span>
-                    </div>
-                    <div className="text-left">
-                        <p className="text-2xl font-bold text-gray-900">{initialDataPoint.brixLevel} BRIX</p>
-                        <p className="text-sm text-gray-600">Refractometer Reading</p>
-                        <Badge className={`${colorClass} mt-1 text-white`}>
-                            {qualityText} Quality
-                        </Badge>
-                    </div>
+              <div className="flex items-center justify-center space-x-4 mb-4">
+                <div className={`${colorClass} w-16 h-16 rounded-full flex items-center justify-center`}>
+                  <span className="text-white font-bold text-xl">{initialDataPoint.brixLevel}</span>
                 </div>
-            </div>
-            
-            <div className="pt-4 border-t border-gray-100">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Submission Details</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                      <Droplets className="w-5 h-5 text-gray-600" />
-                      <span>BRIX Level</span>
-                    </Label>
-                    {isEditing ? (
-                        <Input type="number" value={brixLevel} onChange={e => setBrixLevel(e.target.value === '' ? '' : Number(e.target.value))} min={0} step={0.1} />
-                    ) : (
-                        <p className="font-medium">{initialDataPoint.brixLevel}</p>
-                    )}
-                </div>
-                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                      <Package className="w-5 h-5 text-gray-600" />
-                      <span>Crop Type</span>
-                    </Label>
-                    {isEditing ? (
-                        <div>
-                          <Combobox
-                              items={Array.isArray(crops) ? crops : []}
-                              value={cropType}
-                              onSelect={setCropType}
-                              placeholder="Select Crop"
-                          />
-                        </div>
-                    ) : (
-                        <p className="font-medium">{initialDataPoint.cropType}</p>
-                    )}
-                </div>
-                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                      <Tag className="w-5 h-5 text-gray-600" />
-                      <span>Brand</span>
-                    </Label>
-                    {isEditing ? (
-                        <div>
-                          <Combobox
-                              items={Array.isArray(brands) ? brands : []}
-                              value={brand}
-                              onSelect={setBrand}
-                              placeholder="Select Brand"
-                          />
-                        </div>
-                    ) : (
-                        <p className="font-medium">{initialDataPoint.brandName || 'N/A'}</p>
-                    )}
-                </div>
-                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                      <Store className="w-5 h-5 text-gray-600" />
-                      <span>Store</span>
-                    </Label>
-                    {isEditing ? (
-                        <div>
-                          <Combobox
-                              items={Array.isArray(stores) ? stores : []}
-                              value={store}
-                              onSelect={setStore}
-                              placeholder="Select Store"
-                          />
-                        </div>
-                    ) : (
-                        <p className="font-medium">{initialDataPoint.storeName || 'N/A'}</p>
-                    )}
-                </div>
-                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                      <MapIcon className="w-5 h-5 text-gray-600" />
-                      <span>Location</span>
-                    </Label>
-                    {isEditing ? (
-                        <LocationSearch
-                            value={locationName}
-                            onLocationSelect={handleLocationSelect}
-                            onChange={(e) => setLocationName(e.target.value)}
-                            isLoading={isLocationLoading}
-                        />
-                    ) : (
-                        <>
-                            <p className="font-medium">{initialDataPoint.locationName}</p>
-                            <p className="text-xs text-gray-500">
-                                {initialDataPoint.latitude?.toFixed(4)}, {initialDataPoint.longitude?.toFixed(4)}
-                            </p>
-                        </>
-                    )}
-                </div>
-                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                      <Calendar className="w-5 h-5 text-gray-600" />
-                      <span>Assessment Date</span>
-                    </Label>
-                    {isEditing ? (
-                        <Input type="date" value={measurementDate} onChange={e => setMeasurementDate(e.target.value)} />
-                    ) : (
-                        <p className="font-medium">{new Date(initialDataPoint.submittedAt).toLocaleDateString()}</p>
-                    )}
-                </div>
-                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                      <Calendar className="w-5 h-5 text-gray-600" />
-                      <span>Purchase Date</span>
-                    </Label>
-                    {isEditing ? (
-                        <Input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} />
-                    ) : (
-                        <p className="font-medium">{initialDataPoint.purchaseDate || 'N/A'}</p>
-                    )}
-                </div>
-                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
-                    <Label className="text-sm text-gray-600 flex items-center space-x-2">
-                      <Tag className="w-5 h-5 text-gray-600" />
-                      <span>Variety</span>
-                    </Label>
-                    {isEditing ? (
-                        <Input type="text" value={variety} onChange={e => setVariety(e.target.value)} />
-                    ) : (
-                        <p className="font-medium">{initialDataPoint.variety || 'N/A'}</p>
-                    )}
+                <div className="text-left">
+                  <p className="text-2xl font-bold text-gray-900">{initialDataPoint.brixLevel} BRIX</p>
+                  <p className="text-sm text-gray-600">Refractometer Reading</p>
+                  <Badge className={`${colorClass} mt-1 text-white`}>
+                    {qualityText} Quality
+                  </Badge>
                 </div>
               </div>
-              
-              <div className="bg-gray-50 rounded-lg p-4 mt-4">
-                  <h3 className="font-semibold text-gray-900 mb-2 flex items-center space-x-2">
-                      <FileText className="w-5 h-5 text-gray-600" />
-                      <span>Outlier Notes</span>
-                  </h3>
+            </div>
+
+            <div className="pt-4 border-t border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Submission Details</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                    <Droplets className="w-5 h-5 text-gray-600" />
+                    <span>BRIX Level</span>
+                  </Label>
                   {isEditing ? (
-                      <Textarea value={outlierNotes} onChange={e => setOutlierNotes(e.target.value)} rows={4} />
+                    <Input type="number" value={brixLevel} onChange={e => setBrixLevel(e.target.value === '' ? '' : Number(e.target.value))} min={0} step={0.1} />
                   ) : (
-                      <p className="text-gray-700">{initialDataPoint.outlier_notes || 'No notes for this submission.'}</p>
+                    <p className="font-medium">{initialDataPoint.brixLevel}</p>
                   )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                    <Package className="w-5 h-5 text-gray-600" />
+                    <span>Crop Type</span>
+                  </Label>
+                  {isEditing ? (
+                    <div>
+                      <Combobox
+                        items={Array.isArray(crops) ? crops : []}
+                        value={cropType}
+                        onSelect={setCropType}
+                        placeholder="Select Crop"
+                      />
+                    </div>
+                  ) : (
+                    <p className="font-medium">{initialDataPoint.cropType}</p>
+                  )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                    <Tag className="w-5 h-5 text-gray-600" />
+                    <span>Brand</span>
+                  </Label>
+                  {isEditing ? (
+                    <div>
+                      <Combobox
+                        items={Array.isArray(brands) ? brands : []}
+                        value={brand}
+                        onSelect={setBrand}
+                        placeholder="Select Brand"
+                      />
+                    </div>
+                  ) : (
+                    <p className="font-medium">{initialDataPoint.brandName || 'N/A'}</p>
+                  )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                    <Building className="w-5 h-5 text-gray-600" />
+                    <span>Location (Store)</span>
+                  </Label>
+                  {isEditing ? (
+                    <div>
+                      <Combobox
+                        items={Array.isArray(locations) ? locations : []}
+                        value={locationName}
+                        onSelect={setLocationName}
+                        placeholder="Select Store"
+                      />
+                    </div>
+                  ) : (
+                    <p className="font-medium">{initialDataPoint.locationName || 'N/A'}</p>
+                  )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                    <MapIcon className="w-5 h-5 text-gray-600" />
+                    <span>Place (Address)</span>
+                  </Label>
+                  {isEditing ? (
+                    <LocationSearch
+                      value={placeName}
+                      onLocationSelect={handlePlaceSelect}
+                      onChange={(e) => setPlaceName(e.target.value)}
+                      isLoading={isLocationLoading}
+                    />
+                  ) : (
+                    <>
+                      <p className="font-medium">{initialDataPoint.placeName}</p>
+                      <p className="text-xs text-gray-500">
+                        {initialDataPoint.latitude?.toFixed(4)}, {initialDataPoint.longitude?.toFixed(4)}
+                      </p>
+                    </>
+                  )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                    <Calendar className="w-5 h-5 text-gray-600" />
+                    <span>Assessment Date</span>
+                  </Label>
+                  {isEditing ? (
+                    <Input type="date" value={measurementDate} onChange={e => setMeasurementDate(e.target.value)} />
+                  ) : (
+                    <p className="font-medium">{new Date(initialDataPoint.submittedAt).toLocaleDateString()}</p>
+                  )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                    <Calendar className="w-5 h-5 text-gray-600" />
+                    <span>Purchase Date</span>
+                  </Label>
+                  {isEditing ? (
+                    <Input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} />
+                  ) : (
+                    <p className="font-medium">{initialDataPoint.purchaseDate || 'N/A'}</p>
+                  )}
+                </div>
+                <div className="flex flex-col space-y-2 p-4 bg-gray-50 rounded-lg">
+                  <Label className="text-sm text-gray-600 flex items-center space-x-2">
+                    <Tag className="w-5 h-5 text-gray-600" />
+                    <span>Variety</span>
+                  </Label>
+                  {isEditing ? (
+                    <Input type="text" value={variety} onChange={e => setVariety(e.target.value)} />
+                  ) : (
+                    <p className="font-medium">{initialDataPoint.variety || 'N/A'}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4 mt-4">
+                <h3 className="font-semibold text-gray-900 mb-2 flex items-center space-x-2">
+                  <FileText className="w-5 h-5 text-gray-600" />
+                  <span>Outlier Notes</span>
+                </h3>
+                {isEditing ? (
+                  <Textarea value={outlierNotes} onChange={e => setOutlierNotes(e.target.value)} rows={4} />
+                ) : (
+                  <p className="text-gray-700">{initialDataPoint.outlier_notes || 'No notes for this submission.'}</p>
+                )}
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4 mt-4 flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                      <CheckCircle className={`w-5 h-5 ${verified ? 'text-green-500' : 'text-gray-400'}`} />
-                      <Label htmlFor="verified-checkbox" className="text-sm font-semibold text-gray-700">
-                          Verified
-                      </Label>
-                  </div>
-                  {isAdmin && isEditing ? (
-                      <Input
-                          id="verified-checkbox"
-                          type="checkbox"
-                          checked={verified}
-                          onChange={(e) => setVerified(e.target.checked)}
-                          className="w-4 h-4"
-                      />
-                  ) : (
-                      <Badge variant={verified ? 'default' : 'secondary'} className={`${verified ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400'}`}>
-                          {verified ? 'Yes' : 'No'}
-                      </Badge>
-                  )}
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className={`w-5 h-5 ${verified ? 'text-green-500' : 'text-gray-400'}`} />
+                  <Label htmlFor="verified-checkbox" className="text-sm font-semibold text-gray-700">
+                    Verified
+                  </Label>
+                </div>
+                {isAdmin && isEditing ? (
+                  <Input
+                    id="verified-checkbox"
+                    type="checkbox"
+                    checked={verified}
+                    onChange={(e) => setVerified(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                ) : (
+                  <Badge variant={verified ? 'default' : 'secondary'} className={`${verified ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400'}`}>
+                    {verified ? 'Yes' : 'No'}
+                  </Badge>
+                )}
               </div>
 
               {verified && (
-                  <div className="mt-2 text-sm text-gray-500 flex items-center justify-end">
-                      <User className="w-4 h-4 mr-1" />
-                      <span>Verified by: {verifiedBy || 'N/A'}</span>
-                  </div>
+                <div className="mt-2 text-sm text-gray-500 flex items-center justify-end">
+                  <User className="w-4 h-4 mr-1" />
+                  <span>Verified by: {verifiedBy || 'N/A'}</span>
+                </div>
               )}
             </div>
-            
+
             <div className="pt-4 border-t border-gray-100">
-                <h3 className="flex items-center space-x-2 text-lg font-bold text-gray-900 mb-4">
-                    <ImageIcon className="w-6 h-6 text-gray-600" />
-                    <span>Reference Images ({imageUrls.length})</span>
-                </h3>
-                {imagesLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                        <span className="ml-3 text-gray-600">Loading images...</span>
+              <h3 className="flex items-center space-x-2 text-lg font-bold text-gray-900 mb-4">
+                <ImageIcon className="w-6 h-6 text-gray-600" />
+                <span>Reference Images ({imageUrls.length})</span>
+              </h3>
+              {imagesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                  <span className="ml-3 text-gray-600">Loading images...</span>
+                </div>
+              ) : imageUrls.length === 0 ? (
+                <p className="text-gray-500 italic">No images added for this submission.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {imageUrls.map((url: string, index: number) => (
+                    <div key={index} className="relative w-full pb-[75%] rounded-lg overflow-hidden shadow-md group">
+                      <img
+                        src={url}
+                        alt={`Submission image ${index + 1}`}
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          e.currentTarget.src = 'https://placehold.co/400x300/CCCCCC/333333?text=Image+Error';
+                          e.currentTarget.alt = 'Error loading image';
+                        }}
+                      />
                     </div>
-                ) : imageUrls.length === 0 ? (
-                    <p className="text-gray-500 italic">No images added for this submission.</p>
-                ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {imageUrls.map((url: string, index: number) => (
-                            <div key={index} className="relative w-full pb-[75%] rounded-lg overflow-hidden shadow-md group">
-                                <img
-                                    src={url}
-                                    alt={`Submission image ${index + 1}`}
-                                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                    onError={(e) => {
-                                        e.currentTarget.src = 'https://placehold.co/400x300/CCCCCC/333333?text=Image+Error';
-                                        e.currentTarget.alt = 'Error loading image';
-                                    }}
-                                />
-                            </div>
-                        ))}
-                    </div>
-                )}
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
-        
+
         <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-            {isEditing ? (
-                <>
-                    <Button onClick={handleSave} disabled={saving}>
-                        {saving ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                    <Button variant="outline" onClick={() => setIsEditing(false)} disabled={saving}>
-                        Cancel
-                    </Button>
-                </>
-            ) : (
-                canDelete && (
-                    <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
-                        {isDeleting ? 'Deleting...' : 'Delete Submission'}
-                    </Button>
-                )
-            )}
+          {isEditing ? (
+            <>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </Button>
+              <Button variant="outline" onClick={() => setIsEditing(false)} disabled={saving}>
+                Cancel
+              </Button>
+            </>
+          ) : (
+            canDelete && (
+              <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+                {isDeleting ? 'Deleting...' : 'Delete Submission'}
+              </Button>
+            )
+          )}
         </div>
       </DialogContent>
     </Dialog>
