@@ -78,7 +78,17 @@ const DataEntry = () => {
 
   const handleBrixChange = (value: number | number[]) => {
     const brixValue = Array.isArray(value) ? value[0] : value;
-    handleInputChange('brixLevel', brixValue);
+  
+    // Guard against invalid values like NaN or undefined
+    if (typeof brixValue !== 'number' || isNaN(brixValue)) {
+      setFormData(prev => ({ ...prev, brixLevel: 0 }));
+    } else {
+      handleInputChange('brixLevel', Math.min(Math.max(brixValue, 0), 100));
+    }
+  
+    if (errors.brixLevel) {
+      setErrors(prev => ({ ...prev, brixLevel: '' }));
+    }
   };
 
   const validateFile = (file: File): boolean => {
@@ -129,7 +139,9 @@ const DataEntry = () => {
       }
     });
 
-    if (formData.brixLevel < 0 || formData.brixLevel > 100) {
+    if (typeof formData.brixLevel !== 'number' || isNaN(formData.brixLevel)) {
+      newErrors.brixLevel = 'BRIX must be a valid number';
+    } else if (formData.brixLevel < 0 || formData.brixLevel > 100) {
       newErrors.brixLevel = 'BRIX must be between 0–100';
     }
 
@@ -187,7 +199,7 @@ const DataEntry = () => {
         brandName: formData.brand,
         storeName: formData.store,
         variety: formData.variety,
-        brixValue: formData.brixLevel,
+        brixValue: Number.isFinite(formData.brixLevel) ? parseFloat(formData.brixLevel.toFixed(2)) : 0,
         assessmentDate: new Date(formData.measurementDate + 'T00:00:00.000Z').toISOString(),
         purchaseDate: new Date(formData.purchaseDate + 'T00:00:00.000Z').toISOString(),
         outlierNotes: formData.outlierNotes,
@@ -371,14 +383,22 @@ const DataEntry = () => {
                       BRIX Level <span className="ml-1 text-red-600">*</span>
                     </Label>
                     <div className="flex items-center space-x-4">
-                      <Input
+                    <Input
                         id="brixLevel"
                         type="number"
                         step="0.1"
                         min="0"
                         max="100"
-                        value={formData.brixLevel}
-                        onChange={(e) => handleBrixChange(parseFloat(e.target.value))}
+                        inputMode="decimal"
+                        value={isNaN(formData.brixLevel) ? '' : formData.brixLevel}
+                        onChange={(e) => {
+                          const parsed = parseFloat(e.target.value);
+                          if (e.target.value === '') {
+                            handleInputChange('brixLevel', 0); // fallback for empty
+                          } else {
+                            handleBrixChange(parsed);
+                          }
+                        }}
                         className={`w-24 text-center border-2 rounded-xl px-2 py-2 text-gray-900 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300 ${errors.brixLevel ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
                       />
                       <Slider
