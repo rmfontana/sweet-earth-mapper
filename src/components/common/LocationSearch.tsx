@@ -173,7 +173,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
           type="text"
           value={value}
           onChange={onChange}
-          placeholder="Search for a store or location (e.g., 'Walmart', 'Target Oswego NY')"
+          placeholder="Enter an address or store name"
           className="pl-10"
         />
         {(isLoading || isSearching) && (

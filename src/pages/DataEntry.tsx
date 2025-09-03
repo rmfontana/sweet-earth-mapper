@@ -25,14 +25,14 @@ import { supabase } from '../integrations/supabase/client';
 import { getSupabaseUrl, getPublishableKey } from '@/lib/utils';
 import Combobox from '../components/ui/combo-box';
 import LocationSearch from '../components/common/LocationSearch';
-import { useStaticData } from '../hooks/useStaticData'; // Updated import
+import { useStaticData } from '../hooks/useStaticData';
+import { Slider } from '../components/ui/slider'; // Added Slider component
 
 const DataEntry = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Use the shared static data hook
   const { crops, brands, locations, isLoading: staticDataLoading, error: staticDataError } = useStaticData();
 
   const [formData, setFormData] = useState({
@@ -53,25 +53,22 @@ const DataEntry = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Redirect if not authorized
   useEffect(() => {
     if (!user || (user.role !== 'contributor' && user.role !== 'admin')) {
       navigate('/');
     }
   }, [user, navigate]);
 
-  // Show static data errors
   useEffect(() => {
     if (staticDataError) {
-      toast({ 
-        title: 'Error loading form options', 
-        description: staticDataError, 
-        variant: 'destructive' 
+      toast({
+        title: 'Error loading form options',
+        description: staticDataError,
+        variant: 'destructive',
       });
     }
   }, [staticDataError, toast]);
 
-  // Centralized input change handler
   const handleInputChange = (field: keyof typeof formData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
@@ -79,12 +76,10 @@ const DataEntry = () => {
     }
   };
 
-  const handleBrixNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = parseFloat(e.target.value);
-    if (isNaN(value)) value = 0;
-    if (value < 0) value = 0;
-    if (value > 100) value = 100;
-    handleInputChange('brixLevel', value);
+  // Combined handler for both slider and input
+  const handleBrixChange = (value: number | number[]) => {
+    const brixValue = Array.isArray(value) ? value[0] : value;
+    handleInputChange('brixLevel', brixValue);
   };
 
   const validateFile = (file: File): boolean => {
@@ -114,7 +109,7 @@ const DataEntry = () => {
   const removeImage = (index: number) => {
     handleInputChange('images', formData.images.filter((_, i) => i !== index));
   };
-  
+
   const handleLocationSelect = (location: { name: string; latitude: number; longitude: number }) => {
     setFormData(prev => ({
       ...prev,
@@ -178,7 +173,7 @@ const DataEntry = () => {
         latitude: formData.latitude,
         longitude: formData.longitude,
         locationName: formData.location,
-        userId: user?.id, 
+        userId: user?.id,
       };
       
       const supabaseUrl = getSupabaseUrl();
@@ -187,7 +182,7 @@ const DataEntry = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${publishKey}`, 
+          Authorization: `Bearer ${publishKey}`,
         },
         body: JSON.stringify(payload),
       });
@@ -257,15 +252,13 @@ const DataEntry = () => {
 
   if (!user || (user.role !== 'contributor' && user.role !== 'admin')) return null;
 
-  // Show loading if static data is still loading
   if (staticDataLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-        <Header />
-        <main className="max-w-5xl mx-auto p-6 lg:p-8 pb-24 text-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
+        <div className="text-center p-6">
           <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto" />
           <p className="mt-4 text-gray-600">Loading form data...</p>
-        </main>
+        </div>
       </div>
     );
   }
@@ -273,12 +266,12 @@ const DataEntry = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <Header />
-      <main className="max-w-5xl mx-auto p-6 lg:p-8 pb-24">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+      <main className="max-w-5xl mx-auto p-4 md:p-6 lg:p-8 pb-24">
+        <div className="text-center mb-8 md:mb-12">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             Submit BRIX Measurement
           </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <p className="text-md text-gray-600 max-w-2xl mx-auto">
             Record your bionutrient density measurement from refractometer readings
           </p>
         </div>
@@ -292,11 +285,10 @@ const DataEntry = () => {
               <span>New Measurement Entry</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-8">
-            <form onSubmit={handleSubmit} className="space-y-8" autoComplete="off">
+          <CardContent className="p-4 sm:p-6 md:p-8">
+            <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8" autoComplete="off">
 
-              {/* Required Fields Section */}
-              <div className="border-l-4 border-blue-500 pl-6">
+              <div className="border-l-4 border-blue-500 pl-4 sm:pl-6">
                 <div className="flex items-center space-x-2 mb-6">
                   <h3 className="text-xl font-bold text-gray-900">Required Information</h3>
                   <div className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
@@ -304,10 +296,10 @@ const DataEntry = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mb-6 sm:mb-8">
                   {/* Crop Type */}
                   <div className="relative">
-                    <Label htmlFor="cropType" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                    <Label htmlFor="cropType" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
                       <Package className="inline w-4 h-4 mr-2" />
                       Crop Type <span className="ml-1 text-red-600">*</span>
                     </Label>
@@ -322,7 +314,7 @@ const DataEntry = () => {
 
                   {/* Brand/Farm Name */}
                   <div className="relative">
-                    <Label htmlFor="brand" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                    <Label htmlFor="brand" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
                       <Store className="inline w-4 h-4 mr-2" />
                       Farm/Brand Name <span className="ml-1 text-red-600">*</span>
                     </Label>
@@ -336,10 +328,10 @@ const DataEntry = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mb-6 sm:mb-8">
                   {/* Point of Purchase */}
                   <div className="relative">
-                    <Label htmlFor="store" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                    <Label htmlFor="store" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
                       <Store className="inline w-4 h-4 mr-2" />
                       Point of Purchase <span className="ml-1 text-red-600">*</span>
                     </Label>
@@ -351,14 +343,14 @@ const DataEntry = () => {
                     />
                     {errors.store && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.store}</p>}
                   </div>
-                  
+
                   {/* BRIX Level */}
                   <div>
-                    <Label htmlFor="brixLevel" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                    <Label htmlFor="brixLevel" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
                       <Droplets className="inline w-4 h-4 mr-2" />
                       BRIX Level <span className="ml-1 text-red-600">*</span>
                     </Label>
-                    <div className="relative">
+                    <div className="flex items-center space-x-4">
                       <Input
                         id="brixLevel"
                         type="number"
@@ -366,20 +358,25 @@ const DataEntry = () => {
                         min="0"
                         max="100"
                         value={formData.brixLevel}
-                        onChange={handleBrixNumberChange}
-                        className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300 ${errors.brixLevel ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
+                        onChange={(e) => handleBrixChange(parseFloat(e.target.value))}
+                        className={`w-24 text-center border-2 rounded-xl px-2 py-2 text-gray-900 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300 ${errors.brixLevel ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
                       />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium"></span>
+                      <Slider
+                        value={[formData.brixLevel]}
+                        onValueChange={handleBrixChange}
+                        max={100}
+                        step={0.1}
+                        className="flex-1"
+                      />
                     </div>
                     {errors.brixLevel && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.brixLevel}</p>}
                   </div>
                 </div>
 
-                {/* Row 3: Location and Dates */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mb-6 sm:mb-8">
                   {/* Location - using the new LocationSearch component */}
                   <div className="relative">
-                    <Label htmlFor="location" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                    <Label htmlFor="location" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
                       <MapPin className="inline w-4 h-4 mr-2" />
                       Sample Location <span className="ml-1 text-red-600">*</span>
                     </Label>
@@ -393,7 +390,7 @@ const DataEntry = () => {
 
                   {/* Purchase Date */}
                   <div>
-                    <Label htmlFor="purchaseDate" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                    <Label htmlFor="purchaseDate" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
                       <Calendar className="inline w-4 h-4 mr-2" />
                       Purchase Date <span className="ml-1 text-red-600">*</span>
                     </Label>
@@ -411,13 +408,13 @@ const DataEntry = () => {
               </div>
 
               {/* Optional Fields Section */}
-              <div className="border-l-4 border-gray-300 pl-6">
+              <div className="border-l-4 border-gray-300 pl-4 sm:pl-6">
                 <h3 className="text-xl font-bold text-gray-900 mb-6">Additional Information</h3>
                 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mb-6 sm:mb-8">
                   {/* Measurement Date */}
                   <div>
-                    <Label htmlFor="measurementDate" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                    <Label htmlFor="measurementDate" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
                       <Clock className="inline w-4 h-4 mr-2" />
                       Assessment Date
                     </Label>
@@ -434,7 +431,7 @@ const DataEntry = () => {
 
                   {/* Variety */}
                   <div>
-                    <Label htmlFor="variety" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                    <Label htmlFor="variety" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
                       <Package className="inline w-4 h-4 mr-2" />
                       Variety
                     </Label>
@@ -451,7 +448,7 @@ const DataEntry = () => {
 
                 {/* Outlier Notes */}
                 <div className="mb-8">
-                  <Label htmlFor="outlierNotes" className="flex items-center mb-3 text-sm font-semibold text-gray-700">
+                  <Label htmlFor="outlierNotes" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
                     <FileText className="inline w-4 h-4 mr-2" />
                     Notes/Observations
                   </Label>
@@ -468,7 +465,7 @@ const DataEntry = () => {
               </div>
 
               {/* Image Upload Section */}
-              <div className="border-l-4 border-gray-300 pl-6">
+              <div className="border-l-4 border-gray-300 pl-4 sm:pl-6">
                 <h3 className="text-xl font-bold text-gray-900 mb-6">Optional: Add Images</h3>
                 <div className="flex flex-col space-y-4">
                   <Label htmlFor="images" className="flex items-center text-sm font-semibold text-gray-700">
@@ -509,7 +506,7 @@ const DataEntry = () => {
 
               {/* Submit Button */}
               <div className="flex justify-end pt-8">
-                <Button type="submit" className="w-full lg:w-auto px-12 py-6 text-lg font-semibold" disabled={isLoading}>
+                <Button type="submit" className="w-full sm:w-auto px-12 py-6 text-lg font-semibold" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
