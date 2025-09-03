@@ -26,7 +26,7 @@ import { getSupabaseUrl, getPublishableKey } from '@/lib/utils';
 import Combobox from '../components/ui/combo-box';
 import LocationSearch from '../components/common/LocationSearch';
 import { useStaticData } from '../hooks/useStaticData';
-import { Slider } from '../components/ui/slider'; // Added Slider component
+import { Slider } from '../components/ui/slider';
 
 const DataEntry = () => {
   const { user } = useAuth();
@@ -78,14 +78,14 @@ const DataEntry = () => {
 
   const handleBrixChange = (value: number | number[]) => {
     const brixValue = Array.isArray(value) ? value[0] : value;
-  
+    
     // Guard against invalid values like NaN or undefined
     if (typeof brixValue !== 'number' || isNaN(brixValue)) {
-      setFormData(prev => ({ ...prev, brixLevel: 0 }));
+      handleInputChange('brixLevel', 0);
     } else {
       handleInputChange('brixLevel', Math.min(Math.max(brixValue, 0), 100));
     }
-  
+    
     if (errors.brixLevel) {
       setErrors(prev => ({ ...prev, brixLevel: '' }));
     }
@@ -135,7 +135,7 @@ const DataEntry = () => {
     requiredFields.forEach(field => {
       const value = formData[field];
       if (typeof value === 'string' && !value.trim()) {
-        newErrors[field] = `${field} is required.`;
+        newErrors[field] = `${field.charAt(0).toUpperCase() + field.slice(1)} is required.`;
       }
     });
 
@@ -199,7 +199,8 @@ const DataEntry = () => {
         brandName: formData.brand,
         storeName: formData.store,
         variety: formData.variety,
-        brixValue: Number.isFinite(formData.brixLevel) ? parseFloat(formData.brixLevel.toFixed(2)) : 0,
+        // Ensure brixLevel is a number before using toFixed
+        brixValue: typeof formData.brixLevel === 'number' ? parseFloat(formData.brixLevel.toFixed(2)) : 0,
         assessmentDate: new Date(formData.measurementDate + 'T00:00:00.000Z').toISOString(),
         purchaseDate: new Date(formData.purchaseDate + 'T00:00:00.000Z').toISOString(),
         outlierNotes: formData.outlierNotes,
@@ -319,7 +320,6 @@ const DataEntry = () => {
           </CardHeader>
           <CardContent className="p-4 sm:p-6 md:p-8">
             <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8" autoComplete="off">
-
               <div className="border-l-4 border-blue-500 pl-4 sm:pl-6">
                 <div className="flex items-center space-x-2 mb-6">
                   <h3 className="text-xl font-bold text-gray-900">Required Information</h3>
@@ -384,30 +384,32 @@ const DataEntry = () => {
                     </Label>
                     <div className="flex items-center space-x-4">
                     <Input
-                        id="brixLevel"
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="100"
-                        inputMode="decimal"
-                        value={isNaN(formData.brixLevel) ? '' : formData.brixLevel}
-                        onChange={(e) => {
-                          const parsed = parseFloat(e.target.value);
-                          if (e.target.value === '') {
-                            handleInputChange('brixLevel', 0); // fallback for empty
-                          } else {
-                            handleBrixChange(parsed);
-                          }
-                        }}
-                        className={`w-24 text-center border-2 rounded-xl px-2 py-2 text-gray-900 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300 ${errors.brixLevel ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
-                      />
-                      <Slider
-                        value={[formData.brixLevel]}
-                        onValueChange={handleBrixChange}
-                        max={100}
-                        step={0.1}
-                        className="flex-1"
-                      />
+                      id="brixLevel"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      inputMode="decimal"
+                      value={isNaN(formData.brixLevel) ? '' : formData.brixLevel}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Corrected logic here
+                        if (value === '') {
+                          handleBrixChange(0);
+                        } else {
+                          const parsed = parseFloat(value);
+                          handleBrixChange(isNaN(parsed) ? 0 : parsed);
+                        }
+                      }}
+                      className={`w-24 text-center border-2 rounded-xl px-2 py-2 text-gray-900 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300 ${errors.brixLevel ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
+                    />
+                    <Slider
+                      value={[formData.brixLevel]}
+                      onValueChange={handleBrixChange}
+                      max={100}
+                      step={0.1}
+                      className="flex-1"
+                    />
                     </div>
                     {errors.brixLevel && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.brixLevel}</p>}
                   </div>
@@ -483,6 +485,7 @@ const DataEntry = () => {
                       onChange={e => handleInputChange('variety', e.target.value)}
                       className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300 ${errors.variety ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
                     />
+                    {errors.variety && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.variety}</p>}
                   </div>
                 </div>
 
