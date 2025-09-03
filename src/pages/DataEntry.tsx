@@ -199,7 +199,7 @@ const DataEntry = () => {
         brandName: formData.brand,
         storeName: formData.store,
         variety: formData.variety,
-        // Ensure brixLevel is a number before using toFixed
+        // **CORRECTED LINE:** Add a check to ensure formData.brixLevel is a number
         brixValue: typeof formData.brixLevel === 'number' ? parseFloat(formData.brixLevel.toFixed(2)) : 0,
         assessmentDate: new Date(formData.measurementDate + 'T00:00:00.000Z').toISOString(),
         purchaseDate: new Date(formData.purchaseDate + 'T00:00:00.000Z').toISOString(),
@@ -392,14 +392,8 @@ const DataEntry = () => {
                       inputMode="decimal"
                       value={isNaN(formData.brixLevel) ? '' : formData.brixLevel}
                       onChange={(e) => {
-                        const value = e.target.value;
-                        // Corrected logic here
-                        if (value === '') {
-                          handleBrixChange(0);
-                        } else {
-                          const parsed = parseFloat(value);
-                          handleBrixChange(isNaN(parsed) ? 0 : parsed);
-                        }
+                        const parsed = parseFloat(e.target.value);
+                        handleBrixChange(isNaN(parsed) ? 0 : parsed);
                       }}
                       className={`w-24 text-center border-2 rounded-xl px-2 py-2 text-gray-900 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300 ${errors.brixLevel ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
                     />
