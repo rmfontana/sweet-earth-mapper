@@ -111,4 +111,5 @@ export interface MapFilter {
   brand: string;
   hasImage: boolean;
   category: string;
+  location: string; // Store/location name
 }

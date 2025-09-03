@@ -8,7 +8,7 @@ import { Switch } from '../ui/switch';
 import { ChevronDown, Check, Calendar, X } from 'lucide-react';
 import { fetchCropTypes } from '@/lib/fetchCropTypes';
 import { fetchBrands } from '@/lib/fetchBrands';
-import { fetchStores } from '@/lib/fetchLocations';
+import { fetchLocations } from '@/lib/fetchLocations';
 import { fetchCropCategories } from '@/lib/fetchCropCategories';
 import { Range, getTrackBackground } from 'react-range';
 import { useFilters, DEFAULT_MAP_FILTERS } from '../../contexts/FilterContext';
@@ -113,7 +113,7 @@ const MapFilters: React.FC = () => {
         const [crops, brands, stores, categories] = await Promise.all([
           fetchCropTypes(),
           fetchBrands(),
-          fetchStores(),
+          fetchLocations(),
           fetchCropCategories()
         ]);
         
@@ -424,7 +424,7 @@ const MapFilters: React.FC = () => {
                 className="w-full justify-between text-sm"
                 aria-haspopup="listbox"
               >
-                {filters.store || 'Select Store'}
+                {filters.location || 'Select Store'}
                 <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
@@ -444,15 +444,15 @@ const MapFilters: React.FC = () => {
                     <CommandItem
                       key={store.id}
                       onSelect={() => {
-                        updateFilters('store', store.name === filters.store ? '' : store.name);
+                        updateFilters('location', store.name === filters.location ? '' : store.name);
                         setStoreQuery('');
                       }}
-                      aria-selected={filters.store === store.name}
+                      aria-selected={filters.location === store.name}
                       role="option"
                       className="flex justify-between items-center"
                     >
                       <span>{store.name}</span>
-                      {filters.store === store.name && <Check className="h-4 w-4" />}
+                      {filters.location === store.name && <Check className="h-4 w-4" />}
                     </CommandItem>
                   ))}
                 </CommandList>

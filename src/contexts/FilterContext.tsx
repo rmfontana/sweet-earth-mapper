@@ -13,6 +13,7 @@ export const DEFAULT_MAP_FILTERS: MapFilter = {
   brand: '',
   hasImage: false,
   category: '',
+  location: '',
 };
 
 interface FilterContextType {
