@@ -34,8 +34,8 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
+  const [localValue, setLocalValue] = useState(value); // New local state for the input
   const sessionRef = useRef<string | null>(null);
-  const selectedRef = useRef(false); // New ref to track if a selection was made
 
   useEffect(() => {
     sessionRef.current = generateUUID();
@@ -101,19 +101,21 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
     }
   }, [mapboxToken]);
 
+  // Use a ref to track if a selection was just made
+  const justSelectedRef = useRef(false);
+
   useEffect(() => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      const query = value.trim();
-      // Only search if a selection hasn't just been made
-      if (query && !selectedRef.current) {
+      const query = localValue.trim();
+      // Only trigger a search if the value is not an empty string
+      // and a selection was not just made.
+      if (query && !justSelectedRef.current) {
         searchLocations(query, controller.signal);
       } else {
         setSuggestions([]);
-        // Reset the flag after a brief moment
-        if (selectedRef.current) {
-          selectedRef.current = false;
-        }
+        // Reset the flag immediately after the useEffect finishes
+        justSelectedRef.current = false;
       }
     }, 300);
 
@@ -121,18 +123,24 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [value, searchLocations]);
+  }, [localValue, searchLocations]);
+
+  // Keep the local state in sync with the external prop when it changes
+  // This handles the initial state and external resets
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
 
   const handleSelect = async (suggestion: LocationSuggestion) => {
     if (!mapboxToken || !sessionRef.current) return;
     
-    // Set the flag to true to prevent the search from running again
-    selectedRef.current = true;
-    
     const locationName = suggestion.full_address || suggestion.name;
     
-    // Use the parent's onChange handler to update the form data state
-    // This is the key change to make the parent component re-render with the new value
+    // Set the flag to true to prevent the next search from running
+    justSelectedRef.current = true;
+    
+    // Update both local and parent state
+    setLocalValue(locationName);
     onChange({
       target: { value: locationName }
     } as React.ChangeEvent<HTMLInputElement>);
@@ -178,9 +186,9 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Reset the flag whenever the user types again
-    selectedRef.current = false;
-    onChange(e); 
+    const newValue = e.target.value;
+    setLocalValue(newValue); // Update local state for input control
+    onChange(e); // Propagate change to the parent component
   };
 
   return (
@@ -189,7 +197,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
         <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
           type="text"
-          value={value}
+          value={localValue} // Controlled by local state
           onChange={handleInputChange}
           placeholder="Enter an address or store name"
           className="pl-10"
@@ -220,7 +228,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
         </div>
       )}
       
-      {value.length >= 2 && !isSearching && suggestions.length === 0 && (
+      {localValue.length >= 2 && !isSearching && suggestions.length === 0 && (
         <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 p-3">
           <div className="text-sm text-gray-500">
             No locations found. Try a different search term.
