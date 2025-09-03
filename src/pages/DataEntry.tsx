@@ -369,7 +369,7 @@ const DataEntry = () => {
                         onChange={handleBrixNumberChange}
                         className={`w-full border-2 rounded-xl px-4 py-3 text-gray-900 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-blue-200 hover:border-gray-300 ${errors.brixLevel ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 bg-white'}`}
                       />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">°Brix</span>
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium"></span>
                     </div>
                     {errors.brixLevel && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.brixLevel}</p>}
                   </div>
