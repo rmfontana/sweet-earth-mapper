@@ -52,7 +52,6 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
     fetchToken();
   }, []);
 
-  // Sync the external `value` prop with the internal `inputValue` state
   useEffect(() => {
     setInputValue(value);
   }, [value]);
@@ -121,13 +120,20 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [inputValue, searchLocations]);
+  }, [inputValue, searchLocations, suggestions.length]); // Added suggestions.length to the dependency array
 
   const handleSelect = async (suggestion: LocationSuggestion) => {
     if (!mapboxToken || !sessionRef.current) return;
     
-    // Immediately clear suggestions and update input value
     const locationName = suggestion.full_address || suggestion.name;
+    
+    // Call the parent's onChange handler to update the form data state
+    // This is the key change to make the parent component re-render with the new value
+    onChange({
+      target: { value: locationName }
+    } as React.ChangeEvent<HTMLInputElement>);
+
+    // Immediately clear local state to stop the dropdown from showing
     setInputValue(locationName);
     setSuggestions([]);
     
@@ -171,9 +177,8 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
-    onChange(e); // Propagate change to parent
+    onChange(e); 
     
-    // Clear suggestions if the user starts typing again after a selection
     if (suggestions.length > 0) {
       setSuggestions([]);
     }
