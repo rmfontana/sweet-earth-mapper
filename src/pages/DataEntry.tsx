@@ -197,15 +197,17 @@ const DataEntry = () => {
       const payload = {
         cropName: formData.cropType,
         brandName: formData.brand,
-        storeName: formData.store,
         variety: formData.variety,
-        // **CORRECTED LINE:** Add a check to ensure formData.brixLevel is a number
-        brixValue: typeof formData.brixLevel === 'number' ? parseFloat(formData.brixLevel.toFixed(2)) : 0,
+        brixValue: Number.isFinite(formData.brixLevel)
+          ? Number(formData.brixLevel.toFixed(2))
+          : 0,
         assessmentDate: new Date(formData.measurementDate + 'T00:00:00.000Z').toISOString(),
         purchaseDate: new Date(formData.purchaseDate + 'T00:00:00.000Z').toISOString(),
         outlierNotes: formData.outlierNotes,
-        placeId: placeId,
         userId: user?.id,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
+        locationName: formData.location
       };
 
       // Step 3: Call the Edge Function with the new payload
