@@ -6,6 +6,7 @@ import { fetchLocations } from '../lib/fetchLocations'; // Updated import
 interface DatabaseItem {
   id: string;
   name: string;
+  label?: string;
 }
 
 interface StaticData {
@@ -46,6 +47,7 @@ const normalizeToItems = (data: any[], type: string): DatabaseItem[] => {
       return {
         id: String(item.id),
         name: item.name,
+        label: item.label || item.name, // Use label if available, fallback to name
       };
     }
 
@@ -54,15 +56,18 @@ const normalizeToItems = (data: any[], type: string): DatabaseItem[] => {
       return {
         id: `temp-${type}-${index}`,
         name: item,
+        label: item,
       };
     }
 
     // If it's an object but without proper structure, try to extract name
     if (item && typeof item === 'object') {
       const name = item.name || item.title || item.label || String(item);
+      const label = item.label || name;
       return {
         id: `temp-${type}-${index}`,
         name: typeof name === 'string' ? name : `Unknown ${type} ${index}`,
+        label: typeof label === 'string' ? label : `Unknown ${type} ${index}`,
       };
     }
 
@@ -70,6 +75,7 @@ const normalizeToItems = (data: any[], type: string): DatabaseItem[] => {
     return {
       id: `temp-${type}-${index}`,
       name: `Unknown ${type} ${index}`,
+      label: `Unknown ${type} ${index}`,
     };
   });
 };

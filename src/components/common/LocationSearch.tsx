@@ -27,7 +27,9 @@ const LocationSearch: React.FC<LocationSearchProps> = ({ value, onChange, onLoca
 useEffect(() => {
   const fetchToken = async () => {
     try {
+      console.log('Fetching Mapbox token...');
       const token = await getMapboxToken();
+      console.log('Mapbox token received:', token ? 'Success' : 'Failed');
       setMapboxToken(token);
     } catch (e) {
       console.error('Failed to load Mapbox token for search:', e);
@@ -48,6 +50,7 @@ useEffect(() => {
 
       setIsSearching(true);
       try {
+        console.log('Searching for:', query);
         const searchParams = new URLSearchParams({
           q: query,
           access_token: mapboxToken,
@@ -58,7 +61,13 @@ useEffect(() => {
           `https://api.mapbox.com/search/searchbox/v1/suggest?${searchParams.toString()}`,
           { signal: controller.signal }
         );
+        
+        if (!res.ok) {
+          throw new Error(`Mapbox API error: ${res.status} ${res.statusText}`);
+        }
+        
         const data = await res.json();
+        console.log('Search results:', data);
         setSuggestions(data.suggestions || []);
       } catch (e) {
         if ((e as any).name !== 'AbortError') {

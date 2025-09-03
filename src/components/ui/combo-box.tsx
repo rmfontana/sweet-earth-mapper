@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'; // Assuming this utility function exists
 interface Item {
   id?: string; // ID is optional
   name: string;
+  label?: string; // Display label
 }
 
 interface ComboboxProps {
@@ -31,7 +32,7 @@ const Combobox: React.FC<ComboboxProps> = ({ items, value, onSelect, placeholder
           aria-expanded={open}
           className="w-full justify-between"
         >
-          {selectedItem ? selectedItem.name : placeholder}
+          {selectedItem ? (selectedItem.label || selectedItem.name) : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -56,7 +57,7 @@ const Combobox: React.FC<ComboboxProps> = ({ items, value, onSelect, placeholder
                       value === item.name ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {item.name}
+                  {item.label || item.name}
                 </CommandItem>
               ))}
             </CommandGroup>
