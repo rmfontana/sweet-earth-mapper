@@ -19,23 +19,25 @@ interface LocationSearchProps {
 }
 
 const generateUUID = () => {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
 };
 
-const LocationSearch: React.FC<LocationSearchProps> = ({ 
-  value, 
-  onChange, 
-  onLocationSelect, 
-  isLoading = false 
+const LocationSearch: React.FC<LocationSearchProps> = ({
+  value,
+  onChange,
+  onLocationSelect,
+  isLoading = false
 }) => {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
+  const [hasSelected, setHasSelected] = useState(false); // NEW
+
   const sessionRef = useRef<string | null>(null);
-  const selectedValueRef = useRef<string | null>(null); // New ref to store the selected value
+  const selectedValueRef = useRef<string | null>(null);
 
   useEffect(() => {
     sessionRef.current = generateUUID();
@@ -58,10 +60,9 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       return;
     }
 
-    // Don't search if the query is the same as the last selected value
     if (query === selectedValueRef.current) {
-        setSuggestions([]);
-        return;
+      setSuggestions([]);
+      return;
     }
 
     setIsSearching(true);
@@ -76,7 +77,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
         types: 'address,poi,place,locality'
       });
 
-      const response = await fetch(`${url}?${params}`, { 
+      const response = await fetch(`${url}?${params}`, {
         signal,
         headers: {
           'Content-Type': 'application/json'
@@ -95,7 +96,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
         full_address: s.full_address,
         place_formatted: s.place_formatted,
       })) || [];
-      
+
       setSuggestions(transformedSuggestions);
     } catch (e: any) {
       if (e.name !== 'AbortError') {
@@ -111,7 +112,8 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       const query = value.trim();
-      if (query) {
+
+      if (!hasSelected && query) {
         searchLocations(query, controller.signal);
       } else {
         setSuggestions([]);
@@ -122,55 +124,52 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [value, searchLocations]);
+  }, [value, searchLocations, hasSelected]);
 
   const handleSelect = async (suggestion: LocationSuggestion) => {
     if (!mapboxToken || !sessionRef.current) return;
-    
+
     const locationName = suggestion.full_address || suggestion.name;
 
-    // Store the selected value in the ref before updating the state
     selectedValueRef.current = locationName;
-    
-    // Update the parent component's state, which will trigger a re-render
+    setHasSelected(true); // NEW
+
     onChange({
       target: { value: locationName }
     } as React.ChangeEvent<HTMLInputElement>);
 
-    // Immediately clear suggestions to hide the dropdown
     setSuggestions([]);
-    
     setIsSearching(true);
-  
+
     try {
       const retrieveUrl = `https://api.mapbox.com/search/searchbox/v1/retrieve/${suggestion.mapbox_id}`;
       const retrieveParams = new URLSearchParams({
         access_token: mapboxToken,
         session_token: sessionRef.current,
       });
-  
+
       const response = await fetch(`${retrieveUrl}?${retrieveParams}`);
       if (!response.ok) {
         throw new Error(`Failed to retrieve coordinates: ${response.status}`);
       }
-  
+
       const data = await response.json();
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
         const [longitude, latitude] = feature.geometry.coordinates;
-  
-        onLocationSelect({ 
-          name: locationName, 
-          latitude, 
-          longitude 
+
+        onLocationSelect({
+          name: locationName,
+          latitude,
+          longitude
         });
       }
     } catch (e) {
       console.error('Failed to get location coordinates:', e);
-      onLocationSelect({ 
-        name: locationName, 
-        latitude: 0, 
-        longitude: 0 
+      onLocationSelect({
+        name: locationName,
+        latitude: 0,
+        longitude: 0
       });
     } finally {
       setIsSearching(false);
@@ -178,9 +177,9 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Reset the selected value ref when the user types
     selectedValueRef.current = null;
-    onChange(e); 
+    setHasSelected(false); // NEW
+    onChange(e);
   };
 
   return (
@@ -198,8 +197,8 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-gray-400" />
         )}
       </div>
-      
-      {suggestions.length > 0 && (
+
+      {!hasSelected && suggestions.length > 0 && (
         <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-48 overflow-auto">
           {suggestions.map((suggestion) => (
             <div
@@ -219,8 +218,8 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
           ))}
         </div>
       )}
-      
-      {value.length >= 2 && !isSearching && suggestions.length === 0 && (
+
+      {!hasSelected && value.length >= 2 && !isSearching && suggestions.length === 0 && (
         <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 p-3">
           <div className="text-sm text-gray-500">
             No locations found. Try a different search term.
