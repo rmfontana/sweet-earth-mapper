@@ -439,19 +439,21 @@ const DataPointDetailModal: React.FC<DataPointDetailModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md md:max-w-3xl">
         <DialogHeader>
-          <DialogTitle className="flex justify-between items-center text-2xl font-bold">
-            {isEditing ? `Edit Submission` : `Details for ${initialDataPoint.cropType}`}
-            <div className="flex space-x-2">
-              {!isEditing && canEdit && (
-                <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
-                  <Edit className="w-5 h-5" />
-                </Button>
-              )}
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-          </DialogTitle>
+        <DialogTitle className="flex items-center justify-between text-2xl font-bold">
+          <span>{isEditing ? 'Edit Submission' : `Details for ${initialDataPoint.cropType}`}</span>
+          
+          {!isEditing && canEdit && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsEditing(true)}
+              className="hover:bg-gray-100"
+            >
+              <Edit className="w-5 h-5" />
+              <span className="sr-only">Edit</span>
+            </Button>
+          )}
+        </DialogTitle>
           <DialogDescription className="sr-only">
             View and edit a BRIX measurement submission.
           </DialogDescription>
