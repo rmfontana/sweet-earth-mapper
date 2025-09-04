@@ -11,10 +11,23 @@ interface LocationSuggestion {
   place_formatted?: string;
 }
 
+interface DetailedLocationInfo {
+  name: string;
+  latitude: number;
+  longitude: number;
+  street_address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  poi_name?: string;
+  normalized_address?: string;
+  business_name?: string;
+}
+
 interface LocationSearchProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onLocationSelect: (location: { name: string; latitude: number; longitude: number }) => void;
+  onLocationSelect: (location: DetailedLocationInfo) => void;
   isLoading?: boolean;
 }
 
@@ -34,7 +47,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
-  const [hasSelected, setHasSelected] = useState(false); // NEW
+  const [hasSelected, setHasSelected] = useState(false);
 
   const sessionRef = useRef<string | null>(null);
   const selectedValueRef = useRef<string | null>(null);
@@ -126,13 +139,67 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
     };
   }, [value, searchLocations, hasSelected]);
 
+  const extractDetailedLocationInfo = (feature: any): DetailedLocationInfo => {
+    const [longitude, latitude] = feature.geometry.coordinates;
+    const properties = feature.properties || {};
+    const context = properties.context || {};
+    
+    // Extract address components
+    let street_address = '';
+    let poi_name = '';
+    let business_name = '';
+    
+    // Handle different feature types
+    if (properties.feature_type === 'poi' || properties.feature_type === 'address') {
+      poi_name = properties.name || '';
+      if (properties.feature_type === 'poi' && properties.category) {
+        business_name = properties.name || '';
+      }
+    }
+    
+    // Build street address from components
+    const address_parts = [];
+    if (properties.address_number) address_parts.push(properties.address_number);
+    if (properties.street) address_parts.push(properties.street);
+    street_address = address_parts.join(' ');
+    
+    // Extract location hierarchy
+    const city = context.place?.name || context.locality?.name || '';
+    const state = context.region?.name || context.region?.region_code || '';
+    const country = context.country?.name || context.country?.country_code || '';
+    
+    // Create normalized address for matching
+    const address_components = [street_address, city, state].filter(Boolean);
+    const normalized_address = address_components.join(', ').toLowerCase().trim();
+    
+    // Choose best display name
+    const display_name = properties.full_address || 
+                        properties.place_formatted || 
+                        `${street_address}${city ? ', ' + city : ''}`.trim() ||
+                        properties.name ||
+                        'Unknown Location';
+
+    return {
+      name: display_name,
+      latitude,
+      longitude,
+      street_address: street_address || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      country: country || undefined,
+      poi_name: poi_name || undefined,
+      business_name: business_name || undefined,
+      normalized_address: normalized_address || undefined
+    };
+  };
+
   const handleSelect = async (suggestion: LocationSuggestion) => {
     if (!mapboxToken || !sessionRef.current) return;
 
     const locationName = suggestion.full_address || suggestion.name;
 
     selectedValueRef.current = locationName;
-    setHasSelected(true); // NEW
+    setHasSelected(true);
 
     onChange({
       target: { value: locationName }
@@ -156,12 +223,15 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       const data = await response.json();
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
-        const [longitude, latitude] = feature.geometry.coordinates;
-
+        const detailedInfo = extractDetailedLocationInfo(feature);
+        
+        onLocationSelect(detailedInfo);
+      } else {
+        // Fallback if no detailed data
         onLocationSelect({
           name: locationName,
-          latitude,
-          longitude
+          latitude: 0,
+          longitude: 0
         });
       }
     } catch (e) {
@@ -178,7 +248,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     selectedValueRef.current = null;
-    setHasSelected(false); // NEW
+    setHasSelected(false);
     onChange(e);
   };
 

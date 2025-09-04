@@ -28,6 +28,19 @@ import LocationSearch from '../components/common/LocationSearch';
 import { useStaticData } from '../hooks/useStaticData';
 import { Slider } from '../components/ui/slider';
 
+interface DetailedLocationInfo {
+  name: string;
+  latitude: number;
+  longitude: number;
+  street_address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  poi_name?: string;
+  normalized_address?: string;
+  business_name?: string;
+}
+
 const DataEntry = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -42,6 +55,13 @@ const DataEntry = () => {
     latitude: 0,
     longitude: 0,
     location: '',
+    street_address: '',
+    city: '',
+    state: '',
+    country: '',
+    poi_name: '',
+    business_name: '',
+    normalized_address: '',
     measurementDate: new Date().toISOString().split('T')[0],
     purchaseDate: '',
     outlierNotes: '',
@@ -79,7 +99,6 @@ const DataEntry = () => {
   const handleBrixChange = (value: number | number[]) => {
     const brixValue = Array.isArray(value) ? value[0] : value;
     
-    // Guard against invalid values like NaN or undefined
     if (typeof brixValue !== 'number' || isNaN(brixValue)) {
       handleInputChange('brixLevel', 0);
     } else {
@@ -119,12 +138,19 @@ const DataEntry = () => {
     handleInputChange('images', formData.images.filter((_, i) => i !== index));
   };
 
-  const handleLocationSelect = (location: { name: string; latitude: number; longitude: number }) => {
+  const handleLocationSelect = (location: DetailedLocationInfo) => {
     setFormData(prev => ({
       ...prev,
       location: location.name,
       latitude: location.latitude,
       longitude: location.longitude,
+      street_address: location.street_address || '',
+      city: location.city || '',
+      state: location.state || '',
+      country: location.country || '',
+      poi_name: location.poi_name || '',
+      business_name: location.business_name || '',
+      normalized_address: location.normalized_address || '',
     }));
   };
 
@@ -172,28 +198,7 @@ const DataEntry = () => {
     setIsLoading(true);
 
     try {
-      // Step 1: Find or create the Place record
-      let placeId = null;
-      if (formData.location && formData.latitude && formData.longitude) {
-        const { data: places, error: placesError } = await supabase
-          .from('places')
-          .upsert({ 
-            label: formData.location, 
-            latitude: formData.latitude, 
-            longitude: formData.longitude 
-          })
-          .select()
-          .single();
-
-        if (placesError) {
-          throw new Error('Failed to create or find place record: ' + placesError.message);
-        }
-        placeId = places.id;
-      } else {
-        throw new Error('Location, latitude, and longitude are required.');
-      }
-
-      // Step 2: Prepare the final payload with place_id
+      // Prepare the enhanced payload with detailed location information
       const payload = {
         cropName: formData.cropType,
         brandName: formData.brand,
@@ -205,12 +210,22 @@ const DataEntry = () => {
         purchaseDate: new Date(formData.purchaseDate + 'T00:00:00.000Z').toISOString(),
         outlierNotes: formData.outlierNotes,
         userId: user?.id,
+        // Enhanced location data from Mapbox geocoding
         latitude: formData.latitude,
         longitude: formData.longitude,
-        locationName: formData.location
+        locationName: formData.location,
+        street_address: formData.street_address || null,
+        city: formData.city || null,
+        state: formData.state || null,
+        country: formData.country || null,
+        poi_name: formData.poi_name || null,
+        business_name: formData.business_name || null,
+        normalized_address: formData.normalized_address || null,
+        // Store name for potential location matching
+        store_name: formData.store
       };
 
-      // Step 3: Call the Edge Function with the new payload
+      // Call the Edge Function with enhanced location data
       const supabaseUrl = getSupabaseUrl();
       const publishKey = getPublishableKey();
       const response = await fetch(`${supabaseUrl}/functions/v1/auto-verify-submission`, {
@@ -234,6 +249,7 @@ const DataEntry = () => {
         throw new Error('Submission ID was not returned by the server.');
       }
       
+      // Handle image uploads
       if (formData.images.length > 0) {
         const userId = user?.id;
         if (!userId) throw new Error('User not authenticated for image upload.');
@@ -412,7 +428,7 @@ const DataEntry = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mb-6 sm:mb-8">
-                  {/* Location - using the new LocationSearch component */}
+                  {/* Location - using the enhanced LocationSearch component */}
                   <div className="relative">
                     <Label htmlFor="location" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
                       <MapPin className="inline w-4 h-4 mr-2" />
