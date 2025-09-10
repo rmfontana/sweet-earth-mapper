@@ -224,22 +224,22 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       return;
     }
 
-    // Combine global filters with the location-specific filter
-    const leaderboardFilters = {
+    // Create a new filter object that includes the selected location name
+    const localFilters = {
       ...filters,
-      location_name: selectedPoint.locationName,
+      location_name: selectedPoint.locationName
     };
-    
-    // Pass the combined filters to the fetching functions
-    fetchLocationLeaderboard(leaderboardFilters)
+
+    // Now use the local filters for all leaderboard calls
+    fetchLocationLeaderboard(localFilters)
       .then(setLocationLeaderboard)
       .catch(console.error);
 
-    fetchCropLeaderboard(leaderboardFilters)
+    fetchCropLeaderboard(localFilters)
       .then(setCropLeaderboard)
       .catch(console.error);
 
-    fetchBrandLeaderboard(leaderboardFilters)
+    fetchBrandLeaderboard(localFilters)
       .then(setBrandLeaderboard)
       .catch(console.error);
   }, [selectedPoint, filters]);
@@ -357,7 +357,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       {/* Drawer UI */}
       {selectedPoint && (
-        <div className="absolute top-2 right-2 w-80 bg-white rounded-md shadow-lg p-4 z-50 max-h-[80vh] overflow-y-auto">
+        <div className="absolute top-2 right-2 w-80 bg-white rounded-md shadow-lg p-4 z-50 max-h-[80vh] overflow-y-auto transition-transform duration-300 ease-in-out">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-xl font-bold">{selectedPoint.locationName}</h3>
             <button
