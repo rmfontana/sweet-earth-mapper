@@ -4,19 +4,14 @@ import { getSupabaseUrl, getPublishableKey } from './utils';
 const supabase = createClient(getSupabaseUrl(), getPublishableKey());
 
 export type Filter = {
-  state?: string;
-  country?: string;
-  crop_category?: string;
-  place_id?: string;
   location_name?: string;
-  min_brix?: number;
-  max_brix?: number;
+  place_id?: string;
 };
 
 export interface LeaderboardEntry {
   [key: string]: any;
-  avg_normalized_score: number;
-  grade: string;
+  average_normalized_score: number;  // exactly as in SQL
+  average_brix: number;              // exactly as in SQL
   submission_count: number;
   rank: number;
 }
@@ -27,7 +22,6 @@ async function fetchLeaderboard<R>(
 ): Promise<R[]> {
   const { location_name, place_id } = filters;
 
-  // Only extract the required filters for Supabase
   const params = {
     location_name_filter: location_name ?? null,
     place_id_filter: place_id ?? null,

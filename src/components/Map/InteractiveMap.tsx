@@ -255,21 +255,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   // UI helper: render leaderboard entries based on groupBy
   const renderLeaderboard = () => {
     if (!selectedPoint) return null;
-
+  
     if (isLoading) {
       return <div className="p-4 text-center">Loading leaderboards...</div>;
     }
-
-    const formatValue = (value: string | null) => {
-      return value;
-    };
-
+  
+    const formatValue = (value: string | null) => value;
+  
     switch (groupBy) {
-      case 'none':
-        // Show individual submissions with BRIX, crop, brand, date
-        const storeSubs = allData.filter(
-          (d) => d.placeId === selectedPoint.placeId
-        );
+      case 'none': {
+        const storeSubs = allData.filter(d => d.placeId === selectedPoint.placeId);
         return (
           <div>
             <h4 className="font-semibold mb-2">Submissions BRIX Score</h4>
@@ -280,27 +275,23 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <div>Brix Score</div>
             </div>
             <div className="max-h-60 overflow-y-auto">
-              {storeSubs.map((sub) => (
+              {storeSubs.map(sub => (
                 <div
                   key={sub.id}
                   className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200"
                 >
                   <div>{formatValue(sub.cropType)}</div>
                   <div>{formatValue(sub.brandName)}</div>
-                  <div>
-                    {sub.submittedAt
-                      ? new Date(sub.submittedAt).toLocaleDateString()
-                      : '-'}
-                  </div>
+                  <div>{sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}</div>
                   <div>{sub.brixLevel}</div>
                 </div>
               ))}
             </div>
           </div>
         );
-
-      case 'crop':
-        // Show crop leaderboard grouped by crop type with rank + submissions count
+      }
+  
+      case 'crop': {
         return (
           <div>
             <h4 className="font-semibold mb-2">Crop Rank</h4>
@@ -310,14 +301,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <div># Submissions</div>
             </div>
             <div className="max-h-60 overflow-y-auto">
-              {cropLeaderboard.map((entry) => (
+              {cropLeaderboard.map(entry => (
                 <div
                   key={entry.crop_id}
                   className="grid grid-cols-3 gap-2 py-1 border-b border-gray-200"
                 >
                   <div>{formatValue(entry.crop_name)}</div>
                   <div
-                    style={{ color: getColor(entry.avg_normalized_score) }}
+                    style={{ color: getColor(entry.average_normalized_score) }}
                     className="font-semibold"
                   >
                     {entry.rank}
@@ -328,9 +319,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
           </div>
         );
-
-      case 'brand':
-        // Show brand leaderboard grouped by brand name with rank + submission count
+      }
+  
+      case 'brand': {
         return (
           <div>
             <h4 className="font-semibold mb-2">Brand Rank</h4>
@@ -340,14 +331,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <div># Submissions</div>
             </div>
             <div className="max-h-60 overflow-y-auto">
-              {brandLeaderboard.map((entry) => (
+              {brandLeaderboard.map(entry => (
                 <div
                   key={entry.brand_id}
                   className="grid grid-cols-3 gap-2 py-1 border-b border-gray-200"
                 >
                   <div>{formatValue(entry.brand_name)}</div>
                   <div
-                    style={{ color: getColor(entry.avg_normalized_score) }}
+                    style={{ color: getColor(entry.average_normalized_score) }}
                     className="font-semibold"
                   >
                     {entry.rank}
@@ -358,11 +349,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
           </div>
         );
-
+      }
+  
       default:
         return null;
     }
   };
+  
 
   // Drawer close handler
   const handleClose = () => setSelectedPoint(null);
