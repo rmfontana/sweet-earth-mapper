@@ -58,6 +58,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [groupBy, setGroupBy] = useState<'none' | 'crop' | 'brand'>('crop');
   const [minBrix, setMinBrix] = useState(0);
   const [maxBrix, setMaxBrix] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Store leaderboard data per grouping
   const [locationLeaderboard, setLocationLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -217,38 +218,51 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   // When store is selected, fetch leaderboard data for that store location
   useEffect(() => {
-    if (!selectedPoint) {
+    if (!selectedPoint || !selectedPoint.placeId) {
       setLocationLeaderboard([]);
       setCropLeaderboard([]);
       setBrandLeaderboard([]);
       return;
     }
 
-    // Create a new filter object that includes the selected location name
-    // and the place_id to correctly filter the submissions
+    setIsLoading(true);
+
     const localFilters = {
       ...filters,
       location_name: selectedPoint.locationName,
       place_id: selectedPoint.placeId,
     };
+    
+    // Log the filters to the console for debugging
+    console.log('Fetching leaderboard data with filters:', localFilters);
 
-    // Now use the local filters for all leaderboard calls
-    fetchLocationLeaderboard(localFilters)
-      .then(setLocationLeaderboard)
-      .catch(console.error);
-
-    fetchCropLeaderboard(localFilters)
-      .then(setCropLeaderboard)
-      .catch(console.error);
-
-    fetchBrandLeaderboard(localFilters)
-      .then(setBrandLeaderboard)
-      .catch(console.error);
+    Promise.all([
+      fetchLocationLeaderboard(localFilters),
+      fetchCropLeaderboard(localFilters),
+      fetchBrandLeaderboard(localFilters),
+    ])
+      .then(([locationData, cropData, brandData]) => {
+        setLocationLeaderboard(locationData);
+        setCropLeaderboard(cropData);
+        setBrandLeaderboard(brandData);
+      })
+      .catch(console.error)
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, [selectedPoint, filters]);
 
   // UI helper: render leaderboard entries based on groupBy
   const renderLeaderboard = () => {
     if (!selectedPoint) return null;
+
+    if (isLoading) {
+      return <div className="p-4 text-center">Loading leaderboards...</div>;
+    }
+
+    const formatValue = (value: string | null) => {
+      return value;
+    };
 
     switch (groupBy) {
       case 'none':
@@ -271,8 +285,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   key={sub.id}
                   className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200"
                 >
-                  <div>{sub.cropType}</div>
-                  <div>{sub.brandName || '-'}</div>
+                  <div>{formatValue(sub.cropType)}</div>
+                  <div>{formatValue(sub.brandName)}</div>
                   <div>
                     {sub.submittedAt
                       ? new Date(sub.submittedAt).toLocaleDateString()
@@ -301,7 +315,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   key={entry.crop_id}
                   className="grid grid-cols-3 gap-2 py-1 border-b border-gray-200"
                 >
-                  <div>{entry.crop_name}</div>
+                  <div>{formatValue(entry.crop_name)}</div>
                   <div
                     style={{ color: getColor(entry.avg_normalized_score) }}
                     className="font-semibold"
@@ -331,7 +345,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   key={entry.brand_id}
                   className="grid grid-cols-3 gap-2 py-1 border-b border-gray-200"
                 >
-                  <div>{entry.brand_name}</div>
+                  <div>{formatValue(entry.brand_name)}</div>
                   <div
                     style={{ color: getColor(entry.avg_normalized_score) }}
                     className="font-semibold"
