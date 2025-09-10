@@ -225,9 +225,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
 
     // Create a new filter object that includes the selected location name
+    // and the place_id to correctly filter the submissions
     const localFilters = {
       ...filters,
-      location_name: selectedPoint.locationName
+      location_name: selectedPoint.locationName,
+      place_id: selectedPoint.placeId,
     };
 
     // Now use the local filters for all leaderboard calls
@@ -252,7 +254,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       case 'none':
         // Show individual submissions with BRIX, crop, brand, date
         const storeSubs = allData.filter(
-          (d) => d.locationName === selectedPoint.locationName
+          (d) => d.placeId === selectedPoint.placeId
         );
         return (
           <div>
