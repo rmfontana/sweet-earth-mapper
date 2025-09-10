@@ -56,6 +56,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [groupBy, setGroupBy] = useState<'none' | 'crop' | 'brand'>('crop');
+  const [minBrix, setMinBrix] = useState(0);
+  const [maxBrix, setMaxBrix] = useState(1);
 
   // Store leaderboard data per grouping
   const [locationLeaderboard, setLocationLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -73,6 +75,17 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         setAllData([]);
       });
   }, []);
+
+  // Calculate global min/max brix values for normalization
+  useEffect(() => {
+    if (allData.length > 0) {
+      const brixValues = allData.map(d => d.brixLevel);
+      const min = Math.min(...brixValues);
+      const max = Math.max(...brixValues);
+      setMinBrix(min);
+      setMaxBrix(max);
+    }
+  }, [allData]);
 
   // Filter data based on filters context
   useEffect(() => {
@@ -211,23 +224,25 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       return;
     }
 
-    const filters = { state: '', country: '', crop_category: '' }; // expand if needed
-
-    // Fetch location leaderboard for store
-    fetchLocationLeaderboard({ location_name: selectedPoint.locationName })
+    // Combine global filters with the location-specific filter
+    const leaderboardFilters = {
+      ...filters,
+      location_name: selectedPoint.locationName,
+    };
+    
+    // Pass the combined filters to the fetching functions
+    fetchLocationLeaderboard(leaderboardFilters)
       .then(setLocationLeaderboard)
       .catch(console.error);
 
-    // Fetch crop leaderboard for this store
-    fetchCropLeaderboard({ location_name: selectedPoint.locationName })
+    fetchCropLeaderboard(leaderboardFilters)
       .then(setCropLeaderboard)
       .catch(console.error);
 
-    // Fetch brand leaderboard for this store
-    fetchBrandLeaderboard({ location_name: selectedPoint.locationName })
+    fetchBrandLeaderboard(leaderboardFilters)
       .then(setBrandLeaderboard)
       .catch(console.error);
-  }, [selectedPoint]);
+  }, [selectedPoint, filters]);
 
   // UI helper: render leaderboard entries based on groupBy
   const renderLeaderboard = () => {
@@ -236,7 +251,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     switch (groupBy) {
       case 'none':
         // Show individual submissions with BRIX, crop, brand, date
-        // Filter allData for the selected store
         const storeSubs = allData.filter(
           (d) => d.locationName === selectedPoint.locationName
         );
