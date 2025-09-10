@@ -52,8 +52,7 @@ async function fetchLeaderboard<R>(
 export async function fetchBrandLeaderboard(filters: Filter = {}): Promise<
   (LeaderboardEntry & { brand_id: string; brand_name: string })[]
 > {
-  // Use the new, more flexible Supabase function name if needed
-  // return fetchLeaderboard('get_brand_leaderboard_v2', filters);
+  // Now explicitly using the non-versioned function name as per the migration
   return fetchLeaderboard('get_brand_leaderboard', filters);
 }
 
@@ -65,6 +64,7 @@ export async function fetchBrandLeaderboard(filters: Filter = {}): Promise<
 export async function fetchCropLeaderboard(filters: Filter = {}): Promise<
   (LeaderboardEntry & { crop_id: string; crop_name: string })[]
 > {
+  // Now explicitly using the non-versioned function name as per the migration
   return fetchLeaderboard('get_crop_leaderboard', filters);
 }
 
@@ -76,5 +76,6 @@ export async function fetchCropLeaderboard(filters: Filter = {}): Promise<
 export async function fetchLocationLeaderboard(filters: Filter = {}): Promise<
   (LeaderboardEntry & { location_id: string; location_name: string })[]
 > {
+  // Now explicitly using the non-versioned function name as per the migration
   return fetchLeaderboard('get_location_leaderboard', filters);
 }
