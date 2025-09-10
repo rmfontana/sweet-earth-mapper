@@ -150,13 +150,18 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
     const poi_name = properties.name || '';
     const business_name = properties.category ? properties.name : '';
 
-    let street_address = properties.full_address || '';
+    let street_address = '';
 
-    if (!street_address && (properties.address_number || properties.street)) {
+    
+    if (properties.address_number || properties.street) {
       const parts = [];
       if (properties.address_number) parts.push(properties.address_number);
       if (properties.street) parts.push(properties.street);
       street_address = parts.join(' ');
+    }
+
+    if (!street_address && properties.full_address) {
+      street_address = properties.full_address; // fallback
     }
 
     const city = context.place?.name || context.locality?.name || '';
