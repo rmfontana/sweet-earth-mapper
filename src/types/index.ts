@@ -11,6 +11,7 @@ export interface BrixDataPoint {
   longitude: number | null;
   locationName: string; // Human-readable location (e.g., "Whole Foods Market")
   placeName: string; // Human-readable place (e.g., "123 Main St, Anytown")
+  streetAddress: string; 
   brandName: string;
   submittedBy: string; // Display name of the user who submitted it
   userId?: string; // Add userId for internal filtering/linking to users

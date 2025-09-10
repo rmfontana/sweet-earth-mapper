@@ -9,6 +9,8 @@ type Filter = {
   state?: string;
   country?: string;
   crop_category?: string;
+  place_id?: string;
+  location_name?: string;
 };
 
 // Generic type for leaderboard entries

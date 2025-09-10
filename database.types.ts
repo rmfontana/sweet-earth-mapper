@@ -868,6 +868,39 @@ export type Database = {
         Args: { "": string }
         Returns: unknown
       }
+      get_brand_leaderboard: {
+        Args: { filters?: Json }
+        Returns: {
+          avg_normalized_score: number
+          brand_id: string
+          brand_name: string
+          grade: string
+          rank: number
+          submission_count: number
+        }[]
+      }
+      get_crop_leaderboard: {
+        Args: { filters?: Json }
+        Returns: {
+          avg_normalized_score: number
+          crop_id: string
+          crop_name: string
+          grade: string
+          rank: number
+          submission_count: number
+        }[]
+      }
+      get_location_leaderboard: {
+        Args: { filters?: Json }
+        Returns: {
+          avg_normalized_score: number
+          grade: string
+          location_id: string
+          location_name: string
+          rank: number
+          submission_count: number
+        }[]
+      }
       get_proj4_from_srid: {
         Args: { "": number }
         Returns: string

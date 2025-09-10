@@ -8,12 +8,20 @@ import { applyFilters } from '../../lib/filterUtils';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { MapPin, Calendar, User, CheckCircle, Eye, X } from 'lucide-react'; // Corrected: Added X
+import { MapPin, Calendar, User, CheckCircle, Eye, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { getMapboxToken } from '@/lib/getMapboxToken';
 import type { GeoJSON } from 'geojson';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor } from '../../lib/getBrixColor';
+
+// Leaderboard API imports
+import {
+  fetchLocationLeaderboard,
+  fetchCropLeaderboard,
+  fetchBrandLeaderboard,
+  LeaderboardEntry,
+} from '../../lib/fetchLeaderboards';
 
 interface InteractiveMapProps {
   userLocation?: { lat: number; lng: number } | null;
@@ -22,51 +30,20 @@ interface InteractiveMapProps {
   onNearMeHandled?: () => void;
 }
 
-
 const SUPABASE_PROJECT_REF = 'wbkzczcqlorsewoofwqe';
 
-const getCropIconFileUrl = (mapboxIconId: string): string => {
-  const bucketName = 'crop-images';
-  const fullUrl = `https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1/object/public/${bucketName}/${mapboxIconId}-uncolored.png`;
-  return fullUrl;
-};
-
-const getMapboxIconIdFromPoint = (point: BrixDataPoint): string => {
-  const name = point.name_normalized || point.cropType;
-  return name;
-};
-
-const FALLBACK_ICON_RAW_NAME = 'default';
-const FALLBACK_ICON_ID = getMapboxIconIdFromPoint({
-  cropType: FALLBACK_ICON_RAW_NAME,
-  id: '', brixLevel: 0, verified: false, variety: '', category: '',
-  latitude: null, longitude: null, locationName: '', brandName: '',
-  submittedBy: '', verifiedBy: '', submittedAt: '', outlier_notes: '', images: []
-} as BrixDataPoint);
-
-const createFallbackCircleImage = (size = 30, color = '#3182CE') => {
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext('2d');
-  if (context) {
-    context.clearRect(0, 0, size, size);
-    context.beginPath();
-    context.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2, true);
-    context.fillStyle = color;
-    context.fill();
-    context.lineWidth = 2;
-    context.strokeStyle = '#FFFFFF';
-    context.stroke();
-  }
-  return canvas;
+const getColor = (normalizedScore: number) => {
+  // Map normalized score (0-1) to green/yellow/red gradient
+  if (normalizedScore >= 0.7) return '#16a34a'; // green
+  if (normalizedScore >= 0.4) return '#ca8a04'; // yellow
+  return '#dc2626'; // red
 };
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({
   userLocation,
   showFilters,
   nearMeTriggered,
-  onNearMeHandled
+  onNearMeHandled,
 }) => {
   const location = useLocation();
   const { highlightedPoint } = location.state || {};
@@ -78,11 +55,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [filteredData, setFilteredData] = useState<BrixDataPoint[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
-  const [loadedIconIds, setLoadedIconIds] = useState<Set<string>>(new Set());
-  const [iconsInitialized, setIconsInitialized] = useState(false);
+  const [groupBy, setGroupBy] = useState<'none' | 'crop' | 'brand'>('crop');
+
+  // Store leaderboard data per grouping
+  const [locationLeaderboard, setLocationLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [cropLeaderboard, setCropLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [brandLeaderboard, setBrandLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   const { cache, loading } = useCropThresholds();
 
+  // Fetch data on mount
   useEffect(() => {
     fetchFormattedSubmissions()
       .then((data) => setAllData(data))
@@ -92,11 +74,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
   }, []);
 
+  // Filter data based on filters context
   useEffect(() => {
     const filtered = applyFilters(allData, filters, isAdmin);
     setFilteredData(filtered);
   }, [filters, allData, isAdmin]);
 
+  // Handle near me action to center map
   useEffect(() => {
     if (nearMeTriggered && userLocation && mapRef.current) {
       mapRef.current.easeTo({
@@ -108,37 +92,20 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [nearMeTriggered, userLocation, onNearMeHandled]);
 
-  useEffect(() => {
-    if (!mapRef.current) return;
-    mapRef.current.resize();
-    if (!showFilters) {
-      const currentZoom = mapRef.current.getZoom();
-      mapRef.current.easeTo({
-        zoom: Math.max(currentZoom - 1, 5),
-        duration: 700,
-      });
-    }
-  }, [showFilters]);
-
-  const getColor = useCallback((cropType: string, brixLevel: number) => {
-    if (loading) return '#d1d5db';
-    const thresholds = cache[cropType];
-    return getBrixColor(brixLevel, thresholds, 'hex');
-  }, [loading, cache]);
-
+  // Initialize Mapbox map
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
-    
+
     async function initializeMap() {
       const container = mapContainer.current;
       if (!container) return;
-      
+
       const token = await getMapboxToken();
       if (!token) {
         console.error('Failed to retrieve Mapbox token. Map will not initialize.');
         return;
       }
-      
+
       mapboxgl.accessToken = token;
       const map = new mapboxgl.Map({
         container: container,
@@ -146,12 +113,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         center: userLocation ? [userLocation.lng, userLocation.lat] : [-74.0242, 40.6941],
         zoom: 10,
       });
-      
+
       mapRef.current = map;
       map.on('load', () => setIsMapLoaded(true));
       map.on('error', (e) => console.error('Mapbox error:', e.error));
     }
-    
+
     initializeMap();
 
     return () => {
@@ -159,16 +126,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         mapRef.current.remove();
         mapRef.current = null;
         setIsMapLoaded(false);
-        setIconsInitialized(false);
-        setLoadedIconIds(new Set());
       }
     };
   }, []);
 
-  // Corrected: New useEffect to handle highlightedPoint from router state
+  // Center map on highlighted point if exists
   useEffect(() => {
     if (highlightedPoint && mapRef.current) {
-      const point = allData.find(d => d.id === highlightedPoint.id);
+      const point = allData.find((d) => d.id === highlightedPoint.id);
       if (point && point.latitude && point.longitude) {
         mapRef.current.easeTo({
           center: [point.longitude, point.latitude],
@@ -180,61 +145,53 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [highlightedPoint, allData]);
 
+  // Draw markers for stores, showing store name, with static color
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
 
     // Clear existing markers
     if (markersRef.current.length > 0) {
-      markersRef.current.forEach(marker => marker.remove());
+      markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
     }
-    
-    // Add new markers for the current filtered data
-    filteredData.forEach(point => {
+
+    // Group filtered data by store (locationName) to show markers per store
+    const storeGroups: Record<string, BrixDataPoint[]> = {};
+    filteredData.forEach((point) => {
       if (!point.latitude || !point.longitude) return;
+      if (!point.locationName) return;
+      if (!storeGroups[point.locationName]) storeGroups[point.locationName] = [];
+      storeGroups[point.locationName].push(point);
+    });
+
+    Object.entries(storeGroups).forEach(([storeName, points]) => {
+      // Use first point to position marker (assuming all share same location)
+      const firstPoint = points[0];
+      if (!firstPoint.latitude || !firstPoint.longitude) return;
 
       const markerElement = document.createElement('div');
-      const iconId = getMapboxIconIdFromPoint(point);
-      const iconUrl = getCropIconFileUrl(iconId);
-      const brixColor = getColor(point.cropType, point.brixLevel);
+      markerElement.style.padding = '6px 10px';
+      markerElement.style.backgroundColor = '#3b82f6'; // blue static color
+      markerElement.style.color = 'white';
+      markerElement.style.fontWeight = 'bold';
+      markerElement.style.borderRadius = '6px';
+      markerElement.style.boxShadow = '0 0 5px rgba(0,0,0,0.3)';
+      markerElement.style.cursor = 'pointer';
+      markerElement.innerText = storeName;
 
-      const size = 32; // Marker container size
-      const iconSize = 20; // Icon size to fit inside the circle
+      const marker = new mapboxgl.Marker({ element: markerElement, anchor: 'bottom' })
+        .setLngLat([firstPoint.longitude, firstPoint.latitude])
+        .addTo(mapRef.current!);
 
-      markerElement.style.width = `${size}px`;
-      markerElement.style.height = `${size}px`;
-      markerElement.style.borderRadius = '50%';
-      markerElement.style.backgroundColor = brixColor;
-      markerElement.style.display = 'flex';
-      markerElement.style.justifyContent = 'center';
-      markerElement.style.alignItems = 'center';
-      markerElement.style.border = '2px solid white';
-      markerElement.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
-
-      const iconElement = document.createElement('img');
-      iconElement.src = iconUrl;
-      iconElement.alt = point.cropType;
-      iconElement.style.width = `${iconSize}px`;
-      iconElement.style.height = `${iconSize}px`;
-
-      markerElement.appendChild(iconElement);
-
-      const marker = new mapboxgl.Marker({
-        element: markerElement,
-        anchor: 'center',
-      }).setLngLat([point.longitude, point.latitude]);
-      
-      marker.addTo(mapRef.current!);
       markersRef.current.push(marker);
-      
-      // Stop propagation on marker click to prevent map's click-away behavior
+
       markerElement.addEventListener('click', (e) => {
         e.stopPropagation();
-        setSelectedPoint(point);
+        setSelectedPoint(firstPoint);
       });
     });
 
-    // Added: Click event listener to the map to clear the selected point
+    // Clicking map clears selection
     const mapClickListener = () => setSelectedPoint(null);
     mapRef.current.on('click', mapClickListener);
 
@@ -243,92 +200,182 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         mapRef.current.off('click', mapClickListener);
       }
     };
-  }, [filteredData, isMapLoaded, getColor]);
+  }, [filteredData, isMapLoaded]);
 
-  // Handler for the close button
-  const handleClose = () => {
-    setSelectedPoint(null);
+  // When store is selected, fetch leaderboard data for that store location
+  useEffect(() => {
+    if (!selectedPoint) {
+      setLocationLeaderboard([]);
+      setCropLeaderboard([]);
+      setBrandLeaderboard([]);
+      return;
+    }
+
+    const filters = { state: '', country: '', crop_category: '' }; // expand if needed
+
+    // Fetch location leaderboard for store
+    fetchLocationLeaderboard({ location_name: selectedPoint.locationName })
+      .then(setLocationLeaderboard)
+      .catch(console.error);
+
+    // Fetch crop leaderboard for this store
+    fetchCropLeaderboard({ location_name: selectedPoint.locationName })
+      .then(setCropLeaderboard)
+      .catch(console.error);
+
+    // Fetch brand leaderboard for this store
+    fetchBrandLeaderboard({ location_name: selectedPoint.locationName })
+      .then(setBrandLeaderboard)
+      .catch(console.error);
+  }, [selectedPoint]);
+
+  // UI helper: render leaderboard entries based on groupBy
+  const renderLeaderboard = () => {
+    if (!selectedPoint) return null;
+
+    switch (groupBy) {
+      case 'none':
+        // Show individual submissions with BRIX, crop, brand, date
+        // Filter allData for the selected store
+        const storeSubs = allData.filter(
+          (d) => d.locationName === selectedPoint.locationName
+        );
+        return (
+          <div>
+            <h4 className="font-semibold mb-2">Submissions BRIX Score</h4>
+            <div className="text-xs font-semibold grid grid-cols-4 gap-2 border-b pb-1">
+              <div>Crop Type</div>
+              <div>Brand</div>
+              <div>Submission Date</div>
+              <div>Brix Score</div>
+            </div>
+            <div className="max-h-60 overflow-y-auto">
+              {storeSubs.map((sub) => (
+                <div
+                  key={sub.id}
+                  className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200"
+                >
+                  <div>{sub.cropType}</div>
+                  <div>{sub.brandName || '-'}</div>
+                  <div>
+                    {sub.submittedAt
+                      ? new Date(sub.submittedAt).toLocaleDateString()
+                      : '-'}
+                  </div>
+                  <div>{sub.brixLevel}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      case 'crop':
+        // Show crop leaderboard grouped by crop type with rank + submissions count
+        return (
+          <div>
+            <h4 className="font-semibold mb-2">Crop Rank</h4>
+            <div className="text-xs font-semibold grid grid-cols-3 gap-2 border-b pb-1">
+              <div>Crop</div>
+              <div>Rank</div>
+              <div># Submissions</div>
+            </div>
+            <div className="max-h-60 overflow-y-auto">
+              {cropLeaderboard.map((entry) => (
+                <div
+                  key={entry.crop_id}
+                  className="grid grid-cols-3 gap-2 py-1 border-b border-gray-200"
+                >
+                  <div>{entry.crop_name}</div>
+                  <div
+                    style={{ color: getColor(entry.avg_normalized_score) }}
+                    className="font-semibold"
+                  >
+                    {entry.rank}
+                  </div>
+                  <div>{entry.submission_count}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      case 'brand':
+        // Show brand leaderboard grouped by brand name with rank + submission count
+        return (
+          <div>
+            <h4 className="font-semibold mb-2">Brand Rank</h4>
+            <div className="text-xs font-semibold grid grid-cols-3 gap-2 border-b pb-1">
+              <div>Brand</div>
+              <div>Rank</div>
+              <div># Submissions</div>
+            </div>
+            <div className="max-h-60 overflow-y-auto">
+              {brandLeaderboard.map((entry) => (
+                <div
+                  key={entry.brand_id}
+                  className="grid grid-cols-3 gap-2 py-1 border-b border-gray-200"
+                >
+                  <div>{entry.brand_name}</div>
+                  <div
+                    style={{ color: getColor(entry.avg_normalized_score) }}
+                    className="font-semibold"
+                  >
+                    {entry.rank}
+                  </div>
+                  <div>{entry.submission_count}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
   };
+
+  // Drawer close handler
+  const handleClose = () => setSelectedPoint(null);
 
   return (
     <div className="relative w-full h-full flex flex-col">
       <div ref={mapContainer} className="absolute inset-0 rounded-md shadow-md" />
-      {selectedPoint && (
-        <div className="absolute top-2 right-2 z-10 w-80 max-h-screen overflow-y-auto">
-          <Card className="shadow-lg">
-            <CardContent className="p-4">
-              {/* Added: Close button for the info card */}
-              <button
-                onClick={handleClose}
-                className="absolute top-2 right-2 p-1 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
 
-              <h3 className="text-lg font-bold">
-                {selectedPoint.name_normalized || selectedPoint.cropType}
-              </h3>
-              <div className="mt-2 space-y-2">
-                <p className="flex items-center text-sm text-gray-600">
-                  <Badge
-                    className={`
-                      text-xs font-bold mr-2
-                      ${selectedPoint.verified ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'}
-                    `}
-                  >
-                    Brix: {selectedPoint.brixLevel}
-                  </Badge>
-                  {selectedPoint.variety && (
-                    <span className="text-xs text-gray-500 italic">
-                      ({selectedPoint.variety})
-                    </span>
-                  )}
-                </p>
-                {selectedPoint.locationName && (
-                  <p className="flex items-center text-sm text-gray-600">
-                    <MapPin className="h-4 w-4 mr-2 text-gray-500" />
-                    {selectedPoint.locationName}
-                  </p>
-                )}
-                {selectedPoint.submittedAt && (
-                  <p className="flex items-center text-sm text-gray-600">
-                    <Calendar className="h-4 w-4 mr-2 text-gray-500" />
-                    {new Date(selectedPoint.submittedAt).toLocaleDateString()}
-                  </p>
-                )}
-                {selectedPoint.submittedBy && (
-                  <p className="flex items-center text-sm text-gray-600">
-                    <User className="h-4 w-4 mr-2 text-gray-500" />
-                    Submitted by: {selectedPoint.submittedBy}
-                  </p>
-                )}
-                <div className="mt-2 space-x-2">
-                  <Badge
-                    className={`
-                      ${selectedPoint.verified ? 'bg-green-500' : 'bg-yellow-500'}
-                      text-xs font-bold
-                    `}
-                  >
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    {selectedPoint.verified ? 'Verified' : 'Not Verified'}
-                  </Badge>
-                  {selectedPoint.images && selectedPoint.images.length > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      asChild
-                    >
-                      <Link to={`/data/${selectedPoint.id}`}>
-                        <Eye className="h-4 w-4 mr-2" />
-                        View
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Drawer UI */}
+      {selectedPoint && (
+        <div className="absolute top-2 right-2 w-80 bg-white rounded-md shadow-lg p-4 z-50 max-h-[80vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold">{selectedPoint.locationName}</h3>
+            <button
+              onClick={handleClose}
+              aria-label="Close drawer"
+              className="p-1 rounded hover:bg-gray-200"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <div className="mb-2 text-sm text-gray-600">{selectedPoint.streetAddress}</div>
+
+          <div className="mb-4">
+            <label htmlFor="groupBy" className="block text-sm font-medium mb-1">
+              Group by:
+            </label>
+            <select
+              id="groupBy"
+              className="border border-gray-300 rounded p-1 w-full"
+              value={groupBy}
+              onChange={(e) =>
+                setGroupBy(e.target.value as 'none' | 'crop' | 'brand')
+              }
+            >
+              <option value="none">None</option>
+              <option value="crop">Crop</option>
+              <option value="brand">Brand</option>
+            </select>
+          </div>
+
+          {/* Leaderboard content */}
+          {renderLeaderboard()}
         </div>
       )}
     </div>
