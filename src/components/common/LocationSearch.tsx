@@ -143,41 +143,34 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
     const [longitude, latitude] = feature.geometry.coordinates;
     const properties = feature.properties || {};
     const context = properties.context || {};
-    
-    // Extract address components
-    let street_address = '';
-    let poi_name = '';
-    let business_name = '';
-    
-    // Handle different feature types
-    if (properties.feature_type === 'poi' || properties.feature_type === 'address') {
-      poi_name = properties.name || '';
-      if (properties.feature_type === 'poi' && properties.category) {
-        business_name = properties.name || '';
-      }
+
+    // Log to debug structure
+    console.log('Mapbox feature:', feature);
+
+    const poi_name = properties.name || '';
+    const business_name = properties.category ? properties.name : '';
+
+    let street_address = properties.full_address || '';
+
+    if (!street_address && (properties.address_number || properties.street)) {
+      const parts = [];
+      if (properties.address_number) parts.push(properties.address_number);
+      if (properties.street) parts.push(properties.street);
+      street_address = parts.join(' ');
     }
-    
-    // Build street address from components
-    const address_parts = [];
-    if (properties.address_number) address_parts.push(properties.address_number);
-    if (properties.street) address_parts.push(properties.street);
-    street_address = address_parts.join(' ');
-    
-    // Extract location hierarchy
+
     const city = context.place?.name || context.locality?.name || '';
     const state = context.region?.name || context.region?.region_code || '';
     const country = context.country?.name || context.country?.country_code || '';
-    
-    // Create normalized address for matching
+
     const address_components = [street_address, city, state].filter(Boolean);
     const normalized_address = address_components.join(', ').toLowerCase().trim();
-    
-    // Choose best display name
-    const display_name = properties.full_address || 
-                        properties.place_formatted || 
-                        `${street_address}${city ? ', ' + city : ''}`.trim() ||
-                        properties.name ||
-                        'Unknown Location';
+
+    const display_name = properties.full_address ||
+      properties.place_formatted ||
+      `${street_address}${city ? ', ' + city : ''}`.trim() ||
+      poi_name ||
+      'Unknown Location';
 
     return {
       name: display_name,
@@ -224,7 +217,7 @@ const LocationSearch: React.FC<LocationSearchProps> = ({
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
         const detailedInfo = extractDetailedLocationInfo(feature);
-        
+
         onLocationSelect(detailedInfo);
       } else {
         // Fallback if no detailed data
