@@ -71,6 +71,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
   }, []);
 
+  // Set the default tab to 'crop' whenever a new store is selected
+  useEffect(() => {
+    if (selectedPoint) {
+      setGroupBy('crop');
+    }
+  }, [selectedPoint]);
+
+
   // Calculate global min/max brix values for normalization
   useEffect(() => {
     if (allData.length > 0) {
@@ -306,27 +314,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
   }, [selectedPoint, filters]);
 
-  // New helper function to get color based on normalized score (text-based)
-  const getScoreColor = (score: number) => {
-    if (score >= 1.8) return 'text-green-500';
-    if (score >= 1.615) return 'text-yellow-500';
-    if (score >= 1.4) return 'text-orange-500';
-    return 'text-red-500';
-  };
-
-  const getPillColor = (score: number, type: 'brix' | 'rank') => {
-    const isBrix = type === 'brix';
-    if (isBrix) {
-      if (score >= 6) return 'bg-green-500';
-      if (score >= 4) return 'bg-yellow-500';
-      if (score >= 2) return 'bg-orange-500';
-      return 'bg-red-500';
-    } else {
-      if (score <= 1.8) return 'bg-green-500';
-      if (score <= 1.615) return 'bg-yellow-500';
-      if (score <= 1.4) return 'bg-orange-500';
-      return 'bg-red-500';
-    }
+  // Define generic thresholds for rank pills
+  const rankThresholds = {
+    poor: 3, // Ranks 3 and above are "poor"
+    average: 2, // Rank 2 is "average"
+    good: 1, // Rank 1 is "good"
+    excellent: 1, // Anything lower than 1 (not possible for rank) or very high quality gets excellent
   };
 
   // UI helper: render leaderboard entries based on groupBy
@@ -344,7 +337,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
 
     const formatValue = (value: string | null) => value || 'N/A';
-    const formatScore = (score: number) => score.toFixed(3);
 
     return (
       <Tabs defaultValue="crop" value={groupBy} onValueChange={(value) => setGroupBy(value as any)}>
@@ -358,19 +350,22 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <div>
             <h4 className="font-semibold mb-2 text-base">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
             <div className="divide-y divide-gray-200">
-              {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => (
-                <div key={sub.id} className="flex justify-between items-start py-2">
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-base">{formatValue(sub.cropType)}</span>
-                    <span className="text-xs text-gray-500 mt-1">
-                      {formatValue(sub.brandName)} - {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
-                    </span>
+              {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => {
+                const brixPillColor = getBrixColor(sub.brixLevel, cache[sub.cropType || ''] || { poor: 0, average: 0, good: 0, excellent: 0 }, 'bg');
+                return (
+                  <div key={sub.id} className="flex justify-between items-start py-2">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-base">{formatValue(sub.cropType)}</span>
+                      <span className="text-xs text-gray-500 mt-1">
+                        {formatValue(sub.brandName)} - {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
+                      </span>
+                    </div>
+                    <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${brixPillColor}`}>
+                      {sub.brixLevel}
+                    </div>
                   </div>
-                  <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${getPillColor(sub.brixLevel, 'brix')}`}>
-                    {sub.brixLevel}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </TabsContent>
@@ -382,17 +377,20 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <div>Rank</div>
             </div>
             <div className="divide-y divide-gray-200">
-              {cropLeaderboard.map(entry => (
-                <div key={entry.crop_id} className="flex justify-between items-center py-2">
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-base">{formatValue(entry.crop_name)}</span>
-                    <span className="text-xs text-gray-500 mt-1">({entry.submission_count} submissions)</span>
+              {cropLeaderboard.map(entry => {
+                const rankPillColor = getBrixColor(entry.rank, rankThresholds, 'bg');
+                return (
+                  <div key={entry.crop_id} className="flex justify-between items-center py-2">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-base">{formatValue(entry.crop_name)}</span>
+                      <span className="text-xs text-gray-500 mt-1">({entry.submission_count} submissions)</span>
+                    </div>
+                    <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
+                      {entry.rank}
+                    </div>
                   </div>
-                  <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${getPillColor(entry.average_normalized_score, 'rank')}`}>
-                    {entry.rank}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </TabsContent>
@@ -404,17 +402,20 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <div>Rank</div>
             </div>
             <div className="divide-y divide-gray-200">
-              {brandLeaderboard.map(entry => (
-                <div key={entry.brand_id} className="flex justify-between items-center py-2">
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-base">{formatValue(entry.brand_name)}</span>
-                    <span className="text-xs text-gray-500 mt-1">({entry.submission_count} submissions)</span>
+              {brandLeaderboard.map(entry => {
+                const rankPillColor = getBrixColor(entry.rank, rankThresholds, 'bg');
+                return (
+                  <div key={entry.brand_id} className="flex justify-between items-center py-2">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-base">{formatValue(entry.brand_name)}</span>
+                      <span className="text-xs text-gray-500 mt-1">({entry.submission_count} submissions)</span>
+                    </div>
+                    <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
+                      {entry.rank}
+                    </div>
                   </div>
-                  <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${getPillColor(entry.average_normalized_score, 'rank')}`}>
-                    {entry.rank}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </TabsContent>
