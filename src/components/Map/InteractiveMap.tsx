@@ -162,9 +162,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
     }
-
-    // Group filtered data by store (locationName) to show markers per store
+  
+    // Group data by store and calculate average normalized score
     const storeGroups: Record<string, BrixDataPoint[]> = {};
+    const averageScores: Record<string, number> = {};
+  
     filteredData.forEach((point) => {
       if (!point.latitude || !point.longitude) return;
       if (!point.locationName) return;
@@ -172,30 +174,65 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       storeGroups[point.locationName].push(point);
     });
 
+    // Calculate the average normalized score for each store
     Object.entries(storeGroups).forEach(([storeName, points]) => {
-      // Use first point to position marker (assuming all share same location)
+      if (points.length > 0 && cache) {
+        let totalNormalizedScore = 0;
+        points.forEach(point => {
+          const thresholds = cache[point.cropType || ''];
+          if (thresholds) {
+            const normalizedScore = (point.brixLevel - thresholds.poor) / (thresholds.excellent - thresholds.poor);
+            totalNormalizedScore += normalizedScore;
+          }
+        });
+        averageScores[storeName] = totalNormalizedScore / points.length;
+      }
+    });
+  
+    // Create new markers
+    Object.entries(storeGroups).forEach(([storeName, points]) => {
       const firstPoint = points[0];
       if (!firstPoint.latitude || !firstPoint.longitude) return;
+  
+      // Get color based on average score
+      const averageScore = averageScores[storeName] || 0;
+      const markerColor = getBrixColor(averageScore, {
+        poor: 1.4,
+        average: 1.6,
+        good: 1.8,
+        excellent: 2.0,
+      }, 'hex');
 
-      const markerElement = document.createElement('div');
-      markerElement.style.padding = '6px 10px';
-      markerElement.style.backgroundColor = '#3b82f6'; // blue static color
-      markerElement.style.color = 'white';
-      markerElement.style.fontWeight = 'bold';
-      markerElement.style.borderRadius = '6px';
-      markerElement.style.boxShadow = '0 0 5px rgba(0,0,0,0.3)';
-      markerElement.style.cursor = 'pointer';
-      markerElement.innerText = storeName;
+      // Create the marker element
+      const el = document.createElement('div');
+      el.className = 'marker';
+      el.style.backgroundColor = markerColor;
+      el.style.width = '16px';
+      el.style.height = '16px';
+      el.style.borderRadius = '50%';
+      el.style.border = '2px solid white';
+      el.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
+      el.style.cursor = 'pointer';
 
-      const marker = new mapboxgl.Marker({ element: markerElement, anchor: 'bottom' })
+      // Create the marker and add a click listener
+      const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
         .setLngLat([firstPoint.longitude, firstPoint.latitude])
+        .setPopup(
+          new mapboxgl.Popup({ offset: 25 })
+            .setHTML(`<h3 style="font-weight: bold; font-size: 14px;">${storeName}</h3>`)
+        )
         .addTo(mapRef.current!);
 
       markersRef.current.push(marker);
 
-      markerElement.addEventListener('click', (e) => {
-        e.stopPropagation();
+      // This is a new event listener setup
+      el.addEventListener('click', () => {
         setSelectedPoint(firstPoint);
+        mapRef.current?.easeTo({
+          center: [firstPoint.longitude, firstPoint.latitude],
+          zoom: 14,
+          duration: 1000,
+        });
       });
     });
 
@@ -208,7 +245,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         mapRef.current.off('click', mapClickListener);
       }
     };
-  }, [filteredData, isMapLoaded]);
+  }, [filteredData, isMapLoaded, cache]);
 
   // When store is selected, fetch leaderboard data for that store location
   useEffect(() => {
@@ -261,21 +298,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
   }, [selectedPoint, filters]);
 
-  // New helper function to determine text color based on background color luminance
-  const getTextColor = (bgColor: string) => {
-    if (!bgColor) return 'white'; // Fallback
-  
-    // Calculate luminance of the background color
-    const hex = bgColor.startsWith('#') ? bgColor.slice(1) : bgColor;
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  
-    // Return black for light backgrounds, white for dark backgrounds
-    return luminance > 0.5 ? 'black' : 'white';
+  // New helper function to get color based on normalized score (text-based)
+  const getScoreColor = (score: number) => {
+    if (score >= 1.8) return 'text-green-500';
+    if (score >= 1.615) return 'text-yellow-500';
+    if (score >= 1.4) return 'text-orange-500';
+    return 'text-red-500';
   };
-  
 
   // UI helper: render leaderboard entries based on groupBy
   const renderLeaderboard = () => {
@@ -299,18 +328,18 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <TabsContent value="none" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2 text-sm">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
-            <div className="text-xs font-semibold grid grid-cols-[1fr_1fr_minmax(80px,auto)_60px] gap-1 border-b pb-1">
-              <div className="truncate">Crop</div>
-              <div className="truncate">Brand</div>
+            <div className="text-sm font-semibold grid grid-cols-[1fr_1fr_minmax(100px,auto)_60px] gap-2 border-b pb-1">
+              <div>Crop</div>
+              <div>Brand</div>
               <div>Date</div>
               <div className="text-right">Brix</div>
             </div>
             <div className="max-h-60 overflow-y-auto">
               {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => (
-                <div key={sub.id} className="grid grid-cols-[1fr_1fr_minmax(80px,auto)_60px] gap-1 py-1 border-b border-gray-200 text-xs">
-                  <div className="truncate">{formatValue(sub.cropType)}</div>
-                  <div className="truncate">{formatValue(sub.brandName)}</div>
-                  <div className="truncate">{sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}</div>
+                <div key={sub.id} className="grid grid-cols-[1fr_1fr_minmax(100px,auto)_60px] gap-2 py-1 border-b border-gray-200 text-sm">
+                  <div>{formatValue(sub.cropType)}</div>
+                  <div>{formatValue(sub.brandName)}</div>
+                  <div>{sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}</div>
                   <div className="text-right font-semibold">{sub.brixLevel}</div>
                 </div>
               ))}
@@ -322,36 +351,26 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <div>
             <h4 className="font-semibold mb-2 text-sm">Crop Rankings ({cropLeaderboard.length})</h4>
             {cropLeaderboard.length === 0 ? (
-              <div className="text-center text-gray-500 text-xs">No crop data available.</div>
+              <div className="text-center text-gray-500 text-sm">No crop data available.</div>
             ) : (
               <>
-                <div className="text-xs font-semibold grid grid-cols-[1fr_50px_70px_50px] gap-1 border-b pb-1">
+                <div className="text-sm font-semibold grid grid-cols-[1.5fr_50px_70px_50px] gap-2 border-b pb-1">
                   <div>Crop</div>
                   <div className="text-center">Rank</div>
                   <div className="text-center">Score</div>
                   <div className="text-center">Count</div>
                 </div>
                 <div className="max-h-60 overflow-y-auto">
-                  {cropLeaderboard.map(entry => {
-                    const bgColor = useBrixColorFromContext(entry.crop_name, entry.average_normalized_score, 'hex');
-                    const textColor = getTextColor(bgColor);
-
-                    return (
-                      <div key={entry.crop_id} className="grid grid-cols-[1fr_50px_70px_50px] gap-1 py-1 border-b border-gray-200 text-xs items-center">
-                        <div className="truncate">{formatValue(entry.crop_name)}</div>
-                        <div className="font-semibold text-center">#{entry.rank}</div>
-                        <div className="flex justify-center">
-                          <Badge
-                            className="w-full h-auto rounded-full font-bold px-1 py-0.5 flex justify-center items-center"
-                            style={{ backgroundColor: bgColor, color: textColor }}
-                          >
-                            {formatScore(entry.average_normalized_score)}
-                          </Badge>
-                        </div>
-                        <div className="text-center">{entry.submission_count}</div>
+                  {cropLeaderboard.map(entry => (
+                    <div key={entry.crop_id} className="grid grid-cols-[1.5fr_50px_70px_50px] gap-2 py-1 border-b border-gray-200 text-sm items-center">
+                      <div>{formatValue(entry.crop_name)}</div>
+                      <div className="font-semibold text-center">#{entry.rank}</div>
+                      <div className={`text-center font-bold ${getScoreColor(entry.average_normalized_score)}`}>
+                        {formatScore(entry.average_normalized_score)}
                       </div>
-                    );
-                  })}
+                      <div className="text-center">{entry.submission_count}</div>
+                    </div>
+                  ))}
                 </div>
               </>
             )}
@@ -362,36 +381,26 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <div>
             <h4 className="font-semibold mb-2 text-sm">Brand Rankings ({brandLeaderboard.length})</h4>
             {brandLeaderboard.length === 0 ? (
-              <div className="text-center text-gray-500 text-xs">No brand data available.</div>
+              <div className="text-center text-gray-500 text-sm">No brand data available.</div>
             ) : (
               <>
-                <div className="text-xs font-semibold grid grid-cols-[1fr_50px_70px_50px] gap-1 border-b pb-1">
+                <div className="text-sm font-semibold grid grid-cols-[1.5fr_50px_70px_50px] gap-2 border-b pb-1">
                   <div>Brand</div>
                   <div className="text-center">Rank</div>
                   <div className="text-center">Score</div>
                   <div className="text-center">Count</div>
                 </div>
                 <div className="max-h-60 overflow-y-auto">
-                  {brandLeaderboard.map(entry => {
-                    const bgColor = useBrixColorFromContext(entry.crop_name, entry.average_normalized_score, 'hex');
-                    const textColor = getTextColor(bgColor);
-
-                    return (
-                      <div key={entry.brand_id} className="grid grid-cols-[1fr_50px_70px_50px] gap-1 py-1 border-b border-gray-200 text-xs items-center">
-                        <div className="truncate">{formatValue(entry.brand_name)}</div>
-                        <div className="font-semibold text-center">#{entry.rank}</div>
-                        <div className="flex justify-center">
-                          <Badge
-                            className="w-full h-auto rounded-full font-bold px-1 py-0.5 flex justify-center items-center"
-                            style={{ backgroundColor: bgColor, color: textColor }}
-                          >
-                            {formatScore(entry.average_normalized_score)}
-                          </Badge>
-                        </div>
-                        <div className="text-center">{entry.submission_count}</div>
+                  {brandLeaderboard.map(entry => (
+                    <div key={entry.brand_id} className="grid grid-cols-[1.5fr_50px_70px_50px] gap-2 py-1 border-b border-gray-200 text-sm items-center">
+                      <div>{formatValue(entry.brand_name)}</div>
+                      <div className="font-semibold text-center">#{entry.rank}</div>
+                      <div className={`text-center font-bold ${getScoreColor(entry.average_normalized_score)}`}>
+                        {formatScore(entry.average_normalized_score)}
                       </div>
-                    );
-                  })}
+                      <div className="text-center">{entry.submission_count}</div>
+                    </div>
+                  ))}
                 </div>
               </>
             )}
