@@ -156,24 +156,24 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   // Draw markers for stores, showing store name, with static color
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
-  
+
     // Clear existing markers
     if (markersRef.current.length > 0) {
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
     }
-  
+
     // Group data by store and calculate average normalized score
     const storeGroups: Record<string, BrixDataPoint[]> = {};
     const averageScores: Record<string, number> = {};
-  
+
     filteredData.forEach((point) => {
       if (!point.latitude || !point.longitude) return;
       if (!point.locationName) return;
       if (!storeGroups[point.locationName]) storeGroups[point.locationName] = [];
       storeGroups[point.locationName].push(point);
     });
-  
+
     // Calculate the average normalized score for each store
     Object.entries(storeGroups).forEach(([storeName, points]) => {
       if (points.length > 0 && cache) {
@@ -190,12 +190,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         averageScores[storeName] = count > 0 ? totalNormalizedScore / count : 1; // Default to poor score if no valid data
       }
     });
-  
+
     // Create new markers
     Object.entries(storeGroups).forEach(([storeName, points]) => {
       const firstPoint = points[0];
       if (!firstPoint.latitude || !firstPoint.longitude) return;
-  
+
       const averageScore = averageScores[storeName] || 1; // Default to 1 if no score
       const markerColor = getBrixColor(averageScore, {
         poor: 1.0,
@@ -203,17 +203,23 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         good: 1.5,
         excellent: 1.75,
       }, 'hex');
-  
+
       // Create a div element for the marker and label
       const markerContainer = document.createElement('div');
       markerContainer.className = 'flex flex-col items-center cursor-pointer';
+      markerContainer.style.textAlign = 'center';
+      markerContainer.style.minWidth = '50px';
 
-      // Create a div for the icon and style it
-      const iconDiv = document.createElement('div');
-      iconDiv.className = 'relative';
-      iconDiv.style.color = markerColor; // Color the icon based on the score
-      iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="currentColor" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin-filled"><path d="M12 18V21M12 21H9M12 21H15M12 12c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>`;
-      
+      // Create the colored dot
+      const dot = document.createElement('div');
+      dot.style.backgroundColor = markerColor;
+      dot.style.width = '12px';
+      dot.style.height = '12px';
+      dot.style.borderRadius = '50%';
+      dot.style.border = '2px solid white';
+      dot.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
+      dot.style.marginBottom = '4px';
+
       // Create the text label
       const label = document.createElement('div');
       label.innerText = storeName;
@@ -221,41 +227,37 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       label.style.color = 'white';
       label.style.padding = '2px 8px';
       label.style.borderRadius = '4px';
-      label.style.marginTop = '-5px'; // Adjust position to be right under the pin
       label.style.whiteSpace = 'nowrap';
       label.style.fontSize = '12px';
       label.style.fontWeight = 'bold';
+      label.style.textOverflow = 'ellipsis';
+      label.style.overflow = 'hidden';
+      label.style.maxWidth = '100px'; // Prevent very long names from stretching
 
-      markerContainer.appendChild(iconDiv);
+      markerContainer.appendChild(dot);
       markerContainer.appendChild(label);
-  
+
       const marker = new mapboxgl.Marker({ element: markerContainer, anchor: 'bottom' })
         .setLngLat([firstPoint.longitude, firstPoint.latitude])
         .addTo(mapRef.current!);
-  
+
       markersRef.current.push(marker);
-  
-      // This is the fix to open the side pane
+
       markerContainer.addEventListener('click', () => {
         setSelectedPoint(firstPoint);
-        mapRef.current?.easeTo({
-          center: [firstPoint.longitude, firstPoint.latitude],
-          zoom: 14,
-          duration: 1000,
-        });
       });
     });
-  
+
     const mapClickListener = () => setSelectedPoint(null);
     mapRef.current.on('click', mapClickListener);
-  
+
     return () => {
       if (mapRef.current) {
         mapRef.current.off('click', mapClickListener);
       }
     };
   }, [filteredData, isMapLoaded, cache]);
-  
+
   // When store is selected, fetch leaderboard data for that store location
   useEffect(() => {
     if (!selectedPoint || !selectedPoint.placeId) {
@@ -264,40 +266,26 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setBrandLeaderboard([]);
       return;
     }
-  
+
     setIsLoading(true);
-  
-    // Use place_id directly for more specific filtering
+
     const localFilters = {
       location_name: selectedPoint.locationName,
-      place_id: selectedPoint.placeId, // This should be the UUID string
+      place_id: selectedPoint.placeId,
     };
-    
-    console.log('Fetching leaderboard data with filters:', localFilters);
-    console.log('Selected point details:', {
-      locationName: selectedPoint.locationName,
-      placeId: selectedPoint.placeId,
-      streetAddress: selectedPoint.streetAddress
-    });
-  
+
     Promise.all([
       fetchLocationLeaderboard(localFilters),
       fetchCropLeaderboard(localFilters),
       fetchBrandLeaderboard(localFilters),
     ])
       .then(([locationData, cropData, brandData]) => {
-        console.log('Leaderboard results:', {
-          locationData,
-          cropData,
-          brandData
-        });
         setLocationLeaderboard(locationData);
         setCropLeaderboard(cropData);
         setBrandLeaderboard(brandData);
       })
       .catch((error) => {
         console.error('Error fetching leaderboard data:', error);
-        // Set empty arrays on error
         setLocationLeaderboard([]);
         setCropLeaderboard([]);
         setBrandLeaderboard([]);
@@ -317,15 +305,21 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   // UI helper: render leaderboard entries based on groupBy
   const renderLeaderboard = () => {
-    if (!selectedPoint) return null;
-  
+    if (!selectedPoint) {
+      return (
+        <div className="p-6 text-center text-gray-500 text-lg">
+          Click on a store marker to view its rankings and details.
+        </div>
+      );
+    }
+
     if (isLoading || thresholdsLoading) {
       return <div className="p-4 text-center">Loading leaderboards...</div>;
     }
-  
+
     const formatValue = (value: string | null) => value || 'N/A';
     const formatScore = (score: number) => score.toFixed(3);
-  
+
     return (
       <Tabs defaultValue="crop" value={groupBy} onValueChange={(value) => setGroupBy(value as any)}>
         <TabsList className="grid w-full grid-cols-3">
@@ -333,7 +327,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <TabsTrigger value="crop">Crop</TabsTrigger>
           <TabsTrigger value="brand">Brand</TabsTrigger>
         </TabsList>
-  
+
         <TabsContent value="none" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2 text-base">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
@@ -355,7 +349,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
           </div>
         </TabsContent>
-  
+
         <TabsContent value="crop" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2 text-base">Crop Rankings ({cropLeaderboard.length})</h4>
@@ -385,7 +379,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             )}
           </div>
         </TabsContent>
-  
+
         <TabsContent value="brand" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2 text-base">Brand Rankings ({brandLeaderboard.length})</h4>
@@ -418,35 +412,41 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       </Tabs>
     );
   };
-  
+
   // Drawer close handler
   const handleClose = () => setSelectedPoint(null);
 
   return (
-    <div className="relative w-full h-full flex flex-col">
+    <div className="relative w-full h-full flex flex-row">
       <div ref={mapContainer} className="absolute inset-0 rounded-md shadow-md" />
 
-      {/* Side Drawer UI */}
-      {selectedPoint && (
-        <Card 
-          className="absolute inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl z-50 transform transition-transform duration-300 ease-in-out translate-x-0 overflow-y-auto"
-        >
-          <CardHeader className="p-4 flex flex-row items-start justify-between">
-            <div>
-              <CardTitle className="text-lg font-semibold">{selectedPoint.locationName}</CardTitle>
-              <p className="text-sm text-gray-500 mt-1">
-                {selectedPoint.streetAddress}, {selectedPoint.city}, {selectedPoint.state}
-              </p>
-            </div>
+      {/* Side Pane UI */}
+      <Card
+        className="relative w-80 bg-white rounded-l-lg shadow-2xl z-50 transform transition-transform duration-300 ease-in-out h-full overflow-y-auto"
+      >
+        <CardHeader className="p-4 flex flex-row items-start justify-between">
+          <div>
+            {selectedPoint ? (
+              <>
+                <CardTitle className="text-lg font-semibold">{selectedPoint.locationName}</CardTitle>
+                <p className="text-sm text-gray-500 mt-1">
+                  {selectedPoint.streetAddress}, {selectedPoint.city}, {selectedPoint.state}
+                </p>
+              </>
+            ) : (
+              <CardTitle className="text-lg font-semibold">Explore the Map</CardTitle>
+            )}
+          </div>
+          {selectedPoint && (
             <Button onClick={handleClose} variant="ghost" size="icon" className="p-1">
               <X size={20} />
             </Button>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            {renderLeaderboard()}
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardHeader>
+        <CardContent className="p-4 pt-0">
+          {renderLeaderboard()}
+        </CardContent>
+      </Card>
     </div>
   );
 };
