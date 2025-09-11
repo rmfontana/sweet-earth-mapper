@@ -17,7 +17,6 @@ import { getBrixColor } from '../../lib/getBrixColor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useBrixColorFromContext } from '../../lib/getBrixColor';
 
-
 // Leaderboard API imports
 import {
   fetchLocationLeaderboard,
@@ -61,10 +60,20 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   const { cache, loading: thresholdsLoading } = useCropThresholds();
 
+  // Debug logging to see what's in cache
+  useEffect(() => {
+    console.log('🔍 Cache updated:', cache);
+    console.log('🔍 Cache keys:', Object.keys(cache || {}));
+    console.log('🔍 Thresholds loading:', thresholdsLoading);
+  }, [cache, thresholdsLoading]);
+
   // Fetch data on mount
   useEffect(() => {
     fetchFormattedSubmissions()
-      .then((data) => setAllData(data))
+      .then((data) => {
+        console.log('🔍 All data fetched:', data);
+        setAllData(data);
+      })
       .catch((error) => {
         console.error('Error fetching submissions:', error);
         setAllData([]);
@@ -77,7 +86,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setGroupBy('crop');
     }
   }, [selectedPoint]);
-
 
   // Calculate global min/max brix values for normalization
   useEffect(() => {
@@ -161,7 +169,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [highlightedPoint, allData]);
 
-  // Draw markers for stores, showing store name, with static color
+  // FIXED: Draw markers for stores with proper color calculation
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
 
@@ -182,20 +190,40 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       storeGroups[point.locationName].push(point);
     });
 
-    // Calculate the average normalized score for each store
+    // FIXED: Calculate the average normalized score for each store with better error handling
     Object.entries(storeGroups).forEach(([storeName, points]) => {
-      if (points.length > 0 && cache) {
+      if (points.length > 0) {
         let totalNormalizedScore = 0;
-        let count = 0;
+        let validCount = 0;
+        
         points.forEach(point => {
-          const thresholds = cache[point.cropType || ''];
-          if (thresholds && thresholds.excellent > thresholds.poor) {
+          // FIXED: Better handling of crop type and thresholds
+          const cropType = point.cropType || point.cropLabel || 'unknown';
+          const thresholds = cache?.[cropType];
+          
+          console.log(`🔍 Processing point for ${storeName}:`, {
+            cropType,
+            brixLevel: point.brixLevel,
+            thresholds,
+            hasThresholds: !!thresholds
+          });
+          
+          if (thresholds && typeof thresholds.poor === 'number' && typeof thresholds.excellent === 'number' && thresholds.excellent > thresholds.poor) {
             const normalizedScore = ((point.brixLevel - thresholds.poor) / (thresholds.excellent - thresholds.poor)) + 1;
             totalNormalizedScore += normalizedScore;
-            count++;
+            validCount++;
+          } else {
+            // FIXED: If no thresholds, use a simple normalized score based on global min/max
+            if (maxBrix > minBrix) {
+              const simpleNormalized = ((point.brixLevel - minBrix) / (maxBrix - minBrix)) + 1;
+              totalNormalizedScore += simpleNormalized;
+              validCount++;
+            }
           }
         });
-        averageScores[storeName] = count > 0 ? totalNormalizedScore / count : 1; // Default to poor score if no valid data
+        
+        averageScores[storeName] = validCount > 0 ? totalNormalizedScore / validCount : 1.5; // Default to middle score
+        console.log(`🔍 Average score for ${storeName}:`, averageScores[storeName]);
       }
     });
 
@@ -204,13 +232,23 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const firstPoint = points[0];
       if (!firstPoint.latitude || !firstPoint.longitude) return;
 
-      const averageScore = averageScores[storeName] || 1; // Default to 1 if no score
-      const markerColor = getBrixColor(averageScore, {
+      const averageScore = averageScores[storeName] || 1.5;
+      
+      // FIXED: Use hardcoded thresholds for marker colors since we're working with normalized scores
+      const markerThresholds = {
         poor: 1.0,
         average: 1.25,
         good: 1.5,
         excellent: 1.75,
-      }, 'hex');
+      };
+      
+      const markerColor = getBrixColor(averageScore, markerThresholds, 'hex');
+      
+      console.log(`🔍 Marker for ${storeName}:`, {
+        averageScore,
+        markerColor,
+        points: points.length
+      });
 
       // Create a div element for the marker and label
       const markerContainer = document.createElement('div');
@@ -240,7 +278,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       label.style.fontWeight = 'bold';
       label.style.textOverflow = 'ellipsis';
       label.style.overflow = 'hidden';
-      label.style.maxWidth = '100px'; // Prevent very long names from stretching
+      label.style.maxWidth = '100px';
 
       markerContainer.appendChild(dot);
       markerContainer.appendChild(label);
@@ -258,7 +296,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
     // Handle map click to clear selected point
     const mapClickListener = (e: mapboxgl.MapMouseEvent) => {
-      // Check if the click event originated from a marker
       const isMarkerClick = markersRef.current.some(marker => {
         const markerElement = marker.getElement();
         return markerElement.contains(e.originalEvent.target as Node);
@@ -275,9 +312,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         mapRef.current.off('click', mapClickListener);
       }
     };
-  }, [filteredData, isMapLoaded, cache]);
+  }, [filteredData, isMapLoaded, cache, minBrix, maxBrix]); // FIXED: Added minBrix, maxBrix to dependencies
 
-  // When store is selected, fetch leaderboard data for that store location
+  // FIXED: When store is selected, fetch leaderboard data with better error handling
   useEffect(() => {
     if (!selectedPoint || !selectedPoint.placeId) {
       setLocationLeaderboard([]);
@@ -285,6 +322,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setBrandLeaderboard([]);
       return;
     }
+
+    console.log('🔍 Fetching leaderboards for:', {
+      locationName: selectedPoint.locationName,
+      placeId: selectedPoint.placeId
+    });
 
     setIsLoading(true);
 
@@ -299,6 +341,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       fetchBrandLeaderboard(localFilters),
     ])
       .then(([locationData, cropData, brandData]) => {
+        console.log('🔍 Leaderboard results:', {
+          locationData,
+          cropData,
+          brandData
+        });
+        
         setLocationLeaderboard(locationData);
         setCropLeaderboard(cropData);
         setBrandLeaderboard(brandData);
@@ -322,7 +370,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     excellent: 0, // Should be unreachable, but good to have
   };
 
-  // UI helper: render leaderboard entries based on groupBy
+  // FIXED: UI helper with better error handling and fallbacks
   const renderLeaderboard = () => {
     if (!selectedPoint) {
       return (
@@ -351,13 +399,28 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             <h4 className="font-semibold mb-2 text-base">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
             <div className="divide-y divide-gray-200">
               {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => {
-                const brixPillColor = getBrixColor(sub.brixLevel, cache[sub.cropType || ''] || { poor: 0, average: 0, good: 0, excellent: 0 }, 'bg');
+                // FIXED: Better crop type handling and thresholds lookup
+                const cropType = sub.cropType || sub.cropLabel || 'unknown';
+                const thresholds = cache?.[cropType];
+                
+                console.log(`🔍 Rendering submission pill for ${sub.cropLabel}:`, {
+                  cropType,
+                  brixLevel: sub.brixLevel,
+                  thresholds
+                });
+                
+                const brixPillColor = getBrixColor(
+                  sub.brixLevel, 
+                  thresholds || { poor: minBrix, average: (minBrix + maxBrix) / 2, good: maxBrix * 0.8, excellent: maxBrix }, 
+                  'bg'
+                );
+                
                 return (
                   <div key={sub.id} className="flex justify-between items-start py-2">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-base">{sub.cropLabel}</span>
+                      <span className="font-semibold text-base">{sub.cropLabel || 'Unknown Crop'}</span>
                       <span className="text-xs text-gray-500 mt-1">
-                        {sub.brandLabel} - {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
+                        {sub.brandLabel || 'Unknown Brand'} - {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
                       </span>
                     </div>
                     <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${brixPillColor}`}>
@@ -378,27 +441,37 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
             <div className="divide-y divide-gray-200">
               {cropLeaderboard.length > 0 ? (
-                cropLeaderboard.map(entry => {
+                cropLeaderboard.map((entry, index) => {
                   const rankPillColor = getBrixColor(entry.rank, rankThresholds, 'bg');
+                  
+                  console.log('🔍 Rendering crop leaderboard entry:', entry);
+                  
                   return (
-                    <div key={entry.crop_id} className="flex justify-between items-center py-2">
+                    <div key={entry.crop_id || `crop-${index}`} className="flex justify-between items-center py-2">
                       <div className="flex flex-col">
-                        <span className="font-semibold text-base">{entry.crop_label}</span>
+                        <span className="font-semibold text-base">
+                          {entry.crop_label || entry.crop_name || 'Unknown Crop'}
+                        </span>
                         <span className="text-xs text-gray-500 mt-1">
                           ({entry.submission_count} submissions)
                         </span>
                         <span className="text-xs font-medium text-gray-500 mt-1">
-                          Normalized Score: {entry.average_normalized_score.toFixed(2)}
+                          Normalized Score: {(entry.average_normalized_score || 0).toFixed(2)}
                         </span>
                       </div>
                       <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
-                        {entry.rank}
+                        {entry.rank || '?'}
                       </div>
                     </div>
                   );
                 })
               ) : (
-                <div className="text-center text-gray-500 py-4">No crop data available for this location.</div>
+                <div className="text-center text-gray-500 py-4">
+                  No crop data available for this location.
+                  <div className="text-xs mt-2">
+                    Debug: {allData.filter(d => d.placeId === selectedPoint.placeId).length} total submissions for this store
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -412,27 +485,37 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
             <div className="divide-y divide-gray-200">
               {brandLeaderboard.length > 0 ? (
-                brandLeaderboard.map(entry => {
+                brandLeaderboard.map((entry, index) => {
                   const rankPillColor = getBrixColor(entry.rank, rankThresholds, 'bg');
+                  
+                  console.log('🔍 Rendering brand leaderboard entry:', entry);
+                  
                   return (
-                    <div key={entry.brand_id} className="flex justify-between items-center py-2">
+                    <div key={entry.brand_id || `brand-${index}`} className="flex justify-between items-center py-2">
                       <div className="flex flex-col">
-                        <span className="font-semibold text-base">{entry.brand_label}</span>
+                        <span className="font-semibold text-base">
+                          {entry.brand_label || entry.brand_name || 'Unknown Brand'}
+                        </span>
                         <span className="text-xs text-gray-500 mt-1">
                           ({entry.submission_count} submissions)
                         </span>
                         <span className="text-xs font-medium text-gray-500 mt-1">
-                          Normalized Score: {entry.average_normalized_score.toFixed(2)}
+                          Normalized Score: {(entry.average_normalized_score || 0).toFixed(2)}
                         </span>
                       </div>
                       <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
-                        {entry.rank}
+                        {entry.rank || '?'}
                       </div>
                     </div>
                   );
                 })
               ) : (
-                <div className="text-center text-gray-500 py-4">No brand data available for this location.</div>
+                <div className="text-center text-gray-500 py-4">
+                  No brand data available for this location.
+                  <div className="text-xs mt-2">
+                    Debug: {allData.filter(d => d.placeId === selectedPoint.placeId).length} total submissions for this store
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -447,6 +530,20 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   return (
     <div className="relative w-full h-full flex flex-row">
       <div ref={mapContainer} className="absolute inset-0 rounded-md shadow-md" />
+
+      {/* ADDED: Debug info overlay - remove this in production */}
+      {selectedPoint && process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-4 left-4 bg-black bg-opacity-90 text-white p-3 rounded text-xs z-[9999] max-w-sm max-h-64 overflow-auto">
+          <h3 className="font-bold mb-2">🐛 Debug Info</h3>
+          <div className="space-y-1">
+            <div><strong>Store:</strong> {selectedPoint.locationName}</div>
+            <div><strong>Cache loaded:</strong> {cache ? 'Yes' : 'No'} ({Object.keys(cache || {}).length} crops)</div>
+            <div><strong>Submissions for store:</strong> {allData.filter(d => d.placeId === selectedPoint.placeId).length}</div>
+            <div><strong>Crop leaderboard:</strong> {cropLeaderboard.length} entries</div>
+            <div><strong>Brand leaderboard:</strong> {brandLeaderboard.length} entries</div>
+          </div>
+        </div>
+      )}
 
       {/* Side Pane UI */}
       <Card
