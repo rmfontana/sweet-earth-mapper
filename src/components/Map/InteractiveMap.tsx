@@ -25,7 +25,6 @@ import {
 
 interface InteractiveMapProps {
   userLocation?: { lat: number; lng: number } | null;
-  showFilters: boolean;
   nearMeTriggered?: boolean;
   onNearMeHandled?: () => void;
 }
@@ -34,7 +33,6 @@ const SUPABASE_PROJECT_REF = 'wbkzczcqlorsewoofwqe';
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({
   userLocation,
-  showFilters,
   nearMeTriggered,
   onNearMeHandled,
 }) => {
