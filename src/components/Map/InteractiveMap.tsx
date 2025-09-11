@@ -32,14 +32,6 @@ interface InteractiveMapProps {
 
 const SUPABASE_PROJECT_REF = 'wbkzczcqlorsewoofwqe';
 
-const getColor = (normalizedScore: number) => {
-  // Map normalized score (1-2) to color gradient
-  if (normalizedScore >= 1.80) return '#16a34a'; // excellent - green
-  if (normalizedScore >= 1.615) return '#65a30d'; // good - lime
-  if (normalizedScore >= 1.40) return '#ca8a04'; // average - yellow
-  return '#dc2626'; // poor - red
-};
-
 const InteractiveMap: React.FC<InteractiveMapProps> = ({
   userLocation,
   showFilters,
@@ -268,13 +260,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
   }, [selectedPoint, filters]);
 
-  // Update the getColor function to work with 0-1 normalized scores
+  // Update the getColor function to work with 1-2 normalized scores
   const getColor = (normalizedScore: number) => {
-    // Map normalized score (0-1) to color gradient
-    if (normalizedScore >= 0.8) return '#16a34a'; // excellent - green
-    if (normalizedScore >= 0.6) return '#65a30d'; // good - lime
-    if (normalizedScore >= 0.4) return '#ca8a04'; // average - yellow
-    if (normalizedScore >= 0.2) return '#ea580c'; // below average - orange
+    // Map normalized score (1-2) to color gradient
+    if (normalizedScore >= 1.80) return '#16a34a'; // excellent - green
+    if (normalizedScore >= 1.615) return '#65a30d'; // good - lime
+    if (normalizedScore >= 1.40) return '#ca8a04'; // average - yellow
     return '#dc2626'; // poor - red
   };
 
