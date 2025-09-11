@@ -611,7 +611,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 </p>
               </>
             ) : (
-              <CardTitle className="text-lg font-semibold">Brix Explorer</CardTitle>
+              null
             )}
           </div>
           {selectedPoint && (
