@@ -377,25 +377,29 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <div>Rank</div>
             </div>
             <div className="divide-y divide-gray-200">
-              {cropLeaderboard.map(entry => {
-                const rankPillColor = getBrixColor(entry.rank, rankThresholds, 'bg');
-                return (
-                  <div key={entry.crop_id} className="flex justify-between items-center py-2">
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-base">{entry.crop_label}</span>
-                      <span className="text-xs text-gray-500 mt-1">
-                        ({entry.submission_count} submissions)
-                      </span>
-                      <span className="text-xs font-medium text-gray-500 mt-1">
-                        Normalized Score: {entry.average_normalized_score.toFixed(2)}
-                      </span>
+              {cropLeaderboard.length > 0 ? (
+                cropLeaderboard.map(entry => {
+                  const rankPillColor = getBrixColor(entry.rank, rankThresholds, 'bg');
+                  return (
+                    <div key={entry.crop_id} className="flex justify-between items-center py-2">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-base">{entry.crop_label}</span>
+                        <span className="text-xs text-gray-500 mt-1">
+                          ({entry.submission_count} submissions)
+                        </span>
+                        <span className="text-xs font-medium text-gray-500 mt-1">
+                          Normalized Score: {entry.average_normalized_score.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
+                        {entry.rank}
+                      </div>
                     </div>
-                    <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
-                      {entry.rank}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="text-center text-gray-500 py-4">No crop data available for this location.</div>
+              )}
             </div>
           </div>
         </TabsContent>
@@ -407,25 +411,29 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <div>Rank</div>
             </div>
             <div className="divide-y divide-gray-200">
-              {brandLeaderboard.map(entry => {
-                const rankPillColor = getBrixColor(entry.rank, rankThresholds, 'bg');
-                return (
-                  <div key={entry.brand_id} className="flex justify-between items-center py-2">
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-base">{entry.brand_label}</span>
-                      <span className="text-xs text-gray-500 mt-1">
-                        ({entry.submission_count} submissions)
-                      </span>
-                      <span className="text-xs font-medium text-gray-500 mt-1">
-                        Normalized Score: {entry.average_normalized_score.toFixed(2)}
-                      </span>
+              {brandLeaderboard.length > 0 ? (
+                brandLeaderboard.map(entry => {
+                  const rankPillColor = getBrixColor(entry.rank, rankThresholds, 'bg');
+                  return (
+                    <div key={entry.brand_id} className="flex justify-between items-center py-2">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-base">{entry.brand_label}</span>
+                        <span className="text-xs text-gray-500 mt-1">
+                          ({entry.submission_count} submissions)
+                        </span>
+                        <span className="text-xs font-medium text-gray-500 mt-1">
+                          Normalized Score: {entry.average_normalized_score.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
+                        {entry.rank}
+                      </div>
                     </div>
-                    <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
-                      {entry.rank}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="text-center text-gray-500 py-4">No brand data available for this location.</div>
+              )}
             </div>
           </div>
         </TabsContent>

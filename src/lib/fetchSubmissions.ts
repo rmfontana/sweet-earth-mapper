@@ -111,6 +111,7 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     averageBrix: item.crop?.average_brix,
     goodBrix: item.crop?.good_brix,
     excellentBrix: item.crop?.excellent_brix,
+    // Use `label` for the normalized, human-readable name of the crop
     name_normalized: item.crop?.label ?? item.crop?.name ?? 'Unknown',
 
     // Map the IDs from the nested objects
@@ -120,6 +121,7 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     brandId: item.brand?.id ?? '',
     verifiedByUserId: item.verifier?.id ?? '',
 
+    // FIXED: Ensure labels are populated from the Supabase query results
     cropLabel: item.crop?.label ?? null,
     brandLabel: item.brand?.label ?? null,
   };
