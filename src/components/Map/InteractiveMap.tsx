@@ -443,9 +443,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const renderLeaderboard = () => {
     if (!selectedPoint) {
       return (
-        <div className="p-6 text-center text-gray-500 text-lg">
-          Click on a store marker to view its rankings and details.
-        </div>
+        <div className="flex flex-col items-center justify-center h-full text-center p-6">
+           <MapPin className="w-16 h-16 text-gray-300 mb-4" />
+           <p className="text-xl font-semibold text-gray-700">Ready to Explore?</p>
+           <p className="text-sm text-gray-500 mt-2">
+             Click on a marker to view detailed bionutrient rankings and data for that location.
+           </p>
+         </div>
       );
     }
   
