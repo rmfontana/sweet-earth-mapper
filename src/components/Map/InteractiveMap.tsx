@@ -607,7 +607,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 </p>
               </>
             ) : (
-              <CardTitle className="text-lg font-semibold">Explore the Map</CardTitle>
+              <CardTitle className="text-lg font-semibold">Brix Explorer</CardTitle>
             )}
           </div>
           {selectedPoint && (

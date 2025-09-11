@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { useAuth } from '../../contexts/AuthContext';
-import { Map, Database, Plus, User, LogOut } from 'lucide-react';
+import { Eye, Database, Plus, User, LogOut } from 'lucide-react';
 
 const Header = () => {
   const { user, logout } = useAuth();
@@ -59,8 +59,8 @@ const Header = () => {
                   variant={isActive('/map') ? 'default' : 'ghost'}
                   className="flex items-center space-x-2"
                 >
-                  <Map className="w-4 h-4" />
-                  <span>Map</span>
+                  <Eye className="w-4 h-4" />
+                   <span>Explorer</span>
                 </Button>
               </Link>
 
