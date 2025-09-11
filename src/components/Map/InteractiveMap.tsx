@@ -162,11 +162,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
     }
-  
+
     // Group data by store and calculate average normalized score
     const storeGroups: Record<string, BrixDataPoint[]> = {};
     const averageScores: Record<string, number> = {};
-  
+
     filteredData.forEach((point) => {
       if (!point.latitude || !point.longitude) return;
       if (!point.locationName) return;
@@ -178,55 +178,73 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     Object.entries(storeGroups).forEach(([storeName, points]) => {
       if (points.length > 0 && cache) {
         let totalNormalizedScore = 0;
+        let count = 0;
         points.forEach(point => {
           const thresholds = cache[point.cropType || ''];
-          if (thresholds) {
-            const normalizedScore = (point.brixLevel - thresholds.poor) / (thresholds.excellent - thresholds.poor);
+          if (thresholds && thresholds.excellent > thresholds.poor) {
+            const normalizedScore = ((point.brixLevel - thresholds.poor) / (thresholds.excellent - thresholds.poor)) + 1;
             totalNormalizedScore += normalizedScore;
+            count++;
           }
         });
-        averageScores[storeName] = totalNormalizedScore / points.length;
+        averageScores[storeName] = count > 0 ? totalNormalizedScore / count : 1; // Default to poor score if no valid data
       }
     });
-  
+
     // Create new markers
     Object.entries(storeGroups).forEach(([storeName, points]) => {
       const firstPoint = points[0];
       if (!firstPoint.latitude || !firstPoint.longitude) return;
-  
-      // Get color based on average score
-      const averageScore = averageScores[storeName] || 0;
+
+      const averageScore = averageScores[storeName] || 1; // Default to 1 if no score
       const markerColor = getBrixColor(averageScore, {
-        poor: 1.4,
-        average: 1.6,
-        good: 1.8,
-        excellent: 2.0,
+        poor: 1.0,
+        average: 1.25,
+        good: 1.5,
+        excellent: 1.75,
       }, 'hex');
 
-      // Create the marker element
-      const el = document.createElement('div');
-      el.className = 'marker';
-      el.style.backgroundColor = markerColor;
-      el.style.width = '16px';
-      el.style.height = '16px';
-      el.style.borderRadius = '50%';
-      el.style.border = '2px solid white';
-      el.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
-      el.style.cursor = 'pointer';
+      // Create a div element for the marker and label
+      const markerContainer = document.createElement('div');
+      markerContainer.className = 'mapboxgl-marker-container';
+      markerContainer.style.display = 'flex';
+      markerContainer.style.alignItems = 'center';
+      markerContainer.style.cursor = 'pointer';
 
-      // Create the marker and add a click listener
-      const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+      // Create the colored dot
+      const dot = document.createElement('div');
+      dot.style.backgroundColor = markerColor;
+      dot.style.width = '12px';
+      dot.style.height = '12px';
+      dot.style.borderRadius = '50%';
+      dot.style.border = '2px solid white';
+      dot.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
+      dot.style.cursor = 'pointer';
+
+      // Create the text label
+      const label = document.createElement('div');
+      label.innerText = storeName;
+      label.style.backgroundColor = 'white';
+      label.style.padding = '2px 6px';
+      label.style.borderRadius = '4px';
+      label.style.marginLeft = '5px';
+      label.style.whiteSpace = 'nowrap';
+      label.style.fontSize = '12px';
+      label.style.fontWeight = 'bold';
+      label.style.color = '#333';
+      label.style.boxShadow = '0 0 5px rgba(0,0,0,0.2)';
+
+      markerContainer.appendChild(dot);
+      markerContainer.appendChild(label);
+
+      // Create the marker and add it to the map
+      const marker = new mapboxgl.Marker({ element: markerContainer, anchor: 'left' })
         .setLngLat([firstPoint.longitude, firstPoint.latitude])
-        .setPopup(
-          new mapboxgl.Popup({ offset: 25 })
-            .setHTML(`<h3 style="font-weight: bold; font-size: 14px;">${storeName}</h3>`)
-        )
         .addTo(mapRef.current!);
 
       markersRef.current.push(marker);
 
-      // This is a new event listener setup
-      el.addEventListener('click', () => {
+      markerContainer.addEventListener('click', () => {
         setSelectedPoint(firstPoint);
         mapRef.current?.easeTo({
           center: [firstPoint.longitude, firstPoint.latitude],
@@ -236,7 +254,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
     });
 
-    // Clicking map clears selection
     const mapClickListener = () => setSelectedPoint(null);
     mapRef.current.on('click', mapClickListener);
 
@@ -255,22 +272,22 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setBrandLeaderboard([]);
       return;
     }
-  
+
     setIsLoading(true);
-  
+
     // Use place_id directly for more specific filtering
     const localFilters = {
       location_name: selectedPoint.locationName,
       place_id: selectedPoint.placeId, // This should be the UUID string
     };
-    
+
     console.log('Fetching leaderboard data with filters:', localFilters);
     console.log('Selected point details:', {
       locationName: selectedPoint.locationName,
       placeId: selectedPoint.placeId,
       streetAddress: selectedPoint.streetAddress
     });
-  
+
     Promise.all([
       fetchLocationLeaderboard(localFilters),
       fetchCropLeaderboard(localFilters),
@@ -309,14 +326,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   // UI helper: render leaderboard entries based on groupBy
   const renderLeaderboard = () => {
     if (!selectedPoint) return null;
-  
+
     if (isLoading || thresholdsLoading) {
       return <div className="p-4 text-center">Loading leaderboards...</div>;
     }
-  
+
     const formatValue = (value: string | null) => value || 'N/A';
     const formatScore = (score: number) => score.toFixed(3);
-  
+
     return (
       <Tabs defaultValue="crop" value={groupBy} onValueChange={(value) => setGroupBy(value as any)}>
         <TabsList className="grid w-full grid-cols-3">
@@ -324,11 +341,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <TabsTrigger value="crop">Crop</TabsTrigger>
           <TabsTrigger value="brand">Brand</TabsTrigger>
         </TabsList>
-  
+
         <TabsContent value="none" className="mt-4">
           <div>
-            <h4 className="font-semibold mb-2 text-sm">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
-            <div className="text-sm font-semibold grid grid-cols-[1fr_1fr_minmax(100px,auto)_60px] gap-2 border-b pb-1">
+            <h4 className="font-semibold mb-2 text-base">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
+            <div className="text-sm font-semibold grid grid-cols-[1fr_minmax(120px,2fr)_minmax(100px,auto)_60px] gap-2 border-b pb-1">
               <div>Crop</div>
               <div>Brand</div>
               <div>Date</div>
@@ -336,7 +353,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
             <div className="max-h-60 overflow-y-auto">
               {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => (
-                <div key={sub.id} className="grid grid-cols-[1fr_1fr_minmax(100px,auto)_60px] gap-2 py-1 border-b border-gray-200 text-sm">
+                <div key={sub.id} className="grid grid-cols-[1fr_minmax(120px,2fr)_minmax(100px,auto)_60px] gap-2 py-1 border-b border-gray-200 text-base">
                   <div>{formatValue(sub.cropType)}</div>
                   <div>{formatValue(sub.brandName)}</div>
                   <div>{sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}</div>
@@ -346,12 +363,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
           </div>
         </TabsContent>
-  
+
         <TabsContent value="crop" className="mt-4">
           <div>
-            <h4 className="font-semibold mb-2 text-sm">Crop Rankings ({cropLeaderboard.length})</h4>
+            <h4 className="font-semibold mb-2 text-base">Crop Rankings ({cropLeaderboard.length})</h4>
             {cropLeaderboard.length === 0 ? (
-              <div className="text-center text-gray-500 text-sm">No crop data available.</div>
+              <div className="text-center text-gray-500 text-base">No crop data available.</div>
             ) : (
               <>
                 <div className="text-sm font-semibold grid grid-cols-[1.5fr_50px_70px_50px] gap-2 border-b pb-1">
@@ -362,7 +379,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 </div>
                 <div className="max-h-60 overflow-y-auto">
                   {cropLeaderboard.map(entry => (
-                    <div key={entry.crop_id} className="grid grid-cols-[1.5fr_50px_70px_50px] gap-2 py-1 border-b border-gray-200 text-sm items-center">
+                    <div key={entry.crop_id} className="grid grid-cols-[1.5fr_50px_70px_50px] gap-2 py-1 border-b border-gray-200 text-base items-center">
                       <div>{formatValue(entry.crop_name)}</div>
                       <div className="font-semibold text-center">#{entry.rank}</div>
                       <div className={`text-center font-bold ${getScoreColor(entry.average_normalized_score)}`}>
@@ -376,12 +393,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             )}
           </div>
         </TabsContent>
-  
+
         <TabsContent value="brand" className="mt-4">
           <div>
-            <h4 className="font-semibold mb-2 text-sm">Brand Rankings ({brandLeaderboard.length})</h4>
+            <h4 className="font-semibold mb-2 text-base">Brand Rankings ({brandLeaderboard.length})</h4>
             {brandLeaderboard.length === 0 ? (
-              <div className="text-center text-gray-500 text-sm">No brand data available.</div>
+              <div className="text-center text-gray-500 text-base">No brand data available.</div>
             ) : (
               <>
                 <div className="text-sm font-semibold grid grid-cols-[1.5fr_50px_70px_50px] gap-2 border-b pb-1">
@@ -392,7 +409,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 </div>
                 <div className="max-h-60 overflow-y-auto">
                   {brandLeaderboard.map(entry => (
-                    <div key={entry.brand_id} className="grid grid-cols-[1.5fr_50px_70px_50px] gap-2 py-1 border-b border-gray-200 text-sm items-center">
+                    <div key={entry.brand_id} className="grid grid-cols-[1.5fr_50px_70px_50px] gap-2 py-1 border-b border-gray-200 text-base items-center">
                       <div>{formatValue(entry.brand_name)}</div>
                       <div className="font-semibold text-center">#{entry.rank}</div>
                       <div className={`text-center font-bold ${getScoreColor(entry.average_normalized_score)}`}>
@@ -409,7 +426,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       </Tabs>
     );
   };
-  
+
 
   // Drawer close handler
   const handleClose = () => setSelectedPoint(null);
@@ -420,7 +437,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       {/* Side Drawer UI */}
       {selectedPoint && (
-        <Card 
+        <Card
           className="absolute inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl z-50 transform transition-transform duration-300 ease-in-out translate-x-0 overflow-y-auto"
         >
           <CardHeader className="p-4 flex flex-row items-start justify-between">
