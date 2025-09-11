@@ -204,6 +204,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     return () => {
       if (mapRef.current) {
         mapRef.current.off('click', mapClickListener);
+      'use client';
       }
     };
   }, [filteredData, isMapLoaded]);
@@ -383,26 +384,24 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       {/* Side Drawer UI */}
       {selectedPoint && (
-        <div 
-          className="absolute inset-y-0 right-0 w-80 bg-transparent rounded-l-lg shadow-2xl p-6 z-50 max-h-full overflow-y-auto transform transition-transform duration-300 ease-in-out translate-x-0"
+        <Card 
+          className="absolute inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl z-50 transform transition-transform duration-300 ease-in-out translate-x-0 overflow-y-auto"
         >
-          <Card className="w-full">
-            <CardHeader className="p-4 flex flex-row items-start justify-between">
-              <div>
-                <CardTitle className="text-lg font-semibold">{selectedPoint.locationName}</CardTitle>
-                <p className="text-sm text-gray-500 mt-1">
-                  {selectedPoint.streetAddress}, {selectedPoint.city}, {selectedPoint.state}
-                </p>
-              </div>
-              <Button onClick={handleClose} variant="ghost" size="icon" className="p-1">
-                <X size={20} />
-              </Button>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              {renderLeaderboard()}
-            </CardContent>
-          </Card>
-        </div>
+          <CardHeader className="p-4 flex flex-row items-start justify-between">
+            <div>
+              <CardTitle className="text-lg font-semibold">{selectedPoint.locationName}</CardTitle>
+              <p className="text-sm text-gray-500 mt-1">
+                {selectedPoint.streetAddress}, {selectedPoint.city}, {selectedPoint.state}
+              </p>
+            </div>
+            <Button onClick={handleClose} variant="ghost" size="icon" className="p-1">
+              <X size={20} />
+            </Button>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            {renderLeaderboard()}
+          </CardContent>
+        </Card>
       )}
     </div>
   );
