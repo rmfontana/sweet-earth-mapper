@@ -314,6 +314,21 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     return 'text-red-500';
   };
 
+  const getPillColor = (score: number, type: 'brix' | 'rank') => {
+    const isBrix = type === 'brix';
+    if (isBrix) {
+      if (score >= 6) return 'bg-green-500';
+      if (score >= 4) return 'bg-yellow-500';
+      if (score >= 2) return 'bg-orange-500';
+      return 'bg-red-500';
+    } else {
+      if (score <= 1.8) return 'bg-green-500';
+      if (score <= 1.615) return 'bg-yellow-500';
+      if (score <= 1.4) return 'bg-orange-500';
+      return 'bg-red-500';
+    }
+  };
+
   // UI helper: render leaderboard entries based on groupBy
   const renderLeaderboard = () => {
     if (!selectedPoint) {
@@ -331,8 +346,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const formatValue = (value: string | null) => value || 'N/A';
     const formatScore = (score: number) => score.toFixed(3);
 
-    const gridLayout = "grid grid-cols-[minmax(120px,_1.5fr)_50px_70px_50px]";
-
     return (
       <Tabs defaultValue="crop" value={groupBy} onValueChange={(value) => setGroupBy(value as any)}>
         <TabsList className="grid w-full grid-cols-3">
@@ -344,19 +357,18 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <TabsContent value="none" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2 text-base">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
-            <div className={`text-sm font-semibold ${gridLayout} gap-2 border-b pb-1`}>
-              <div className="overflow-hidden text-ellipsis whitespace-nowrap">Crop</div>
-              <div className="overflow-hidden text-ellipsis whitespace-nowrap">Brand</div>
-              <div className="overflow-hidden text-ellipsis whitespace-nowrap">Date</div>
-              <div className="text-right">Brix</div>
-            </div>
             <div className="divide-y divide-gray-200">
               {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => (
-                <div key={sub.id} className={`${gridLayout} gap-2 py-1 border-gray-200 text-base`}>
-                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(sub.cropType)}</div>
-                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(sub.brandName)}</div>
-                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">{sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}</div>
-                  <div className="text-right font-semibold">{sub.brixLevel}</div>
+                <div key={sub.id} className="flex justify-between items-start py-2">
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-base">{formatValue(sub.cropType)}</span>
+                    <span className="text-xs text-gray-500 mt-1">
+                      {formatValue(sub.brandName)} - {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
+                    </span>
+                  </div>
+                  <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${getPillColor(sub.brixLevel, 'brix')}`}>
+                    {sub.brixLevel}
+                  </div>
                 </div>
               ))}
             </div>
@@ -365,61 +377,45 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
         <TabsContent value="crop" className="mt-4">
           <div>
-            <h4 className="font-semibold mb-2 text-base">Crop Rankings ({cropLeaderboard.length})</h4>
-            {cropLeaderboard.length === 0 ? (
-              <div className="text-center text-gray-500 text-base">No crop data available.</div>
-            ) : (
-              <>
-                <div className={`text-sm font-semibold ${gridLayout} gap-2 border-b pb-1`}>
-                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">Crop</div>
-                  <div className="text-center">Rank</div>
-                  <div className="text-center">Score</div>
-                  <div className="text-center">Count</div>
+            <div className="flex justify-between items-center text-sm font-semibold border-b pb-1">
+              <div>Crop ({cropLeaderboard.length})</div>
+              <div>Rank</div>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {cropLeaderboard.map(entry => (
+                <div key={entry.crop_id} className="flex justify-between items-center py-2">
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-base">{formatValue(entry.crop_name)}</span>
+                    <span className="text-xs text-gray-500 mt-1">({entry.submission_count} submissions)</span>
+                  </div>
+                  <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${getPillColor(entry.average_normalized_score, 'rank')}`}>
+                    {entry.rank}
+                  </div>
                 </div>
-                <div className="divide-y divide-gray-200">
-                  {cropLeaderboard.map(entry => (
-                    <div key={entry.crop_id} className={`${gridLayout} gap-2 py-1 border-gray-200 text-base items-center`}>
-                      <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(entry.crop_name)}</div>
-                      <div className="font-semibold text-center">#{entry.rank}</div>
-                      <div className={`text-center font-bold ${getScoreColor(entry.average_normalized_score)}`}>
-                        {formatScore(entry.average_normalized_score)}
-                      </div>
-                      <div className="text-center">{entry.submission_count}</div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+              ))}
+            </div>
           </div>
         </TabsContent>
 
         <TabsContent value="brand" className="mt-4">
           <div>
-            <h4 className="font-semibold mb-2 text-base">Brand Rankings ({brandLeaderboard.length})</h4>
-            {brandLeaderboard.length === 0 ? (
-              <div className="text-center text-gray-500 text-base">No brand data available.</div>
-            ) : (
-              <>
-                <div className={`text-sm font-semibold ${gridLayout} gap-2 border-b pb-1`}>
-                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">Brand</div>
-                  <div className="text-center">Rank</div>
-                  <div className="text-center">Score</div>
-                  <div className="text-center">Count</div>
+            <div className="flex justify-between items-center text-sm font-semibold border-b pb-1">
+              <div>Brand ({brandLeaderboard.length})</div>
+              <div>Rank</div>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {brandLeaderboard.map(entry => (
+                <div key={entry.brand_id} className="flex justify-between items-center py-2">
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-base">{formatValue(entry.brand_name)}</span>
+                    <span className="text-xs text-gray-500 mt-1">({entry.submission_count} submissions)</span>
+                  </div>
+                  <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${getPillColor(entry.average_normalized_score, 'rank')}`}>
+                    {entry.rank}
+                  </div>
                 </div>
-                <div className="divide-y divide-gray-200">
-                  {brandLeaderboard.map(entry => (
-                    <div key={entry.brand_id} className={`${gridLayout} gap-2 py-1 border-gray-200 text-base items-center`}>
-                      <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(entry.brand_name)}</div>
-                      <div className="font-semibold text-center">#{entry.rank}</div>
-                      <div className={`text-center font-bold ${getScoreColor(entry.average_normalized_score)}`}>
-                        {formatScore(entry.average_normalized_score)}
-                      </div>
-                      <div className="text-center">{entry.submission_count}</div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+              ))}
+            </div>
           </div>
         </TabsContent>
       </Tabs>
