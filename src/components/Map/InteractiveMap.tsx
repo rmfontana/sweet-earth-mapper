@@ -331,6 +331,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const formatValue = (value: string | null) => value || 'N/A';
     const formatScore = (score: number) => score.toFixed(3);
 
+    const gridLayout = "grid grid-cols-[minmax(120px,_1.5fr)_50px_70px_50px]";
+
     return (
       <Tabs defaultValue="crop" value={groupBy} onValueChange={(value) => setGroupBy(value as any)}>
         <TabsList className="grid w-full grid-cols-3">
@@ -342,7 +344,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <TabsContent value="none" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2 text-base">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
-            <div className="text-sm font-semibold grid grid-cols-[1fr_minmax(120px,2fr)_minmax(100px,auto)_60px] gap-2 border-b pb-1">
+            <div className={`text-sm font-semibold ${gridLayout} gap-2 border-b pb-1`}>
               <div>Crop</div>
               <div>Brand</div>
               <div>Date</div>
@@ -350,10 +352,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
             <div className="max-h-60 overflow-y-auto">
               {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => (
-                <div key={sub.id} className="grid grid-cols-[1fr_minmax(120px,2fr)_minmax(100px,auto)_60px] gap-2 py-1 border-b border-gray-200 text-base">
-                  <div>{formatValue(sub.cropType)}</div>
-                  <div>{formatValue(sub.brandName)}</div>
-                  <div>{sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}</div>
+                <div key={sub.id} className={`${gridLayout} gap-2 py-1 border-b border-gray-200 text-base`}>
+                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(sub.cropType)}</div>
+                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(sub.brandName)}</div>
+                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">{sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}</div>
                   <div className="text-right font-semibold">{sub.brixLevel}</div>
                 </div>
               ))}
@@ -368,16 +370,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <div className="text-center text-gray-500 text-base">No crop data available.</div>
             ) : (
               <>
-                <div className="text-sm font-semibold grid grid-cols-[1.5fr_50px_70px_50px] gap-2 border-b pb-1">
-                  <div>Crop</div>
+                <div className={`text-sm font-semibold ${gridLayout} gap-2 border-b pb-1`}>
+                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">Crop</div>
                   <div className="text-center">Rank</div>
                   <div className="text-center">Score</div>
                   <div className="text-center">Count</div>
                 </div>
                 <div className="max-h-60 overflow-y-auto">
                   {cropLeaderboard.map(entry => (
-                    <div key={entry.crop_id} className="grid grid-cols-[1.5fr_50px_70px_50px] gap-2 py-1 border-b border-gray-200 text-base items-center">
-                      <div>{formatValue(entry.crop_name)}</div>
+                    <div key={entry.crop_id} className={`${gridLayout} gap-2 py-1 border-b border-gray-200 text-base items-center`}>
+                      <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(entry.crop_name)}</div>
                       <div className="font-semibold text-center">#{entry.rank}</div>
                       <div className={`text-center font-bold ${getScoreColor(entry.average_normalized_score)}`}>
                         {formatScore(entry.average_normalized_score)}
@@ -398,16 +400,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <div className="text-center text-gray-500 text-base">No brand data available.</div>
             ) : (
               <>
-                <div className="text-sm font-semibold grid grid-cols-[1.5fr_50px_70px_50px] gap-2 border-b pb-1">
-                  <div>Brand</div>
+                <div className={`text-sm font-semibold ${gridLayout} gap-2 border-b pb-1`}>
+                  <div className="overflow-hidden text-ellipsis whitespace-nowrap">Brand</div>
                   <div className="text-center">Rank</div>
                   <div className="text-center">Score</div>
                   <div className="text-center">Count</div>
                 </div>
                 <div className="max-h-60 overflow-y-auto">
                   {brandLeaderboard.map(entry => (
-                    <div key={entry.brand_id} className="grid grid-cols-[1.5fr_50px_70px_50px] gap-2 py-1 border-b border-gray-200 text-base items-center">
-                      <div>{formatValue(entry.brand_name)}</div>
+                    <div key={entry.brand_id} className={`${gridLayout} gap-2 py-1 border-b border-gray-200 text-base items-center`}>
+                      <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(entry.brand_name)}</div>
                       <div className="font-semibold text-center">#{entry.rank}</div>
                       <div className={`text-center font-bold ${getScoreColor(entry.average_normalized_score)}`}>
                         {formatScore(entry.average_normalized_score)}
@@ -459,7 +461,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         </CardContent>
       </Card>
     </div>
-  );
+);
 };
 
 export default InteractiveMap;
