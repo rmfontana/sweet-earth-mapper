@@ -29,12 +29,14 @@ export interface BrixDataPoint {
   name_normalized?: string;
   purchaseDate: string | null;
 
-  // NEW/UPDATED FIELDS
   locationId: string;
   cropId: string;
   placeId: string;
   brandId: string;
   verifiedByUserId: string;
+
+  cropLabel: string | null;
+  brandLabel: string | null;
 }
 
 // Data format returned from Supabase, aligned with BrixDataPoint

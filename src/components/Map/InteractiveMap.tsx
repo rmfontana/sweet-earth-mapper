@@ -319,7 +319,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     poor: 3, // Ranks 3 and above are "poor"
     average: 2, // Rank 2 is "average"
     good: 1, // Rank 1 is "good"
-    excellent: 1, // Anything lower than 1 (not possible for rank) or very high quality gets excellent
+    excellent: 0, // Should be unreachable, but good to have
   };
 
   // UI helper: render leaderboard entries based on groupBy
@@ -355,9 +355,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 return (
                   <div key={sub.id} className="flex justify-between items-start py-2">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-base">{formatValue(sub.cropType)}</span>
+                      <span className="font-semibold text-base">{formatValue(sub.cropLabel)}</span>
                       <span className="text-xs text-gray-500 mt-1">
-                        {formatValue(sub.brandName)} - {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
+                        {formatValue(sub.brandLabel)} - {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
                       </span>
                     </div>
                     <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${brixPillColor}`}>
@@ -382,11 +382,18 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 return (
                   <div key={entry.crop_id} className="flex justify-between items-center py-2">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-base">{formatValue(entry.crop_name)}</span>
-                      <span className="text-xs text-gray-500 mt-1">({entry.submission_count} submissions)</span>
+                      <span className="font-semibold text-base">{formatValue(entry.crop_label)}</span>
+                      <span className="text-xs text-gray-500 mt-1">
+                        ({entry.submission_count} submissions)
+                      </span>
                     </div>
-                    <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
-                      {entry.rank}
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-medium text-gray-500">
+                        {entry.average_normalized_score.toFixed(2)}
+                      </span>
+                      <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
+                        {entry.rank}
+                      </div>
                     </div>
                   </div>
                 );
@@ -407,11 +414,18 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 return (
                   <div key={entry.brand_id} className="flex justify-between items-center py-2">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-base">{formatValue(entry.brand_name)}</span>
-                      <span className="text-xs text-gray-500 mt-1">({entry.submission_count} submissions)</span>
+                      <span className="font-semibold text-base">{formatValue(entry.brand_label)}</span>
+                      <span className="text-xs text-gray-500 mt-1">
+                        ({entry.submission_count} submissions)
+                      </span>
                     </div>
-                    <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
-                      {entry.rank}
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-medium text-gray-500">
+                        {entry.average_normalized_score.toFixed(2)}
+                      </span>
+                      <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
+                        {entry.rank}
+                      </div>
                     </div>
                   </div>
                 );

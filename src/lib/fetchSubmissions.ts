@@ -95,7 +95,7 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     // Use `label` for the display names of locations, stores, and brands
     placeName: item.place?.label ?? '',
     locationName: item.location?.label ?? item.location?.name ?? '',
-    streetAddress: item.place?.street_address ?? '', 
+    streetAddress: item.place?.street_address ?? '',
     city: item.place?.city ?? '',
     state: item.place?.state ?? '',
     country: item.place?.country ?? '',
@@ -111,7 +111,6 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     averageBrix: item.crop?.average_brix,
     goodBrix: item.crop?.good_brix,
     excellentBrix: item.crop?.excellent_brix,
-    // Use `label` for the normalized, human-readable name of the crop
     name_normalized: item.crop?.label ?? item.crop?.name ?? 'Unknown',
 
     // Map the IDs from the nested objects
@@ -120,6 +119,9 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     cropId: item.crop?.id ?? '',
     brandId: item.brand?.id ?? '',
     verifiedByUserId: item.verifier?.id ?? '',
+
+    cropLabel: item.crop?.label ?? null,
+    brandLabel: item.brand?.label ?? null,
   };
 }
 
