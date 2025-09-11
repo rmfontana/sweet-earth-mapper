@@ -5,7 +5,9 @@ const supabase = createClient(getSupabaseUrl(), getPublishableKey());
 
 export type Filter = {
   location_name?: string;
-  place_id?: string; // Keep as string for UUID
+  place_id?: string; 
+  state?: string; 
+  country?: string; 
 };
 
 export interface LeaderboardEntry {
@@ -20,13 +22,15 @@ async function fetchLeaderboard<R>(
   rpcName: string,
   filters: Filter = {}
 ): Promise<R[]> {
-  const { location_name, place_id } = filters;
+  const { location_name, place_id, state, country } = filters;
   
-  console.log(`Fetching ${rpcName} with filters:`, { location_name, place_id });
+  console.log(`Fetching ${rpcName} with filters:`, { location_name, place_id, state, country });
   
   const params = {
     location_name_filter: location_name ?? null,
     place_id_filter: place_id ?? null,
+    state_filter: state ?? null,
+    country_filter: country ?? null,
   };
 
   const { data, error } = await supabase.rpc(rpcName, params);
