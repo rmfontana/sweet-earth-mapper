@@ -5,7 +5,7 @@ import { BrixDataPoint } from '../../types';
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
 import { useFilters } from '../../contexts/FilterContext';
 import { applyFilters } from '../../lib/filterUtils';
-import { Card, CardContent } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { MapPin, Calendar, User, CheckCircle, Eye, X } from 'lucide-react';
@@ -14,6 +14,7 @@ import { getMapboxToken } from '@/lib/getMapboxToken';
 import type { GeoJSON } from 'geojson';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor } from '../../lib/getBrixColor';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'; // New imports
 
 // Leaderboard API imports
 import {
@@ -278,28 +279,27 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const formatValue = (value: string | null) => value || 'N/A';
     const formatScore = (score: number) => score.toFixed(3);
   
-    switch (groupBy) {
-      case 'none': {
-        const storeSubs = allData.filter(d => d.placeId === selectedPoint.placeId);
-        if (storeSubs.length === 0) {
-          return <div className="p-4 text-center text-gray-500">No submissions found for this location</div>;
-        }
-        
-        return (
+    // Updated to return TabsContent components based on groupBy state
+    return (
+      <Tabs defaultValue="crop" value={groupBy} onValueChange={(value) => setGroupBy(value as any)}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="none">All</TabsTrigger>
+          <TabsTrigger value="crop">Crop</TabsTrigger>
+          <TabsTrigger value="brand">Brand</TabsTrigger>
+        </TabsList>
+  
+        <TabsContent value="none" className="mt-4">
           <div>
-            <h4 className="font-semibold mb-2">All Submissions ({storeSubs.length})</h4>
+            <h4 className="font-semibold mb-2">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
             <div className="text-xs font-semibold grid grid-cols-4 gap-2 border-b pb-1">
-              <div>Crop Type</div>
+              <div>Crop</div>
               <div>Brand</div>
               <div>Date</div>
-              <div>Brix Score</div>
+              <div>Brix</div>
             </div>
             <div className="max-h-60 overflow-y-auto">
-              {storeSubs.map(sub => (
-                <div
-                  key={sub.id}
-                  className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200 text-sm"
-                >
+              {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => (
+                <div key={sub.id} className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200 text-sm">
                   <div>{formatValue(sub.cropType)}</div>
                   <div>{formatValue(sub.brandName)}</div>
                   <div>{sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}</div>
@@ -308,84 +308,69 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               ))}
             </div>
           </div>
-        );
-      }
+        </TabsContent>
   
-      case 'crop': {
-        if (cropLeaderboard.length === 0) {
-          return <div className="p-4 text-center text-gray-500">No crop data available for this location</div>;
-        }
-        
-        return (
+        <TabsContent value="crop" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2">Crop Rankings ({cropLeaderboard.length})</h4>
-            <div className="text-xs font-semibold grid grid-cols-4 gap-2 border-b pb-1">
-              <div>Crop</div>
-              <div>Rank</div>
-              <div>Score</div>
-              <div>Count</div>
-            </div>
-            <div className="max-h-60 overflow-y-auto">
-              {cropLeaderboard.map(entry => (
-                <div
-                  key={entry.crop_id}
-                  className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200 text-sm"
-                >
-                  <div>{formatValue(entry.crop_name)}</div>
-                  <div className="font-semibold">#{entry.rank}</div>
-                  <div
-                    style={{ color: getColor(entry.average_normalized_score) }}
-                    className="font-semibold"
-                  >
-                    {formatScore(entry.average_normalized_score)}
-                  </div>
-                  <div>{entry.submission_count}</div>
+            {cropLeaderboard.length === 0 ? (
+              <div className="text-center text-gray-500">No crop data available.</div>
+            ) : (
+              <>
+                <div className="text-xs font-semibold grid grid-cols-4 gap-2 border-b pb-1">
+                  <div>Crop</div>
+                  <div>Rank</div>
+                  <div>Score</div>
+                  <div>Count</div>
                 </div>
-              ))}
-            </div>
+                <div className="max-h-60 overflow-y-auto">
+                  {cropLeaderboard.map(entry => (
+                    <div key={entry.crop_id} className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200 text-sm">
+                      <div>{formatValue(entry.crop_name)}</div>
+                      <div className="font-semibold">#{entry.rank}</div>
+                      <div style={{ color: getColor(entry.average_normalized_score) }} className="font-semibold">
+                        {formatScore(entry.average_normalized_score)}
+                      </div>
+                      <div>{entry.submission_count}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        );
-      }
+        </TabsContent>
   
-      case 'brand': {
-        if (brandLeaderboard.length === 0) {
-          return <div className="p-4 text-center text-gray-500">No brand data available for this location</div>;
-        }
-        
-        return (
+        <TabsContent value="brand" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2">Brand Rankings ({brandLeaderboard.length})</h4>
-            <div className="text-xs font-semibold grid grid-cols-4 gap-2 border-b pb-1">
-              <div>Brand</div>
-              <div>Rank</div>
-              <div>Score</div>
-              <div>Count</div>
-            </div>
-            <div className="max-h-60 overflow-y-auto">
-              {brandLeaderboard.map(entry => (
-                <div
-                  key={entry.brand_id}
-                  className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200 text-sm"
-                >
-                  <div>{formatValue(entry.brand_name)}</div>
-                  <div className="font-semibold">#{entry.rank}</div>
-                  <div
-                    style={{ color: getColor(entry.average_normalized_score) }}
-                    className="font-semibold"
-                  >
-                    {formatScore(entry.average_normalized_score)}
-                  </div>
-                  <div>{entry.submission_count}</div>
+            {brandLeaderboard.length === 0 ? (
+              <div className="text-center text-gray-500">No brand data available.</div>
+            ) : (
+              <>
+                <div className="text-xs font-semibold grid grid-cols-4 gap-2 border-b pb-1">
+                  <div>Brand</div>
+                  <div>Rank</div>
+                  <div>Score</div>
+                  <div>Count</div>
                 </div>
-              ))}
-            </div>
+                <div className="max-h-60 overflow-y-auto">
+                  {brandLeaderboard.map(entry => (
+                    <div key={entry.brand_id} className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200 text-sm">
+                      <div>{formatValue(entry.brand_name)}</div>
+                      <div className="font-semibold">#{entry.rank}</div>
+                      <div style={{ color: getColor(entry.average_normalized_score) }} className="font-semibold">
+                        {formatScore(entry.average_normalized_score)}
+                      </div>
+                      <div>{entry.submission_count}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        );
-      }
-  
-      default:
-        return null;
-    }
+        </TabsContent>
+      </Tabs>
+    );
   };
   
 
@@ -399,42 +384,24 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       {/* Side Drawer UI */}
       {selectedPoint && (
         <div 
-          className="absolute inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl p-6 z-50 max-h-full overflow-y-auto transform transition-transform duration-300 ease-in-out translate-x-0"
+          className="absolute inset-y-0 right-0 w-80 bg-transparent rounded-l-lg shadow-2xl p-6 z-50 max-h-full overflow-y-auto transform transition-transform duration-300 ease-in-out translate-x-0"
         >
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold">{selectedPoint.locationName}</h3>
-            <button
-              onClick={handleClose}
-              aria-label="Close drawer"
-              className="p-1 rounded hover:bg-gray-200"
-            >
-              <X size={20} />
-            </button>
-          </div>
-          <div className="mb-2 text-sm text-gray-600">
-            {selectedPoint.streetAddress}, {selectedPoint.city}, {selectedPoint.state}, {selectedPoint.country}
-          </div>
-
-          <div className="mb-4">
-            <label htmlFor="groupBy" className="block text-sm font-medium mb-1">
-              Group by:
-            </label>
-            <select
-              id="groupBy"
-              className="border border-gray-300 rounded p-1 w-full"
-              value={groupBy}
-              onChange={(e) =>
-                setGroupBy(e.target.value as 'none' | 'crop' | 'brand')
-              }
-            >
-              <option value="none">None</option>
-              <option value="crop">Crop</option>
-              <option value="brand">Brand</option>
-            </select>
-          </div>
-
-          {/* Leaderboard content */}
-          {renderLeaderboard()}
+          <Card className="w-full">
+            <CardHeader className="p-4 flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="text-lg font-semibold">{selectedPoint.locationName}</CardTitle>
+                <p className="text-sm text-gray-500 mt-1">
+                  {selectedPoint.streetAddress}, {selectedPoint.city}, {selectedPoint.state}
+                </p>
+              </div>
+              <Button onClick={handleClose} variant="ghost" size="icon" className="p-1">
+                <X size={20} />
+              </Button>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              {renderLeaderboard()}
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>
