@@ -248,7 +248,18 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
     });
 
-    const mapClickListener = () => setSelectedPoint(null);
+    // Handle map click to clear selected point
+    const mapClickListener = (e: mapboxgl.MapMouseEvent) => {
+      // Check if the click event originated from a marker
+      const isMarkerClick = markersRef.current.some(marker => {
+        const markerElement = marker.getElement();
+        return markerElement.contains(e.originalEvent.target as Node);
+      });
+      if (!isMarkerClick) {
+        setSelectedPoint(null);
+      }
+    };
+
     mapRef.current.on('click', mapClickListener);
 
     return () => {
