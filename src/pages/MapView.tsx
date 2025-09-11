@@ -1,20 +1,13 @@
 import React, { useState } from 'react';
 import Header from '../components/Layout/Header';
 import InteractiveMap from '../components/Map/InteractiveMap';
-// Remove the import for MapFilters
-// import MapFilters from '../components/Map/MapFilters'; 
-import { useFilters } from '../contexts/FilterContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Locate } from 'lucide-react';
-// Remove the import for Link
-// import { Link } from 'react-router-dom'; 
 import { useToast } from '../hooks/use-toast';
 
 const MapView = () => {
   const { toast } = useToast();
-  // No need for the showFilters state anymore
-  // const [showFilters, setShowFilters] = useState(true);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [nearMeTriggered, setNearMeTriggered] = useState(false);
 
@@ -61,7 +54,6 @@ const MapView = () => {
       <Header />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -81,43 +73,16 @@ const MapView = () => {
               <Locate className="w-4 h-4" />
               <span>Near Me</span>
             </Button>
-            {/* Remove the "Hide/Show Filters" and "Data List" buttons */}
-            {/* <Button
-              variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center space-x-2"
-            >
-              <Filter className="w-4 h-4" />
-              <span>{showFilters ? 'Hide' : 'Show'} Filters</span>
-            </Button>
-            
-            <Link to="/data">
-              <Button variant="outline" className="flex items-center space-x-2">
-                <List className="w-4 h-4" />
-                <span>Data List</span>
-              </Button>
-            </Link> */}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Remove the filters sidebar section */}
-          {/* {showFilters && (
-            <div className="lg:col-span-1">
-              <MapFilters />
-            </div>
-          )} */}
-          
-          {/* Map Area */}
-          {/* Update the col-span to take up the full width */}
+        <div className="grid grid-cols-1">
           <div className="lg:col-span-4">
             <Card>
               <CardContent className="p-0">
                 <div className="h-[600px] w-full relative">
                   <InteractiveMap 
                     userLocation={userLocation} 
-                    // Remove the showFilters prop
-                    // showFilters={showFilters}
                     nearMeTriggered={nearMeTriggered}
                     onNearMeHandled={handleNearMeHandled}
                   />
