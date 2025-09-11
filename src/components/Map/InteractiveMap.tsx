@@ -422,7 +422,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       {/* Side Pane UI */}
       <Card
-        className="relative w-80 bg-white rounded-l-lg shadow-2xl z-50 transform transition-transform duration-300 ease-in-out h-full overflow-y-auto"
+        className="absolute inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl z-50 transform transition-transform duration-300 ease-in-out h-full overflow-y-auto"
       >
         <CardHeader className="p-4 flex flex-row items-start justify-between">
           <div>
