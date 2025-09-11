@@ -33,10 +33,11 @@ interface InteractiveMapProps {
 const SUPABASE_PROJECT_REF = 'wbkzczcqlorsewoofwqe';
 
 const getColor = (normalizedScore: number) => {
-  // Map normalized score (0-1) to green/yellow/red gradient
-  if (normalizedScore >= 0.7) return '#16a34a'; // green
-  if (normalizedScore >= 0.4) return '#ca8a04'; // yellow
-  return '#dc2626'; // red
+  // Map normalized score (1-2) to color gradient
+  if (normalizedScore >= 1.80) return '#16a34a'; // excellent - green
+  if (normalizedScore >= 1.615) return '#65a30d'; // good - lime
+  if (normalizedScore >= 1.40) return '#ca8a04'; // average - yellow
+  return '#dc2626'; // poor - red
 };
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({
