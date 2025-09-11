@@ -355,9 +355,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 return (
                   <div key={sub.id} className="flex justify-between items-start py-2">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-base">{formatValue(sub.cropLabel)}</span>
+                      <span className="font-semibold text-base">{sub.cropLabel}</span>
                       <span className="text-xs text-gray-500 mt-1">
-                        {formatValue(sub.brandLabel)} - {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
+                        {sub.brandLabel} - {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
                       </span>
                     </div>
                     <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${brixPillColor}`}>
@@ -382,18 +382,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 return (
                   <div key={entry.crop_id} className="flex justify-between items-center py-2">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-base">{formatValue(entry.crop_label)}</span>
+                      <span className="font-semibold text-base">{entry.crop_label}</span>
                       <span className="text-xs text-gray-500 mt-1">
                         ({entry.submission_count} submissions)
                       </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-medium text-gray-500">
-                        {entry.average_normalized_score.toFixed(2)}
+                      <span className="text-xs font-medium text-gray-500 mt-1">
+                        Normalized Score: {entry.average_normalized_score.toFixed(2)}
                       </span>
-                      <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
-                        {entry.rank}
-                      </div>
+                    </div>
+                    <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
+                      {entry.rank}
                     </div>
                   </div>
                 );
@@ -414,18 +412,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 return (
                   <div key={entry.brand_id} className="flex justify-between items-center py-2">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-base">{formatValue(entry.brand_label)}</span>
+                      <span className="font-semibold text-base">{entry.brand_label}</span>
                       <span className="text-xs text-gray-500 mt-1">
                         ({entry.submission_count} submissions)
                       </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-medium text-gray-500">
-                        {entry.average_normalized_score.toFixed(2)}
+                      <span className="text-xs font-medium text-gray-500 mt-1">
+                        Normalized Score: {entry.average_normalized_score.toFixed(2)}
                       </span>
-                      <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
-                        {entry.rank}
-                      </div>
+                    </div>
+                    <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${rankPillColor}`}>
+                      {entry.rank}
                     </div>
                   </div>
                 );
