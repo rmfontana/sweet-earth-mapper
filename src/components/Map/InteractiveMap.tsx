@@ -15,6 +15,8 @@ import type { GeoJSON } from 'geojson';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor } from '../../lib/getBrixColor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { useBrixColorFromContext } from '../../lib/getBrixColor';
+
 
 // Leaderboard API imports
 import {
@@ -259,6 +261,22 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
   }, [selectedPoint, filters]);
 
+  // New helper function to determine text color based on background color luminance
+  const getTextColor = (bgColor: string) => {
+    if (!bgColor) return 'white'; // Fallback
+  
+    // Calculate luminance of the background color
+    const hex = bgColor.startsWith('#') ? bgColor.slice(1) : bgColor;
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  
+    // Return black for light backgrounds, white for dark backgrounds
+    return luminance > 0.5 ? 'black' : 'white';
+  };
+  
+
   // UI helper: render leaderboard entries based on groupBy
   const renderLeaderboard = () => {
     if (!selectedPoint) return null;
@@ -280,8 +298,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   
         <TabsContent value="none" className="mt-4">
           <div>
-            <h4 className="font-semibold mb-2">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
-            <div className="text-xs font-semibold grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_1fr_60px] gap-2 border-b pb-1">
+            <h4 className="font-semibold mb-2 text-sm">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
+            <div className="text-xs font-semibold grid grid-cols-[1fr_1fr_minmax(80px,auto)_60px] gap-1 border-b pb-1">
               <div className="truncate">Crop</div>
               <div className="truncate">Brand</div>
               <div>Date</div>
@@ -289,7 +307,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
             <div className="max-h-60 overflow-y-auto">
               {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => (
-                <div key={sub.id} className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_1fr_60px] gap-2 py-1 border-b border-gray-200 text-sm">
+                <div key={sub.id} className="grid grid-cols-[1fr_1fr_minmax(80px,auto)_60px] gap-1 py-1 border-b border-gray-200 text-xs">
                   <div className="truncate">{formatValue(sub.cropType)}</div>
                   <div className="truncate">{formatValue(sub.brandName)}</div>
                   <div className="truncate">{sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}</div>
@@ -302,33 +320,38 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   
         <TabsContent value="crop" className="mt-4">
           <div>
-            <h4 className="font-semibold mb-2">Crop Rankings ({cropLeaderboard.length})</h4>
+            <h4 className="font-semibold mb-2 text-sm">Crop Rankings ({cropLeaderboard.length})</h4>
             {cropLeaderboard.length === 0 ? (
-              <div className="text-center text-gray-500">No crop data available.</div>
+              <div className="text-center text-gray-500 text-xs">No crop data available.</div>
             ) : (
               <>
-                <div className="text-xs font-semibold grid grid-cols-[minmax(0,1.5fr)_50px_70px_50px] gap-2 border-b pb-1">
+                <div className="text-xs font-semibold grid grid-cols-[1fr_50px_70px_50px] gap-1 border-b pb-1">
                   <div>Crop</div>
                   <div className="text-center">Rank</div>
                   <div className="text-center">Score</div>
                   <div className="text-center">Count</div>
                 </div>
                 <div className="max-h-60 overflow-y-auto">
-                  {cropLeaderboard.map(entry => (
-                    <div key={entry.crop_id} className="grid grid-cols-[minmax(0,1.5fr)_50px_70px_50px] gap-2 py-1 border-b border-gray-200 text-sm">
-                      <div className="truncate">{formatValue(entry.crop_name)}</div>
-                      <div className="font-semibold text-center">#{entry.rank}</div>
-                      <div className="flex justify-center">
-                        <Badge
-                          className="w-12 text-[10px] h-4 rounded-full flex justify-center items-center font-bold px-1"
-                          style={{ backgroundColor: getBrixColor(entry.average_normalized_score, cache[entry.crop_name], 'hex') }}
-                        >
-                          {formatScore(entry.average_normalized_score)}
-                        </Badge>
+                  {cropLeaderboard.map(entry => {
+                    const bgColor = useBrixColorFromContext(entry.crop_name, entry.average_normalized_score, 'hex');
+                    const textColor = getTextColor(bgColor);
+
+                    return (
+                      <div key={entry.crop_id} className="grid grid-cols-[1fr_50px_70px_50px] gap-1 py-1 border-b border-gray-200 text-xs items-center">
+                        <div className="truncate">{formatValue(entry.crop_name)}</div>
+                        <div className="font-semibold text-center">#{entry.rank}</div>
+                        <div className="flex justify-center">
+                          <Badge
+                            className="w-full h-auto rounded-full font-bold px-1 py-0.5 flex justify-center items-center"
+                            style={{ backgroundColor: bgColor, color: textColor }}
+                          >
+                            {formatScore(entry.average_normalized_score)}
+                          </Badge>
+                        </div>
+                        <div className="text-center">{entry.submission_count}</div>
                       </div>
-                      <div className="text-center">{entry.submission_count}</div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -337,33 +360,38 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   
         <TabsContent value="brand" className="mt-4">
           <div>
-            <h4 className="font-semibold mb-2">Brand Rankings ({brandLeaderboard.length})</h4>
+            <h4 className="font-semibold mb-2 text-sm">Brand Rankings ({brandLeaderboard.length})</h4>
             {brandLeaderboard.length === 0 ? (
-              <div className="text-center text-gray-500">No brand data available.</div>
+              <div className="text-center text-gray-500 text-xs">No brand data available.</div>
             ) : (
               <>
-                <div className="text-xs font-semibold grid grid-cols-[minmax(0,1.5fr)_50px_70px_50px] gap-2 border-b pb-1">
+                <div className="text-xs font-semibold grid grid-cols-[1fr_50px_70px_50px] gap-1 border-b pb-1">
                   <div>Brand</div>
                   <div className="text-center">Rank</div>
                   <div className="text-center">Score</div>
                   <div className="text-center">Count</div>
                 </div>
                 <div className="max-h-60 overflow-y-auto">
-                  {brandLeaderboard.map(entry => (
-                    <div key={entry.brand_id} className="grid grid-cols-[minmax(0,1.5fr)_50px_70px_50px] gap-2 py-1 border-b border-gray-200 text-sm">
-                      <div className="truncate">{formatValue(entry.brand_name)}</div>
-                      <div className="font-semibold text-center">#{entry.rank}</div>
-                      <div className="flex justify-center">
-                        <Badge
-                          className="w-12 text-[10px] h-4 rounded-full flex justify-center items-center font-bold px-1"
-                          style={{ backgroundColor: getBrixColor(entry.average_normalized_score, cache[entry.crop_name], 'hex') }}
-                        >
-                          {formatScore(entry.average_normalized_score)}
-                        </Badge>
+                  {brandLeaderboard.map(entry => {
+                    const bgColor = useBrixColorFromContext(entry.crop_name, entry.average_normalized_score, 'hex');
+                    const textColor = getTextColor(bgColor);
+
+                    return (
+                      <div key={entry.brand_id} className="grid grid-cols-[1fr_50px_70px_50px] gap-1 py-1 border-b border-gray-200 text-xs items-center">
+                        <div className="truncate">{formatValue(entry.brand_name)}</div>
+                        <div className="font-semibold text-center">#{entry.rank}</div>
+                        <div className="flex justify-center">
+                          <Badge
+                            className="w-full h-auto rounded-full font-bold px-1 py-0.5 flex justify-center items-center"
+                            style={{ backgroundColor: bgColor, color: textColor }}
+                          >
+                            {formatScore(entry.average_normalized_score)}
+                          </Badge>
+                        </div>
+                        <div className="text-center">{entry.submission_count}</div>
                       </div>
-                      <div className="text-center">{entry.submission_count}</div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}
