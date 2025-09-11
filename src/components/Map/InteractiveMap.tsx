@@ -396,42 +396,54 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     <div className="relative w-full h-full flex flex-col">
       <div ref={mapContainer} className="absolute inset-0 rounded-md shadow-md" />
 
-      {/* Drawer UI */}
+      {/* Side Drawer UI */}
       {selectedPoint && (
-        <div className="absolute top-2 right-2 w-80 bg-white rounded-md shadow-lg p-4 z-50 max-h-[80vh] overflow-y-auto transition-transform duration-300 ease-in-out">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold">{selectedPoint.locationName}</h3>
-            <button
-              onClick={handleClose}
-              aria-label="Close drawer"
-              className="p-1 rounded hover:bg-gray-200"
-            >
-              <X size={20} />
-            </button>
-          </div>
-          <div className="mb-2 text-sm text-gray-600">{selectedPoint.streetAddress}</div>
+        <>
+          {/* Backdrop Overlay */}
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-30 z-40 transition-opacity duration-300"
+            onClick={handleClose}
+            aria-hidden="true"
+          />
 
-          <div className="mb-4">
-            <label htmlFor="groupBy" className="block text-sm font-medium mb-1">
-              Group by:
-            </label>
-            <select
-              id="groupBy"
-              className="border border-gray-300 rounded p-1 w-full"
-              value={groupBy}
-              onChange={(e) =>
-                setGroupBy(e.target.value as 'none' | 'crop' | 'brand')
-              }
-            >
-              <option value="none">None</option>
-              <option value="crop">Crop</option>
-              <option value="brand">Brand</option>
-            </select>
-          </div>
+          {/* Drawer Pane */}
+          <div 
+            className="fixed inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl p-6 z-50 max-h-screen overflow-y-auto transition-transform duration-300 ease-out transform translate-x-0"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">{selectedPoint.locationName}</h3>
+              <button
+                onClick={handleClose}
+                aria-label="Close drawer"
+                className="p-1 rounded hover:bg-gray-200"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="mb-2 text-sm text-gray-600">{selectedPoint.streetAddress}</div>
 
-          {/* Leaderboard content */}
-          {renderLeaderboard()}
-        </div>
+            <div className="mb-4">
+              <label htmlFor="groupBy" className="block text-sm font-medium mb-1">
+                Group by:
+              </label>
+              <select
+                id="groupBy"
+                className="border border-gray-300 rounded p-1 w-full"
+                value={groupBy}
+                onChange={(e) =>
+                  setGroupBy(e.target.value as 'none' | 'crop' | 'brand')
+                }
+              >
+                <option value="none">None</option>
+                <option value="crop">Crop</option>
+                <option value="brand">Brand</option>
+              </select>
+            </div>
+
+            {/* Leaderboard content */}
+            {renderLeaderboard()}
+          </div>
+        </>
       )}
     </div>
   );
