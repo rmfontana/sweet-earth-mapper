@@ -5,13 +5,13 @@ const supabase = createClient(getSupabaseUrl(), getPublishableKey());
 
 export type Filter = {
   location_name?: string;
-  place_id?: string;
+  place_id?: string; // Keep as string for UUID
 };
 
 export interface LeaderboardEntry {
   [key: string]: any;
-  average_normalized_score: number;  // exactly as in SQL
-  average_brix: number;              // exactly as in SQL
+  average_normalized_score: number;
+  average_brix: number;
   submission_count: number;
   rank: number;
 }
@@ -21,19 +21,22 @@ async function fetchLeaderboard<R>(
   filters: Filter = {}
 ): Promise<R[]> {
   const { location_name, place_id } = filters;
-
+  
+  console.log(`Fetching ${rpcName} with filters:`, { location_name, place_id });
+  
   const params = {
     location_name_filter: location_name ?? null,
     place_id_filter: place_id ?? null,
   };
 
   const { data, error } = await supabase.rpc(rpcName, params);
-
+  
   if (error) {
-    console.error(`Error fetching ${rpcName}`, error);
+    console.error(`Error fetching ${rpcName}:`, error);
     throw error;
   }
 
+  console.log(`${rpcName} returned:`, data);
   return data || [];
 }
 

@@ -224,33 +224,58 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setBrandLeaderboard([]);
       return;
     }
-
+  
     setIsLoading(true);
-
+  
+    // Use place_id directly for more specific filtering
     const localFilters = {
-      ...filters,
       location_name: selectedPoint.locationName,
-      place_id: selectedPoint.placeId,
+      place_id: selectedPoint.placeId, // This should be the UUID string
     };
     
-    // Log the filters to the console for debugging
     console.log('Fetching leaderboard data with filters:', localFilters);
-
+    console.log('Selected point details:', {
+      locationName: selectedPoint.locationName,
+      placeId: selectedPoint.placeId,
+      streetAddress: selectedPoint.streetAddress
+    });
+  
     Promise.all([
       fetchLocationLeaderboard(localFilters),
       fetchCropLeaderboard(localFilters),
       fetchBrandLeaderboard(localFilters),
     ])
       .then(([locationData, cropData, brandData]) => {
+        console.log('Leaderboard results:', {
+          locationData,
+          cropData,
+          brandData
+        });
         setLocationLeaderboard(locationData);
         setCropLeaderboard(cropData);
         setBrandLeaderboard(brandData);
       })
-      .catch(console.error)
+      .catch((error) => {
+        console.error('Error fetching leaderboard data:', error);
+        // Set empty arrays on error
+        setLocationLeaderboard([]);
+        setCropLeaderboard([]);
+        setBrandLeaderboard([]);
+      })
       .finally(() => {
         setIsLoading(false);
       });
   }, [selectedPoint, filters]);
+
+  // Update the getColor function to work with 0-1 normalized scores
+  const getColor = (normalizedScore: number) => {
+    // Map normalized score (0-1) to color gradient
+    if (normalizedScore >= 0.8) return '#16a34a'; // excellent - green
+    if (normalizedScore >= 0.6) return '#65a30d'; // good - lime
+    if (normalizedScore >= 0.4) return '#ca8a04'; // average - yellow
+    if (normalizedScore >= 0.2) return '#ea580c'; // below average - orange
+    return '#dc2626'; // poor - red
+  };
 
   // UI helper: render leaderboard entries based on groupBy
   const renderLeaderboard = () => {
@@ -260,25 +285,30 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       return <div className="p-4 text-center">Loading leaderboards...</div>;
     }
   
-    const formatValue = (value: string | null) => value;
+    const formatValue = (value: string | null) => value || 'N/A';
+    const formatScore = (score: number) => (score * 100).toFixed(1) + '%';
   
     switch (groupBy) {
       case 'none': {
         const storeSubs = allData.filter(d => d.placeId === selectedPoint.placeId);
+        if (storeSubs.length === 0) {
+          return <div className="p-4 text-center text-gray-500">No submissions found for this location</div>;
+        }
+        
         return (
           <div>
-            <h4 className="font-semibold mb-2">Submissions BRIX Score</h4>
+            <h4 className="font-semibold mb-2">All Submissions ({storeSubs.length})</h4>
             <div className="text-xs font-semibold grid grid-cols-4 gap-2 border-b pb-1">
               <div>Crop Type</div>
               <div>Brand</div>
-              <div>Submission Date</div>
+              <div>Date</div>
               <div>Brix Score</div>
             </div>
             <div className="max-h-60 overflow-y-auto">
               {storeSubs.map(sub => (
                 <div
                   key={sub.id}
-                  className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200"
+                  className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200 text-sm"
                 >
                   <div>{formatValue(sub.cropType)}</div>
                   <div>{formatValue(sub.brandName)}</div>
@@ -292,26 +322,32 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
   
       case 'crop': {
+        if (cropLeaderboard.length === 0) {
+          return <div className="p-4 text-center text-gray-500">No crop data available for this location</div>;
+        }
+        
         return (
           <div>
-            <h4 className="font-semibold mb-2">Crop Rank</h4>
-            <div className="text-xs font-semibold grid grid-cols-3 gap-2 border-b pb-1">
+            <h4 className="font-semibold mb-2">Crop Rankings ({cropLeaderboard.length})</h4>
+            <div className="text-xs font-semibold grid grid-cols-4 gap-2 border-b pb-1">
               <div>Crop</div>
               <div>Rank</div>
-              <div># Submissions</div>
+              <div>Score</div>
+              <div>Count</div>
             </div>
             <div className="max-h-60 overflow-y-auto">
               {cropLeaderboard.map(entry => (
                 <div
                   key={entry.crop_id}
-                  className="grid grid-cols-3 gap-2 py-1 border-b border-gray-200"
+                  className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200 text-sm"
                 >
                   <div>{formatValue(entry.crop_name)}</div>
+                  <div className="font-semibold">#{entry.rank}</div>
                   <div
                     style={{ color: getColor(entry.average_normalized_score) }}
                     className="font-semibold"
                   >
-                    {entry.rank}
+                    {formatScore(entry.average_normalized_score)}
                   </div>
                   <div>{entry.submission_count}</div>
                 </div>
@@ -322,26 +358,32 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
   
       case 'brand': {
+        if (brandLeaderboard.length === 0) {
+          return <div className="p-4 text-center text-gray-500">No brand data available for this location</div>;
+        }
+        
         return (
           <div>
-            <h4 className="font-semibold mb-2">Brand Rank</h4>
-            <div className="text-xs font-semibold grid grid-cols-3 gap-2 border-b pb-1">
+            <h4 className="font-semibold mb-2">Brand Rankings ({brandLeaderboard.length})</h4>
+            <div className="text-xs font-semibold grid grid-cols-4 gap-2 border-b pb-1">
               <div>Brand</div>
               <div>Rank</div>
-              <div># Submissions</div>
+              <div>Score</div>
+              <div>Count</div>
             </div>
             <div className="max-h-60 overflow-y-auto">
               {brandLeaderboard.map(entry => (
                 <div
                   key={entry.brand_id}
-                  className="grid grid-cols-3 gap-2 py-1 border-b border-gray-200"
+                  className="grid grid-cols-4 gap-2 py-1 border-b border-gray-200 text-sm"
                 >
                   <div>{formatValue(entry.brand_name)}</div>
+                  <div className="font-semibold">#{entry.rank}</div>
                   <div
                     style={{ color: getColor(entry.average_normalized_score) }}
                     className="font-semibold"
                   >
-                    {entry.rank}
+                    {formatScore(entry.average_normalized_score)}
                   </div>
                   <div>{entry.submission_count}</div>
                 </div>
