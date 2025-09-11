@@ -286,7 +286,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   
     const formatValue = (value: string | null) => value || 'N/A';
-    const formatScore = (score: number) => (score * 100).toFixed(1) + '%';
+    const formatScore = (score: number) => score.toFixed(3);
   
     switch (groupBy) {
       case 'none': {
