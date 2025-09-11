@@ -89,6 +89,7 @@ export type Database = {
       places: {
         Row: {
           city: string | null
+          country: string | null
           id: string
           label: string | null
           latitude: number
@@ -100,6 +101,7 @@ export type Database = {
         }
         Insert: {
           city?: string | null
+          country?: string | null
           id?: string
           label?: string | null
           latitude: number
@@ -111,6 +113,7 @@ export type Database = {
         }
         Update: {
           city?: string | null
+          country?: string | null
           id?: string
           label?: string | null
           latitude?: number
@@ -869,7 +872,14 @@ export type Database = {
         Returns: unknown
       }
       get_brand_leaderboard: {
-        Args: { filters?: Json }
+        Args:
+          | {
+              country_filter: string
+              location_name_filter: string
+              place_id_filter: string
+              state_filter: string
+            }
+          | { filters?: Json }
         Returns: {
           avg_normalized_score: number
           brand_id: string
@@ -880,18 +890,38 @@ export type Database = {
         }[]
       }
       get_crop_leaderboard: {
-        Args: { filters?: Json }
+        Args:
+          | {
+              country_filter: string
+              location_name_filter: string
+              place_id_filter: string
+              state_filter: string
+            }
+          | { filters?: Json }
         Returns: {
-          avg_normalized_score: number
+          average_brix: number
+          average_normalized_score: number
+          average_normalized_score_threshold: number
           crop_id: string
           crop_name: string
+          excellent_normalized_score: number
+          good_normalized_score: number
           grade: string
+          min_normalized_score: number
+          poor_normalized_score: number
           rank: number
           submission_count: number
         }[]
       }
       get_location_leaderboard: {
-        Args: { filters?: Json }
+        Args:
+          | {
+              country_filter: string
+              location_name_filter: string
+              place_id_filter: string
+              state_filter: string
+            }
+          | { filters?: Json }
         Returns: {
           avg_normalized_score: number
           grade: string
@@ -900,6 +930,10 @@ export type Database = {
           rank: number
           submission_count: number
         }[]
+      }
+      get_normalized_brix_1_to_2: {
+        Args: { brix_value_arg: number; crop_id_arg: string }
+        Returns: number
       }
       get_proj4_from_srid: {
         Args: { "": number }

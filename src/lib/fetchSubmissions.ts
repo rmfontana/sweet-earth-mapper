@@ -11,7 +11,7 @@ const SUBMISSIONS_SELECT_QUERY_STRING = `
   crop_variety,
   outlier_notes,
   purchase_date,
-    place:place_id(id,label,latitude,longitude,street_address),
+  place:place_id(id,label,latitude,longitude,street_address,city,state,country),
   location:location_id(id,name,label),
   brand:brand_id(id,name,label),
   user:users!user_id(id,display_name),
@@ -37,6 +37,9 @@ interface SupabaseSubmissionRow {
     latitude: number;
     longitude: number;
     street_address?: string | null;
+    city: string | null;
+    state: string | null;
+    country: string | null;
   } | null;
   // The 'location' property now holds the name and label from the new 'locations' table (the old 'stores' table).
   location: {
@@ -93,6 +96,9 @@ function formatSubmissionData(item: SupabaseSubmissionRow): BrixDataPoint {
     placeName: item.place?.label ?? '',
     locationName: item.location?.label ?? item.location?.name ?? '',
     streetAddress: item.place?.street_address ?? '', 
+    city: item.place?.city ?? '',
+    state: item.place?.state ?? '',
+    country: item.place?.country ?? '',
     brandName: item.brand?.label ?? item.brand?.name ?? '',
     submittedBy: item.user?.display_name ?? 'Anonymous',
     userId: item.user?.id ?? undefined,

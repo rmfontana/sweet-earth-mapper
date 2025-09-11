@@ -1,30 +1,33 @@
-// Core TypeScript interfaces for the BRIX platform
 export interface BrixDataPoint {
   id: string;
   brixLevel: number;
   verified: boolean;
   verifiedAt: string | null; // ISO timestamp
-  variety: string; // Specific variety of the crop (e.g., Roma for Tomato)
-  cropType: string; // General crop type (e.g., Tomato)
-  category: string; // Category of the crop (e.g., vegetable, fruit)
+  variety: string;
+  cropType: string;
+  category: string;
   latitude: number | null;
   longitude: number | null;
-  locationName: string; // Human-readable location (e.g., "Whole Foods Market")
-  placeName: string; // Human-readable place (e.g., "123 Main St, Anytown")
-  streetAddress: string; 
+  locationName: string;
+  placeName: string;
+  streetAddress: string;
+  // Add the new fields here
+  city: string;
+  state: string;
+  country: string;
   brandName: string;
-  submittedBy: string; // Display name of the user who submitted it
-  userId?: string; // Add userId for internal filtering/linking to users
-  verifiedBy: string; // Display name of the user who verified it
-  submittedAt: string; // ISO timestamp of assessment date
+  submittedBy: string;
+  userId?: string;
+  verifiedBy: string;
+  submittedAt: string;
   outlier_notes: string;
-  images: string[]; // Array of image URLs/paths
+  images: string[];
   poorBrix: number | null;
   averageBrix: number | null;
   goodBrix: number | null;
   excellentBrix: number | null;
-  name_normalized?: string; // Added the name_normalized field here
-  purchaseDate: string | null; // ISO timestamp
+  name_normalized?: string;
+  purchaseDate: string | null;
 
   // NEW/UPDATED FIELDS
   locationId: string;

@@ -411,7 +411,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <X size={20} />
             </button>
           </div>
-          <div className="mb-2 text-sm text-gray-600">{selectedPoint.streetAddress}</div>
+          <div className="mb-2 text-sm text-gray-600">
+            {selectedPoint.streetAddress}, {selectedPoint.city}, {selectedPoint.state}, {selectedPoint.country}
+          </div>
 
           <div className="mb-4">
             <label htmlFor="groupBy" className="block text-sm font-medium mb-1">
