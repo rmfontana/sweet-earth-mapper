@@ -8,7 +8,7 @@ import { applyFilters } from '../../lib/filterUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { MapPin, Calendar, User, CheckCircle, Eye, X } from 'lucide-react';
+import { MapPin, Calendar, User, CheckCircle, Eye, X, ArrowLeft } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { getMapboxToken } from '@/lib/getMapboxToken';
 import type { GeoJSON } from 'geojson';
@@ -33,6 +33,13 @@ interface InteractiveMapProps {
 
 const SUPABASE_PROJECT_REF = 'wbkzczcqlorsewoofwqe';
 
+// ADDED: Define a type for the selected view
+type SelectedView = {
+  type: 'crop' | 'brand';
+  id: string;
+  label: string;
+} | null;
+
 const InteractiveMap: React.FC<InteractiveMapProps> = ({
   userLocation,
   nearMeTriggered,
@@ -52,6 +59,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [minBrix, setMinBrix] = useState(0);
   const [maxBrix, setMaxBrix] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // ADDED: New state to manage the drill-down view
+  const [selectedEntry, setSelectedEntry] = useState<SelectedView>(null);
 
   // Store leaderboard data per grouping
   const [locationLeaderboard, setLocationLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -84,6 +94,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   useEffect(() => {
     if (selectedPoint) {
       setGroupBy('crop');
+      // ADDED: Reset drill-down view when a new store is selected
+      setSelectedEntry(null);
     }
   }, [selectedPoint]);
 
@@ -169,7 +181,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [highlightedPoint, allData]);
 
-  // FIXED: Draw markers for stores with proper color calculation
+  // Draw markers for stores with proper color calculation
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
 
@@ -190,14 +202,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       storeGroups[point.locationName].push(point);
     });
 
-    // FIXED: Calculate the average normalized score for each store with better error handling
+    // Calculate the average normalized score for each store with better error handling
     Object.entries(storeGroups).forEach(([storeName, points]) => {
       if (points.length > 0) {
         let totalNormalizedScore = 0;
         let validCount = 0;
         
         points.forEach(point => {
-          // FIXED: Better handling of crop type and thresholds
+          // Better handling of crop type and thresholds
           const cropType = point.cropType || point.cropLabel || 'unknown';
           const thresholds = cache?.[cropType];
           
@@ -213,7 +225,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             totalNormalizedScore += normalizedScore;
             validCount++;
           } else {
-            // FIXED: If no thresholds, use a simple normalized score based on global min/max
+            // If no thresholds, use a simple normalized score based on global min/max
             if (maxBrix > minBrix) {
               const simpleNormalized = ((point.brixLevel - minBrix) / (maxBrix - minBrix)) + 1;
               totalNormalizedScore += simpleNormalized;
@@ -234,7 +246,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       const averageScore = averageScores[storeName] || 1.5;
       
-      // FIXED: Use hardcoded thresholds for marker colors since we're working with normalized scores
+      // Use hardcoded thresholds for marker colors since we're working with normalized scores
       const markerThresholds = {
         poor: 1.0,
         average: 1.25,
@@ -312,9 +324,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         mapRef.current.off('click', mapClickListener);
       }
     };
-  }, [filteredData, isMapLoaded, cache, minBrix, maxBrix]); // FIXED: Added minBrix, maxBrix to dependencies
+  }, [filteredData, isMapLoaded, cache, minBrix, maxBrix]);
 
-  // FIXED: When store is selected, fetch leaderboard data with better error handling
+  // When store is selected, fetch leaderboard data with better error handling
   useEffect(() => {
     if (!selectedPoint || !selectedPoint.placeId) {
       setLocationLeaderboard([]);
@@ -370,7 +382,64 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     excellent: 0, // Should be unreachable, but good to have
   };
 
-  // FIXED: UI helper with better error handling and fallbacks
+  // ADDED: New helper function to render a single submission item
+  const renderSubmissionItem = (sub: BrixDataPoint, key: string) => {
+    const cropType = sub.cropType || sub.cropLabel || 'unknown';
+    const thresholds = cache?.[cropType];
+    const brixPillColor = getBrixColor(
+      sub.brixLevel, 
+      thresholds || { poor: minBrix, average: (minBrix + maxBrix) / 2, good: maxBrix * 0.8, excellent: maxBrix }, 
+      'bg'
+    );
+    
+    return (
+      <div key={key} className="flex justify-between items-start py-2">
+        <div className="flex flex-col">
+          <span className="font-semibold text-base">{sub.cropLabel || 'Unknown Crop'}</span>
+          <span className="text-xs text-gray-500 mt-1">
+            {sub.brandLabel || 'Unknown Brand'} - {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
+          </span>
+        </div>
+        <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${brixPillColor}`}>
+          {sub.brixLevel}
+        </div>
+      </div>
+    );
+  };
+
+  // ADDED: New component to render the detailed submission list
+  const renderDetailedSubmissions = () => {
+    if (!selectedEntry) return null; // Safety check
+
+    const filteredSubmissions = allData
+      .filter(d => d.placeId === selectedPoint?.placeId)
+      .filter(d => {
+        if (selectedEntry.type === 'crop') {
+          return d.cropLabel === selectedEntry.label;
+        } else {
+          return d.brandLabel === selectedEntry.label;
+        }
+      });
+
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center space-x-2 pb-4 border-b">
+          <Button variant="ghost" size="icon" onClick={() => setSelectedEntry(null)}>
+            <ArrowLeft size={20} />
+          </Button>
+          <h4 className="font-semibold text-base">Submissions for {selectedEntry.label} ({filteredSubmissions.length})</h4>
+        </div>
+        <div className="divide-y divide-gray-200 mt-4 overflow-y-auto">
+          {filteredSubmissions.length > 0 ? (
+            filteredSubmissions.map(sub => renderSubmissionItem(sub, sub.id))
+          ) : (
+            <div className="text-center text-gray-500 py-4">No submissions found.</div>
+          )}
+        </div>
+      </div>
+    );
+  };
+  
   const renderLeaderboard = () => {
     if (!selectedPoint) {
       return (
@@ -379,13 +448,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         </div>
       );
     }
-
+  
     if (isLoading || thresholdsLoading) {
       return <div className="p-4 text-center">Loading leaderboards...</div>;
     }
-
-    const formatValue = (value: string | null) => value || 'N/A';
-
+    
+    // ADDED: Conditionally render the detailed view if an entry is selected
+    if (selectedEntry) {
+        return renderDetailedSubmissions();
+    }
+  
     return (
       <Tabs defaultValue="crop" value={groupBy} onValueChange={(value) => setGroupBy(value as any)}>
         <TabsList className="grid w-full grid-cols-3">
@@ -393,46 +465,16 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <TabsTrigger value="crop">Crop</TabsTrigger>
           <TabsTrigger value="brand">Brand</TabsTrigger>
         </TabsList>
-
+  
         <TabsContent value="none" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2 text-base">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
             <div className="divide-y divide-gray-200">
-              {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => {
-                // FIXED: Better crop type handling and thresholds lookup
-                const cropType = sub.cropType || sub.cropLabel || 'unknown';
-                const thresholds = cache?.[cropType];
-                
-                console.log(`🔍 Rendering submission pill for ${sub.cropLabel}:`, {
-                  cropType,
-                  brixLevel: sub.brixLevel,
-                  thresholds
-                });
-                
-                const brixPillColor = getBrixColor(
-                  sub.brixLevel, 
-                  thresholds || { poor: minBrix, average: (minBrix + maxBrix) / 2, good: maxBrix * 0.8, excellent: maxBrix }, 
-                  'bg'
-                );
-                
-                return (
-                  <div key={sub.id} className="flex justify-between items-start py-2">
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-base">{sub.cropLabel || 'Unknown Crop'}</span>
-                      <span className="text-xs text-gray-500 mt-1">
-                        {sub.brandLabel || 'Unknown Brand'} - {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
-                      </span>
-                    </div>
-                    <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${brixPillColor}`}>
-                      {sub.brixLevel}
-                    </div>
-                  </div>
-                );
-              })}
+              {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => renderSubmissionItem(sub, sub.id))}
             </div>
           </div>
         </TabsContent>
-
+  
         <TabsContent value="crop" className="mt-4">
           <div>
             <div className="flex justify-between items-center text-sm font-semibold border-b pb-1">
@@ -444,10 +486,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 cropLeaderboard.map((entry, index) => {
                   const rankPillColor = getBrixColor(entry.rank, rankThresholds, 'bg');
                   
-                  console.log('🔍 Rendering crop leaderboard entry:', entry);
-                  
                   return (
-                    <div key={entry.crop_id || `crop-${index}`} className="flex justify-between items-center py-2">
+                    // ADDED: Add onClick handler to enable drill-down
+                    <div 
+                      key={entry.crop_id || `crop-${index}`} 
+                      className="flex justify-between items-center py-2 cursor-pointer hover:bg-gray-50"
+                      onClick={() => setSelectedEntry({ type: 'crop', id: entry.crop_id, label: entry.crop_label || entry.crop_name || 'Unknown Crop' })}
+                    >
                       <div className="flex flex-col">
                         <span className="font-semibold text-base">
                           {entry.crop_label || entry.crop_name || 'Unknown Crop'}
@@ -476,7 +521,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </div>
           </div>
         </TabsContent>
-
+  
         <TabsContent value="brand" className="mt-4">
           <div>
             <div className="flex justify-between items-center text-sm font-semibold border-b pb-1">
@@ -488,10 +533,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 brandLeaderboard.map((entry, index) => {
                   const rankPillColor = getBrixColor(entry.rank, rankThresholds, 'bg');
                   
-                  console.log('🔍 Rendering brand leaderboard entry:', entry);
-                  
                   return (
-                    <div key={entry.brand_id || `brand-${index}`} className="flex justify-between items-center py-2">
+                    // ADDED: Add onClick handler to enable drill-down
+                    <div 
+                      key={entry.brand_id || `brand-${index}`} 
+                      className="flex justify-between items-center py-2 cursor-pointer hover:bg-gray-50"
+                      onClick={() => setSelectedEntry({ type: 'brand', id: entry.brand_id, label: entry.brand_label || entry.brand_name || 'Unknown Brand' })}
+                    >
                       <div className="flex flex-col">
                         <span className="font-semibold text-base">
                           {entry.brand_label || entry.brand_name || 'Unknown Brand'}
