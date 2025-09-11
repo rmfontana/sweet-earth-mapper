@@ -345,14 +345,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <div>
             <h4 className="font-semibold mb-2 text-base">All Submissions ({allData.filter(d => d.placeId === selectedPoint.placeId).length})</h4>
             <div className={`text-sm font-semibold ${gridLayout} gap-2 border-b pb-1`}>
-              <div>Crop</div>
-              <div>Brand</div>
-              <div>Date</div>
+              <div className="overflow-hidden text-ellipsis whitespace-nowrap">Crop</div>
+              <div className="overflow-hidden text-ellipsis whitespace-nowrap">Brand</div>
+              <div className="overflow-hidden text-ellipsis whitespace-nowrap">Date</div>
               <div className="text-right">Brix</div>
             </div>
-            <div className="max-h-60 overflow-y-auto">
+            <div className="divide-y divide-gray-200">
               {allData.filter(d => d.placeId === selectedPoint.placeId).map(sub => (
-                <div key={sub.id} className={`${gridLayout} gap-2 py-1 border-b border-gray-200 text-base`}>
+                <div key={sub.id} className={`${gridLayout} gap-2 py-1 border-gray-200 text-base`}>
                   <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(sub.cropType)}</div>
                   <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(sub.brandName)}</div>
                   <div className="overflow-hidden text-ellipsis whitespace-nowrap">{sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}</div>
@@ -376,9 +376,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   <div className="text-center">Score</div>
                   <div className="text-center">Count</div>
                 </div>
-                <div className="max-h-60 overflow-y-auto">
+                <div className="divide-y divide-gray-200">
                   {cropLeaderboard.map(entry => (
-                    <div key={entry.crop_id} className={`${gridLayout} gap-2 py-1 border-b border-gray-200 text-base items-center`}>
+                    <div key={entry.crop_id} className={`${gridLayout} gap-2 py-1 border-gray-200 text-base items-center`}>
                       <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(entry.crop_name)}</div>
                       <div className="font-semibold text-center">#{entry.rank}</div>
                       <div className={`text-center font-bold ${getScoreColor(entry.average_normalized_score)}`}>
@@ -406,9 +406,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                   <div className="text-center">Score</div>
                   <div className="text-center">Count</div>
                 </div>
-                <div className="max-h-60 overflow-y-auto">
+                <div className="divide-y divide-gray-200">
                   {brandLeaderboard.map(entry => (
-                    <div key={entry.brand_id} className={`${gridLayout} gap-2 py-1 border-b border-gray-200 text-base items-center`}>
+                    <div key={entry.brand_id} className={`${gridLayout} gap-2 py-1 border-gray-200 text-base items-center`}>
                       <div className="overflow-hidden text-ellipsis whitespace-nowrap">{formatValue(entry.brand_name)}</div>
                       <div className="font-semibold text-center">#{entry.rank}</div>
                       <div className={`text-center font-bold ${getScoreColor(entry.average_normalized_score)}`}>
@@ -435,9 +435,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       {/* Side Pane UI */}
       <Card
-        className="absolute inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl z-50 transform transition-transform duration-300 ease-in-out h-full overflow-y-auto"
+        className="absolute inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl z-50 flex flex-col h-full"
       >
-        <CardHeader className="p-4 flex flex-row items-start justify-between">
+        <CardHeader className="p-4 flex-shrink-0 flex flex-row items-start justify-between">
           <div>
             {selectedPoint ? (
               <>
@@ -456,12 +456,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             </Button>
           )}
         </CardHeader>
-        <CardContent className="p-4 pt-0">
+        <CardContent className="p-4 pt-0 flex-1 overflow-y-auto">
           {renderLeaderboard()}
         </CardContent>
       </Card>
     </div>
-);
+  );
 };
 
 export default InteractiveMap;
