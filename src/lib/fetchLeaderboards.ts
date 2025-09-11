@@ -5,9 +5,9 @@ const supabase = createClient(getSupabaseUrl(), getPublishableKey());
 
 export type Filter = {
   location_name?: string;
-  place_id?: string; 
-  state?: string; 
-  country?: string; 
+  place_id?: string;
+  state?: string;
+  country?: string;
 };
 
 export interface LeaderboardEntry {
@@ -16,6 +16,8 @@ export interface LeaderboardEntry {
   average_brix: number;
   submission_count: number;
   rank: number;
+  crop_label?: string; // Corrected: add labels to interface
+  brand_label?: string; // Corrected: add labels to interface
 }
 
 async function fetchLeaderboard<R>(
@@ -23,9 +25,9 @@ async function fetchLeaderboard<R>(
   filters: Filter = {}
 ): Promise<R[]> {
   const { location_name, place_id, state, country } = filters;
-  
+
   console.log(`Fetching ${rpcName} with filters:`, { location_name, place_id, state, country });
-  
+
   const params = {
     location_name_filter: location_name ?? null,
     place_id_filter: place_id ?? null,
@@ -34,7 +36,7 @@ async function fetchLeaderboard<R>(
   };
 
   const { data, error } = await supabase.rpc(rpcName, params);
-  
+
   if (error) {
     console.error(`Error fetching ${rpcName}:`, error);
     throw error;
@@ -45,14 +47,16 @@ async function fetchLeaderboard<R>(
 }
 
 export async function fetchBrandLeaderboard(filters: Filter = {}): Promise<
-  (LeaderboardEntry & { brand_id: string; brand_name: string })[]
+  (LeaderboardEntry & { brand_id: string; brand_name: string; brand_label: string })[]
 > {
+  // Assuming your Supabase RPC function `get_brand_leaderboard` is updated to return `brand_label`.
   return fetchLeaderboard('get_brand_leaderboard', filters);
 }
 
 export async function fetchCropLeaderboard(filters: Filter = {}): Promise<
-  (LeaderboardEntry & { crop_id: string; crop_name: string })[]
+  (LeaderboardEntry & { crop_id: string; crop_name: string; crop_label: string })[]
 > {
+  // Assuming your Supabase RPC function `get_crop_leaderboard` is updated to return `crop_label`.
   return fetchLeaderboard('get_crop_leaderboard', filters);
 }
 
