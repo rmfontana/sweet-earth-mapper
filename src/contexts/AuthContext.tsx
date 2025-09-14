@@ -54,7 +54,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
       .from('users')
       .select('id, display_name, role, points, submission_count, last_submission, country, state, city')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('[fetchUserProfile] Supabase error:', error.message, error);
@@ -74,6 +74,18 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
   }
 }
 
+async function ensureProfileExists(userId: string, retries = 3): Promise<UserProfile | null> {
+  for (let i = 0; i < retries; i++) {
+    const profile = await fetchUserProfile(userId);
+    if (profile) {
+      return profile;
+    }
+    console.log(`[ensureProfileExists] Retry ${i + 1}/${retries} for user ${userId}`);
+    await new Promise(resolve => setTimeout(resolve, 500 * (i + 1))); // exponential backoff
+  }
+  return null;
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -81,33 +93,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isAdmin = user?.role === 'admin';
 
-  // Handle session changes
-  const handleSessionChangeAsync = async (session: any) => {
+  // Handle session changes synchronously to avoid race conditions
+  const handleSessionChange = (session: any) => {
     if (session?.user) {
-      try {
-        const { id, email } = session.user;
-        const profile = await fetchUserProfile(id);
-        if (profile) {
-          if (email) {
-            profile.email = email;
+      const { id, email } = session.user;
+      console.log('[Auth] Session established for user:', id);
+      
+      // Defer DB calls to avoid blocking auth state changes
+      setTimeout(async () => {
+        try {
+          const profile = await ensureProfileExists(id);
+          if (profile) {
+            if (email) {
+              profile.email = email;
+            }
+            setUser(profile);
+            setIsAuthenticated(true);
+            setAuthError(null);
+            console.log('[Auth] Profile loaded successfully for user:', id);
+          } else {
+            console.error('[Auth] Profile not found after retries for user:', id);
+            setUser(null);
+            setIsAuthenticated(false);
+            setAuthError('User profile not found.');
           }
-          setUser(profile);
-          setIsAuthenticated(true);
-          setAuthError(null);
-        } else {
+        } catch (err: any) {
+          console.error('[Auth] Error fetching profile:', err.message || err);
           setUser(null);
           setIsAuthenticated(false);
-          setAuthError('User profile not found.');
+          setAuthError('Error fetching user profile.');
         }
-      } catch (err: any) {
-        console.error('[Auth] Error fetching profile:', err.message || err);
-        setUser(null);
-        setIsAuthenticated(false);
-        setAuthError('Error fetching user profile.');
-      }
+      }, 0);
     } else {
+      console.log('[Auth] No session found');
       setUser(null);
       setIsAuthenticated(false);
+      setAuthError(null);
     }
   };
 
@@ -121,7 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      await handleSessionChangeAsync(session);
+      handleSessionChange(session);
     } catch (err: any) {
       console.error('[Auth] Unexpected error loading session:', err.message || err);
       setAuthError('Unexpected error loading session.');
@@ -129,11 +150,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    loadSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      handleSessionChangeAsync(session);
+    // Set up listener first to avoid missing events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[Auth] Auth state change:', event);
+      handleSessionChange(session);
     });
+
+    // Then load initial session
+    loadSession();
 
     return () => subscription.unsubscribe();
   }, []);
@@ -158,6 +182,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         password,
         options: {
           data: userMetadata,
+          emailRedirectTo: `${window.location.origin}/`,
         },
       });
 
@@ -178,20 +203,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // We don't need to call the Edge Function from the client.
 
       if (data.session) {
-        // A session means email confirmation is not required (or is instant),
-        // so we can fetch the profile and log the user in immediately.
-        const profile = await fetchUserProfile(data.user.id);
-        if (profile) {
-          if (data.user.email) {
-            profile.email = data.user.email;
-          }
-          setUser(profile);
-          setIsAuthenticated(true);
-          return true;
-        } else {
-          setAuthError('Account created but profile not found. Try logging in again.');
-          return false;
-        }
+        // A session means email confirmation is not required,
+        // profile will be loaded via onAuthStateChange
+        console.log('[REGISTER] Session created, profile will be loaded automatically');
+        return true;
       }
 
       // No session means email confirmation is needed, so just return true for now.
@@ -218,18 +233,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (data.user) {
-        const profile = await fetchUserProfile(data.user.id);
-        if (profile) {
-          if (data.user.email) {
-            profile.email = data.user.email;
-          }
-          setUser(profile);
-          setIsAuthenticated(true);
-          return true;
-        } else {
-          setAuthError('User profile not found after login. Please contact support.');
-          return false;
-        }
+        // Profile will be loaded via onAuthStateChange
+        console.log('[LOGIN] User authenticated, profile will be loaded automatically');
+        return true;
       }
 
       setAuthError('Login failed. No user returned.');

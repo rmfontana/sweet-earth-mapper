@@ -38,7 +38,7 @@ const Register = () => {
   // Redirect if already authenticated
   React.useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard');
+      navigate('/');
     }
   }, [isAuthenticated, navigate]);
 
@@ -187,7 +187,7 @@ const Register = () => {
             title: 'Welcome to BRIX!',
             description: `Account created successfully! Welcome, ${formData.display_name.trim()}!`,
           });
-          navigate('/dashboard');
+          navigate('/');
         } else {
           toast({
             title: 'Registration Successful!',
