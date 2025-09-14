@@ -198,21 +198,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     location?: LocationData
   ): Promise<boolean> => {
     setAuthError(null);
-    
+  
     try {
-      // Prepare user metadata - the trigger will use this to create the profile
       const userMetadata: any = {
         display_name: displayName.trim() || email.split('@')[0],
+        ...location
       };
-  
-      // Add location data to metadata if provided
-      if (location) {
-        userMetadata.country = location.country;
-        userMetadata.state = location.state;
-        userMetadata.city = location.city;
-      }
-  
-      console.log('[REGISTER] Attempting registration with metadata:', userMetadata);
   
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -235,38 +226,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
       console.log('[REGISTER] Auth user created:', data.user.id);
   
-      // If email confirmation is required, user won't be logged in immediately
-      if (!data.session) {
-        console.log('[REGISTER] Email confirmation required');
-        // Registration successful, but needs email confirmation
-        // The trigger should have created the profile already
-        return true;
+      // Call Edge Function to create user profile
+      const createProfileRes = await fetch(`${getSupabaseUrl()}/functions/v1/create-user-profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.session?.access_token || ''}`, // Optional
+        },
+        body: JSON.stringify({
+          user_id: data.user.id,
+          email: data.user.email,
+          display_name: userMetadata.display_name,
+          country: userMetadata.country,
+          state: userMetadata.state,
+          city: userMetadata.city
+        }),
+      });
+  
+      if (!createProfileRes.ok) {
+        const error = await createProfileRes.json();
+        console.error('[REGISTER] Edge function failed:', error);
+        setAuthError('Failed to create user profile. Please try again later.');
+        return false;
       }
   
-      // If user is immediately logged in (email confirmation disabled)
+      // If session exists (email confirmation not required), fetch profile immediately
       if (data.session) {
-        console.log('[REGISTER] User logged in immediately, waiting for profile...');
-        
-        // Wait for the trigger to create the profile
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Try to fetch the profile
-        let profile = null;
-        let attempts = 0;
-        const maxAttempts = 5;
-        
-        while (!profile && attempts < maxAttempts) {
-          console.log(`[REGISTER] Fetching profile attempt ${attempts + 1}`);
-          profile = await fetchUserProfile(data.user.id);
-          
-          if (!profile) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            attempts++;
-          }
-        }
-        
+        const profile = await fetchUserProfile(data.user.id);
         if (profile) {
-          console.log('[REGISTER] Profile found:', profile);
           if (data.user.email) {
             profile.email = data.user.email;
           }
@@ -274,12 +261,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setIsAuthenticated(true);
           return true;
         } else {
-          console.warn('[REGISTER] Profile not found after multiple attempts');
-          setAuthError('Account created but profile is still being set up. Please try refreshing the page or logging in again.');
+          setAuthError('Account created but profile not found. Try logging in again.');
           return false;
         }
       }
   
+      // If no session, the user will need to confirm their email first
       return true;
     } catch (err: any) {
       console.error('[REGISTER] Unexpected error:', err.message || err);
