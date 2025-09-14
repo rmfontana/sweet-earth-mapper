@@ -10,7 +10,8 @@ export async function fetchFromGeonamesProxy({ endpoint, queryParams }: GeoNames
 
   const encodedParams = btoa(new URLSearchParams(queryParams).toString());
 
-  const url = `${supabaseUrl}/functions/v1/geonames-proxy?endpoint=${endpoint}&params=${encodedParams}`;
+  const url = `${supabaseUrl}/functions/v1/get-geonames-username?endpoint=${encodeURIComponent(endpoint)}&params=${encodeURIComponent(encodedParams)}`;
+
 
   const response = await fetch(url, {
     method: 'GET',
