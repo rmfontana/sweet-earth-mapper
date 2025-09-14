@@ -16,6 +16,15 @@ interface UserProfile {
   submission_count?: number | null;
   last_submission?: string | null;
   email?: string | null;
+  country?: string | null;
+  state?: string | null;
+  city?: string | null;
+}
+
+interface LocationData {
+  country: string;
+  state: string;
+  city: string;
 }
 
 interface AuthContextType {
@@ -25,8 +34,9 @@ interface AuthContextType {
   authError: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  register: (email: string, password: string, displayName: string) => Promise<boolean>;
+  register: (email: string, password: string, displayName: string, location?: LocationData) => Promise<boolean>;
   updateUsername: (newUsername: string) => Promise<boolean>;
+  updateLocation: (location: LocationData) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,7 +50,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
 
     const { data, error } = await supabase
       .from('users')
-      .select('id, display_name, role, points, submission_count, last_submission')
+      .select('id, display_name, role, points, submission_count, last_submission, country, state, city')
       .eq('id', userId)
       .single();
 
@@ -54,7 +64,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
       return null;
     }
 
-    return data;
+    return data as UserProfile;
   } catch (err: any) {
     console.error('[fetchUserProfile] Unexpected error:', err.message || err);
     return null;
@@ -75,7 +85,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const { id, email } = session.user;
         const profile = await fetchUserProfile(id);
         if (profile) {
-          profile.email = email;
+          if (email) {
+            profile.email = email;
+          }
           setUser(profile);
           setIsAuthenticated(true);
           setAuthError(null);
@@ -142,7 +154,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (data.user) {
         const profile = await fetchUserProfile(data.user.id);
         if (profile) {
-          profile.email = data.user.email;
+          if (data.user.email) {
+            profile.email = data.user.email;
+          }
           setUser(profile);
           setIsAuthenticated(true);
           return true;
@@ -177,17 +191,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const register = async (email: string, password: string, displayName: string): Promise<boolean> => {
+  const register = async (
+    email: string, 
+    password: string, 
+    displayName: string, 
+    location?: LocationData
+  ): Promise<boolean> => {
     setAuthError(null);
     
     try {
+      // The `data` option in `supabase.auth.signUp` is for `auth.users` metadata.
+      // We'll include location data in the metadata and let the trigger handle it
+      const userMetadata: any = {
+        display_name: displayName.trim() || email.split('@')[0],
+      };
+
+      // Add location data to metadata if provided
+      if (location) {
+        userMetadata.country = location.country;
+        userMetadata.state = location.state;
+        userMetadata.city = location.city;
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: {
-            display_name: displayName.trim() || email.split('@')[0], // Pass display_name in metadata
-          }
+          data: userMetadata
         },
       });
 
@@ -222,9 +252,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         
         if (profile) {
-          profile.email = data.user.email;
+          if (data.user.email) {
+            profile.email = data.user.email;
+          }
           setUser(profile);
           setIsAuthenticated(true);
+          
+          // If location wasn't set during signup, update it now
+          if (location && (!profile.country || !profile.state || !profile.city)) {
+            await updateLocation(location);
+          }
+          
           return true;
         } else {
           console.warn('[REGISTER] Profile not found after multiple attempts');
@@ -247,19 +285,70 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return false;
     }
 
-    const { error } = await supabase
-      .from('users')
-      .update({ display_name: newUsername })
-      .eq('id', user.id);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ display_name: newUsername })
+        .eq('id', user.id);
 
-    if (error) {
-      console.error('[updateUsername] Error:', error.message);
-      setAuthError(error.message);
+      if (error) {
+        console.error('[updateUsername] Error:', error.message);
+        setAuthError(error.message);
+        return false;
+      }
+
+      setUser((prev) => (prev ? { ...prev, display_name: newUsername } : null));
+      return true;
+    } catch (err: any) {
+      console.error('[updateUsername] Unexpected error:', err.message || err);
+      setAuthError('Unexpected error updating username.');
       return false;
     }
+  };
 
-    setUser((prev) => (prev ? { ...prev, display_name: newUsername } : null));
-    return true;
+  const updateLocation = async (location: LocationData): Promise<boolean> => {
+    if (!user) {
+      console.warn('[updateLocation] Skipped: user is null');
+      setAuthError('Not authenticated.');
+      return false;
+    }
+  
+    try {
+      // Check if location columns exist by attempting the update
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          country: location.country,
+          state: location.state,
+          city: location.city
+        })
+        .eq('id', user.id);
+  
+      if (error) {
+        // If the error is about missing columns, the migration hasn't been run yet
+        if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+          console.error('[updateLocation] Location columns do not exist. Please run the database migration.');
+          setAuthError('Location feature is not available. Please contact support.');
+          return false;
+        }
+        
+        console.error('[updateLocation] Error:', error.message);
+        setAuthError(error.message);
+        return false;
+      }
+  
+      // Re-fetch the profile to get the latest from DB
+      const refreshedProfile = await fetchUserProfile(user.id);
+      if (refreshedProfile) {
+        setUser({ ...refreshedProfile, email: user.email });
+      }
+  
+      return true;
+    } catch (err: any) {
+      console.error('[updateLocation] Unexpected error:', err.message || err);
+      setAuthError('Unexpected error updating location.');
+      return false;
+    }
   };
 
   return (
@@ -273,6 +362,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         logout,
         register,
         updateUsername,
+        updateLocation,
       }}
     >
       {children}

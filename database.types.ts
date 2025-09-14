@@ -298,6 +298,8 @@ export type Database = {
       }
       users: {
         Row: {
+          city: string | null
+          country: string | null
           created_at: string | null
           display_name: string | null
           email: string | null
@@ -305,9 +307,12 @@ export type Database = {
           last_submission: string | null
           points: number | null
           role: string | null
+          state: string | null
           submission_count: number | null
         }
         Insert: {
+          city?: string | null
+          country?: string | null
           created_at?: string | null
           display_name?: string | null
           email?: string | null
@@ -315,9 +320,12 @@ export type Database = {
           last_submission?: string | null
           points?: number | null
           role?: string | null
+          state?: string | null
           submission_count?: number | null
         }
         Update: {
+          city?: string | null
+          country?: string | null
           created_at?: string | null
           display_name?: string | null
           email?: string | null
@@ -325,6 +333,7 @@ export type Database = {
           last_submission?: string | null
           points?: number | null
           role?: string | null
+          state?: string | null
           submission_count?: number | null
         }
         Relationships: []
@@ -903,6 +912,7 @@ export type Database = {
           average_normalized_score: number
           average_normalized_score_threshold: number
           crop_id: string
+          crop_label: string
           crop_name: string
           excellent_normalized_score: number
           good_normalized_score: number
