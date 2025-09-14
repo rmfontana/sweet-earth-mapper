@@ -200,19 +200,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setAuthError(null);
     
     try {
-      // The `data` option in `supabase.auth.signUp` is for `auth.users` metadata.
-      // We'll include location data in the metadata and let the trigger handle it
+      // Prepare user metadata - the trigger will use this to create the profile
       const userMetadata: any = {
         display_name: displayName.trim() || email.split('@')[0],
       };
-
+  
       // Add location data to metadata if provided
       if (location) {
         userMetadata.country = location.country;
         userMetadata.state = location.state;
         userMetadata.city = location.city;
       }
-
+  
+      console.log('[REGISTER] Attempting registration with metadata:', userMetadata);
+  
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -220,31 +221,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           data: userMetadata
         },
       });
-
+  
       if (error) {
-        console.error('[REGISTER] Error:', error.message);
+        console.error('[REGISTER] Supabase auth error:', error.message);
         setAuthError(error.message);
         return false;
       }
-
+  
+      if (!data.user) {
+        setAuthError('Registration failed - no user returned');
+        return false;
+      }
+  
+      console.log('[REGISTER] Auth user created:', data.user.id);
+  
       // If email confirmation is required, user won't be logged in immediately
-      if (data.user && !data.session) {
-        // Registration successful, needs email confirmation
+      if (!data.session) {
+        console.log('[REGISTER] Email confirmation required');
+        // Registration successful, but needs email confirmation
+        // The trigger should have created the profile already
         return true;
       }
-
+  
       // If user is immediately logged in (email confirmation disabled)
-      if (data.user && data.session) {
-        // Wait a moment for the trigger/hook to create the profile
-        await new Promise(resolve => setTimeout(resolve, 1500));
+      if (data.session) {
+        console.log('[REGISTER] User logged in immediately, waiting for profile...');
         
-        // Try to fetch the profile a few times in case of timing issues
+        // Wait for the trigger to create the profile
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Try to fetch the profile
         let profile = null;
         let attempts = 0;
-        const maxAttempts = 3;
+        const maxAttempts = 5;
         
         while (!profile && attempts < maxAttempts) {
+          console.log(`[REGISTER] Fetching profile attempt ${attempts + 1}`);
           profile = await fetchUserProfile(data.user.id);
+          
           if (!profile) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             attempts++;
@@ -252,25 +266,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         
         if (profile) {
+          console.log('[REGISTER] Profile found:', profile);
           if (data.user.email) {
             profile.email = data.user.email;
           }
           setUser(profile);
           setIsAuthenticated(true);
-          
-          // If location wasn't set during signup, update it now
-          if (location && (!profile.country || !profile.state || !profile.city)) {
-            await updateLocation(location);
-          }
-          
           return true;
         } else {
           console.warn('[REGISTER] Profile not found after multiple attempts');
-          setAuthError('Account created but profile setup is still in progress. Please try refreshing or logging in again.');
+          setAuthError('Account created but profile is still being set up. Please try refreshing the page or logging in again.');
           return false;
         }
       }
-
+  
       return true;
     } catch (err: any) {
       console.error('[REGISTER] Unexpected error:', err.message || err);
@@ -278,6 +287,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return false;
     }
   };
+  
+  // Also update your fetchUserProfile function to add better logging
+  async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
+    try {
+      if (!userId) {
+        console.error('[fetchUserProfile] No userId provided');
+        return null;
+      }
+  
+      console.log('[fetchUserProfile] Fetching profile for user:', userId);
+  
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, display_name, role, points, submission_count, last_submission, country, state, city')
+        .eq('id', userId)
+        .single();
+  
+      if (error) {
+        console.error('[fetchUserProfile] Supabase error:', error.message, error);
+        return null;
+      }
+  
+      if (!data) {
+        console.warn('[fetchUserProfile] No user found for ID:', userId);
+        return null;
+      }
+  
+      console.log('[fetchUserProfile] Profile found:', data);
+      return data as UserProfile;
+    } catch (err: any) {
+      console.error('[fetchUserProfile] Unexpected error:', err.message || err);
+      return null;
+    }
+  }
 
   const updateUsername = async (newUsername: string): Promise<boolean> => {
     if (!user) {

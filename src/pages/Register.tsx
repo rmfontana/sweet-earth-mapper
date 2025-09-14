@@ -416,7 +416,7 @@ const Register = () => {
                   <div className="text-center">
                     <h3 className="text-lg font-medium text-gray-900 mb-2">Where are you located?</h3>
                     <p className="text-sm text-gray-600">
-                      This helps us show you relevant agricultural data and connect you with farmers in your area.
+                      This helps us show you relevant brix data to show you bionutrient scores near you.
                     </p>
                   </div>
 
