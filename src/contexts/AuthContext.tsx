@@ -6,7 +6,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { supabase } from '../integrations/supabase/client';
-import { getSupabaseUrl } from '@/lib/utils.ts';
+// NOTE: We no longer need the getSupabaseUrl utility as we're removing the Edge Function call.
 
 interface UserProfile {
   id: string;
@@ -145,7 +145,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     location?: LocationData
   ): Promise<boolean> => {
     setAuthError(null);
-
     try {
       const userMetadata: any = {
         display_name: displayName.trim() || email.split('@')[0],
@@ -175,33 +174,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       console.log('[REGISTER] Auth user created:', data.user.id);
 
-      // Headers WITHOUT Authorization (because token not valid yet)
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      // Call Edge Function to create user profile
-      const createProfileRes = await fetch(`${getSupabaseUrl()}/functions/v1/create-user-profile`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          user_id: data.user.id,
-          email: data.user.email,
-          display_name: userMetadata.display_name,
-          country: userMetadata.country,
-          state: userMetadata.state,
-          city: userMetadata.city,
-        }),
-      });
-
-      if (!createProfileRes.ok) {
-        const errorBody = await createProfileRes.json().catch(() => ({}));
-        console.error('[REGISTER] Edge function failed:', errorBody);
-        setAuthError('Failed to create user profile. Please try again later.');
-        return false;
-      }
+      // The database trigger will now automatically create the user profile.
+      // We don't need to call the Edge Function from the client.
 
       if (data.session) {
+        // A session means email confirmation is not required (or is instant),
+        // so we can fetch the profile and log the user in immediately.
         const profile = await fetchUserProfile(data.user.id);
         if (profile) {
           if (data.user.email) {
@@ -216,7 +194,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // No session means email confirmation is needed, so no profile fetch now
+      // No session means email confirmation is needed, so just return true for now.
       return true;
     } catch (err: any) {
       console.error('[REGISTER] Unexpected error:', err.message || err);
@@ -240,38 +218,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (data.user) {
-        let profile = await fetchUserProfile(data.user.id);
-        if (!profile) {
-          console.warn('[LOGIN] Profile not found. Attempting Edge Function fallback.');
-
-          // Headers WITHOUT Authorization
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-          };
-
-          const createProfileRes = await fetch(`${getSupabaseUrl()}/functions/v1/create-user-profile`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              user_id: data.user.id,
-              email: data.user.email,
-              display_name: data.user.user_metadata?.display_name || data.user.email?.split('@')[0],
-              country: data.user.user_metadata?.country,
-              state: data.user.user_metadata?.state,
-              city: data.user.user_metadata?.city,
-            }),
-          });
-
-          if (!createProfileRes.ok) {
-            const errorBody = await createProfileRes.json().catch(() => ({}));
-            console.error('[LOGIN] Edge function fallback failed:', errorBody);
-            setAuthError('Failed to create user profile on login. Please try again.');
-            return false;
-          }
-
-          profile = await fetchUserProfile(data.user.id);
-        }
-
+        const profile = await fetchUserProfile(data.user.id);
         if (profile) {
           if (data.user.email) {
             profile.email = data.user.email;
@@ -280,7 +227,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setIsAuthenticated(true);
           return true;
         } else {
-          setAuthError('User profile not found after login.');
+          setAuthError('User profile not found after login. Please contact support.');
           return false;
         }
       }
