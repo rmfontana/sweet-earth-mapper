@@ -149,7 +149,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const userMetadata: any = {
         display_name: displayName.trim() || email.split('@')[0],
-        ...location
+        ...location,
       };
 
       console.log('[REGISTER] Attempting registration with metadata:', userMetadata);
@@ -158,7 +158,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email,
         password,
         options: {
-          data: userMetadata
+          data: userMetadata,
         },
       });
 
@@ -175,15 +175,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       console.log('[REGISTER] Auth user created:', data.user.id);
 
-      // Prepare headers - include Authorization only if token present
+      // Headers WITHOUT Authorization (because token not valid yet)
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-      if (data.session?.access_token) {
-        headers['Authorization'] = `Bearer ${data.session.access_token}`;
-      } else {
-        console.log('[REGISTER] No access token available; not sending Authorization header');
-      }
 
       // Call Edge Function to create user profile
       const createProfileRes = await fetch(`${getSupabaseUrl()}/functions/v1/create-user-profile`, {
@@ -249,14 +244,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!profile) {
           console.warn('[LOGIN] Profile not found. Attempting Edge Function fallback.');
 
+          // Headers WITHOUT Authorization
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
           };
-          if (data.session?.access_token) {
-            headers['Authorization'] = `Bearer ${data.session.access_token}`;
-          } else {
-            console.log('[LOGIN] No access token; not sending Authorization header');
-          }
 
           const createProfileRes = await fetch(`${getSupabaseUrl()}/functions/v1/create-user-profile`, {
             method: 'POST',
