@@ -3,14 +3,7 @@ import { ChevronDown, MapPin, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Alert, AlertDescription } from '../ui/alert';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '../ui/select';
-import { 
+import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -33,13 +26,7 @@ interface LocationSelectorProps {
     stateCode: string;
     city: string;
   };
-  onChange: (location: {
-    country: string;
-    countryCode: string; 
-    state: string;
-    stateCode: string;
-    city: string;
-  }) => void;
+  onChange: (location: LocationData) => void;
   disabled?: boolean;
   required?: boolean;
   showAutoDetect?: boolean;
@@ -55,17 +42,25 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   const [countries, setCountries] = useState<Country[]>([]);
   const [states, setStates] = useState<State[]>([]);
   const [cities, setCities] = useState<City[]>([]);
-  
+
   const [loading, setLoading] = useState({
     countries: false,
     states: false,
     cities: false,
     autoDetect: false
   });
-  
+
   const [error, setError] = useState<string | null>(null);
-  const [citySearch, setCitySearch] = useState('');
+
+  // Popover state
+  const [countryPopoverOpen, setCountryPopoverOpen] = useState(false);
+  const [statePopoverOpen, setStatePopoverOpen] = useState(false);
   const [cityPopoverOpen, setCityPopoverOpen] = useState(false);
+  
+  // Search state
+  const [countrySearch, setCountrySearch] = useState('');
+  const [stateSearch, setStateSearch] = useState('');
+  const [citySearch, setCitySearch] = useState('');
 
   // Load countries on mount
   useEffect(() => {
@@ -74,7 +69,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
 
   // Load states when country changes
   useEffect(() => {
-    if (value.countryCode && value.countryCode !== '') {
+    if (value.countryCode) {
       loadStates(value.countryCode);
     } else {
       setStates([]);
@@ -94,7 +89,6 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   const loadCountries = async () => {
     setLoading(prev => ({ ...prev, countries: true }));
     setError(null);
-    
     try {
       const countriesData = await locationService.getCountries();
       setCountries(countriesData);
@@ -108,12 +102,9 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
 
   const loadStates = async (countryCode: string) => {
     setLoading(prev => ({ ...prev, states: true }));
-    
     try {
       const statesData = await locationService.getStates(countryCode);
       setStates(statesData);
-      
-      // Reset state and city if current selections are invalid
       if (value.state && !statesData.find(s => s.name === value.state)) {
         onChange({
           ...value,
@@ -132,12 +123,9 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
 
   const loadCities = async (countryCode: string, stateCode: string) => {
     setLoading(prev => ({ ...prev, cities: true }));
-    
     try {
       const citiesData = await locationService.getCities(countryCode, stateCode);
       setCities(citiesData);
-      
-      // Reset city if current selection is invalid
       if (value.city && !citiesData.find(c => c.name === value.city)) {
         onChange({
           ...value,
@@ -155,18 +143,10 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   const handleAutoDetectLocation = async () => {
     setLoading(prev => ({ ...prev, autoDetect: true }));
     setError(null);
-    
     try {
       const detectedLocation = await locationService.getUserLocation();
-      
       if (detectedLocation) {
-        onChange({
-          country: detectedLocation.country,
-          countryCode: detectedLocation.countryCode,
-          state: detectedLocation.state,
-          stateCode: detectedLocation.stateCode,
-          city: detectedLocation.city
-        });
+        onChange(detectedLocation);
       } else {
         setError('Unable to detect your location. Please select manually.');
       }
@@ -178,7 +158,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
     }
   };
 
-  const handleCountryChange = (countryCode: string) => {
+  const handleCountrySelect = useCallback((countryCode: string) => {
     const selectedCountry = countries.find(c => c.code === countryCode);
     if (selectedCountry) {
       onChange({
@@ -188,10 +168,12 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
         stateCode: '',
         city: ''
       });
+      setCountryPopoverOpen(false);
+      setCountrySearch('');
     }
-  };
+  }, [countries, onChange]);
 
-  const handleStateChange = (stateName: string) => {
+  const handleStateSelect = useCallback((stateName: string) => {
     const selectedState = states.find(s => s.name === stateName);
     if (selectedState) {
       onChange({
@@ -200,21 +182,32 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
         stateCode: selectedState.adminCode1,
         city: ''
       });
+      setStatePopoverOpen(false);
+      setStateSearch('');
     }
-  };
+  }, [states, value, onChange]);
 
-  const handleCityChange = (cityName: string) => {
+  const handleCitySelect = useCallback((cityName: string) => {
     onChange({
       ...value,
       city: cityName
     });
     setCityPopoverOpen(false);
     setCitySearch('');
-  };
+  }, [value, onChange]);
 
-  const filteredCities = cities.filter(city =>
-    city.name.toLowerCase().includes(citySearch.toLowerCase())
-  ).slice(0, 100); // Limit results for performance
+  const filteredCountries = countrySearch
+    ? countries.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase()))
+    : countries;
+
+  const filteredStates = stateSearch
+    ? states.filter(s => s.name.toLowerCase().includes(stateSearch.toLowerCase()))
+    : states;
+
+  const filteredCities = citySearch
+    ? cities.filter(c => c.name.toLowerCase().includes(citySearch.toLowerCase())).slice(0, 100)
+    : cities.slice(0, 100);
+
 
   return (
     <div className="space-y-4">
@@ -244,68 +237,120 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
         </div>
       )}
 
-      {/* Country Selection */}
+      {/* Country Selection (Combobox) */}
       <div>
         <Label htmlFor="country">
           Country {required && <span className="text-red-500">*</span>}
         </Label>
-        <Select
-          value={value.countryCode}
-          onValueChange={handleCountryChange}
-          disabled={disabled || loading.countries}
-          required={required}
-        >
-          <SelectTrigger className="w-full mt-1">
-            <SelectValue placeholder={loading.countries ? "Loading countries..." : "Select country"} />
-          </SelectTrigger>
-          <SelectContent>
-            {countries.map((country) => (
-              <SelectItem key={country.code} value={country.code}>
-                <div className="flex items-center">
-                  {country.flag && <span className="mr-2">{country.flag}</span>}
-                  {country.name}
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover open={countryPopoverOpen} onOpenChange={setCountryPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={countryPopoverOpen}
+              className="w-full mt-1 justify-between"
+              disabled={disabled || loading.countries}
+            >
+              {value.country || (loading.countries ? "Loading countries..." : "Select country")}
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[300px] p-0">
+            <Command>
+              <CommandInput
+                placeholder="Search countries..."
+                value={countrySearch}
+                onValueChange={setCountrySearch}
+              />
+              <CommandList>
+                {loading.countries ? (
+                  <CommandEmpty>
+                    <div className="flex items-center justify-center p-2">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
+                    </div>
+                  </CommandEmpty>
+                ) : (
+                  <>
+                    <CommandEmpty>No country found.</CommandEmpty>
+                    <CommandGroup>
+                      {filteredCountries.map((country) => (
+                        <CommandItem
+                          key={country.code}
+                          value={country.name}
+                          onSelect={() => handleCountrySelect(country.code)}
+                        >
+                          <div className="flex items-center">
+                            {country.flag && <span className="mr-2">{country.flag}</span>}
+                            {country.name}
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </>
+                )}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
-      {/* State/Province Selection */}
+      {/* State/Province Selection (Combobox) */}
       {value.countryCode && (
         <div>
           <Label htmlFor="state">
             State/Province {required && <span className="text-red-500">*</span>}
           </Label>
-          <Select
-            value={value.state}
-            onValueChange={handleStateChange}
-            disabled={disabled || loading.states || states.length === 0}
-            required={required}
-          >
-            <SelectTrigger className="w-full mt-1">
-              <SelectValue 
-                placeholder={
-                  loading.states 
-                    ? "Loading states..." 
-                    : states.length === 0 
-                      ? "No states available"
-                      : "Select state/province"
-                } 
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {states.map((state) => (
-                <SelectItem key={`${state.geonameId}-${state.adminCode1}`} value={state.name}>
-                  {state.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={statePopoverOpen} onOpenChange={setStatePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={statePopoverOpen}
+                className="w-full mt-1 justify-between"
+                disabled={disabled || loading.states || states.length === 0}
+              >
+                {value.state || (loading.states ? "Loading states..." : states.length === 0 ? "No states available" : "Select state/province")}
+                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[300px] p-0">
+              <Command>
+                <CommandInput
+                  placeholder="Search states..."
+                  value={stateSearch}
+                  onValueChange={setStateSearch}
+                />
+                <CommandList>
+                  {loading.states ? (
+                    <CommandEmpty>
+                      <div className="flex items-center justify-center p-2">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
+                      </div>
+                    </CommandEmpty>
+                  ) : (
+                    <>
+                      <CommandEmpty>No state found.</CommandEmpty>
+                      <CommandGroup>
+                        {filteredStates.map((state) => (
+                          <CommandItem
+                            key={state.geonameId}
+                            value={state.name}
+                            onSelect={() => handleStateSelect(state.name)}
+                          >
+                            {state.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </>
+                  )}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
       )}
 
-      {/* City Selection with Search */}
+      {/* City Selection (Combobox) */}
       {value.countryCode && value.state && (
         <div>
           <Label htmlFor="city">
@@ -321,8 +366,8 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
                 disabled={disabled || loading.cities || cities.length === 0}
               >
                 {value.city || (
-                  loading.cities 
-                    ? "Loading cities..." 
+                  loading.cities
+                    ? "Loading cities..."
                     : cities.length === 0
                       ? "No cities available"
                       : "Select city"
@@ -330,7 +375,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
                 <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-full p-0">
+            <PopoverContent className="w-[300px] p-0">
               <Command>
                 <CommandInput
                   placeholder="Search cities..."
@@ -338,25 +383,35 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
                   onValueChange={setCitySearch}
                 />
                 <CommandList>
-                  <CommandEmpty>No cities found.</CommandEmpty>
-                  <CommandGroup>
-                    {filteredCities.map((city) => (
-                      <CommandItem
-                        key={city.geonameId}
-                        value={city.name}
-                        onSelect={handleCityChange}
-                      >
-                        <div className="flex flex-col">
-                          <span>{city.name}</span>
-                          {city.population && city.population > 0 && (
-                            <span className="text-xs text-gray-500">
-                              Population: {city.population.toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
+                  {loading.cities ? (
+                    <CommandEmpty>
+                      <div className="flex items-center justify-center p-2">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
+                      </div>
+                    </CommandEmpty>
+                  ) : (
+                    <>
+                      <CommandEmpty>No city found.</CommandEmpty>
+                      <CommandGroup>
+                        {filteredCities.map((city) => (
+                          <CommandItem
+                            key={city.geonameId}
+                            value={city.name}
+                            onSelect={() => handleCitySelect(city.name)}
+                          >
+                            <div className="flex flex-col">
+                              <span>{city.name}</span>
+                              {city.population && city.population > 0 && (
+                                <span className="text-xs text-gray-500">
+                                  Population: {city.population.toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </>
+                  )}
                 </CommandList>
               </Command>
             </PopoverContent>
