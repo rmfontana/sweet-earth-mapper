@@ -6,7 +6,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { supabase } from '../integrations/supabase/client';
-import { getSupabaseUrl } from "@/lib/utils.ts";
+import { getSupabaseUrl } from '@/lib/utils.ts';
 
 interface UserProfile {
   id: string;
@@ -48,6 +48,8 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
       return null;
     }
 
+    console.log('[fetchUserProfile] Fetching profile for user:', userId);
+
     const { data, error } = await supabase
       .from('users')
       .select('id, display_name, role, points, submission_count, last_submission, country, state, city')
@@ -55,7 +57,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
       .single();
 
     if (error) {
-      console.error('[fetchUserProfile] Supabase error:', error.message);
+      console.error('[fetchUserProfile] Supabase error:', error.message, error);
       return null;
     }
 
@@ -64,6 +66,7 @@ async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
       return null;
     }
 
+    console.log('[fetchUserProfile] Profile found:', data);
     return data as UserProfile;
   } catch (err: any) {
     console.error('[fetchUserProfile] Unexpected error:', err.message || err);
@@ -78,7 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isAdmin = user?.role === 'admin';
 
-  // Async handler for session changes - called without await inside onAuthStateChange
+  // Handle session changes
   const handleSessionChangeAsync = async (session: any) => {
     if (session?.user) {
       try {
@@ -108,7 +111,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Initial session load (awaiting is fine here)
   const loadSession = async () => {
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
@@ -127,15 +129,106 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    loadSession(); // Initial load
+    loadSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      // No await here — fire and forget async call to avoid deadlocks
       handleSessionChangeAsync(session);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const register = async (
+    email: string,
+    password: string,
+    displayName: string,
+    location?: LocationData
+  ): Promise<boolean> => {
+    setAuthError(null);
+
+    try {
+      const userMetadata: any = {
+        display_name: displayName.trim() || email.split('@')[0],
+        ...location
+      };
+
+      console.log('[REGISTER] Attempting registration with metadata:', userMetadata);
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: userMetadata
+        },
+      });
+
+      if (error) {
+        console.error('[REGISTER] Supabase auth error:', error.message);
+        setAuthError(error.message);
+        return false;
+      }
+
+      if (!data.user) {
+        setAuthError('Registration failed - no user returned');
+        return false;
+      }
+
+      console.log('[REGISTER] Auth user created:', data.user.id);
+
+      // Prepare headers - include Authorization only if token present
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (data.session?.access_token) {
+        headers['Authorization'] = `Bearer ${data.session.access_token}`;
+      } else {
+        console.log('[REGISTER] No access token available; not sending Authorization header');
+      }
+
+      // Call Edge Function to create user profile
+      const createProfileRes = await fetch(`${getSupabaseUrl()}/functions/v1/create-user-profile`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          user_id: data.user.id,
+          email: data.user.email,
+          display_name: userMetadata.display_name,
+          country: userMetadata.country,
+          state: userMetadata.state,
+          city: userMetadata.city,
+        }),
+      });
+
+      if (!createProfileRes.ok) {
+        const errorBody = await createProfileRes.json().catch(() => ({}));
+        console.error('[REGISTER] Edge function failed:', errorBody);
+        setAuthError('Failed to create user profile. Please try again later.');
+        return false;
+      }
+
+      if (data.session) {
+        const profile = await fetchUserProfile(data.user.id);
+        if (profile) {
+          if (data.user.email) {
+            profile.email = data.user.email;
+          }
+          setUser(profile);
+          setIsAuthenticated(true);
+          return true;
+        } else {
+          setAuthError('Account created but profile not found. Try logging in again.');
+          return false;
+        }
+      }
+
+      // No session means email confirmation is needed, so no profile fetch now
+      return true;
+    } catch (err: any) {
+      console.error('[REGISTER] Unexpected error:', err.message || err);
+      setAuthError('Unexpected error during registration.');
+      return false;
+    }
+  };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setAuthError(null);
@@ -152,7 +245,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (data.user) {
-        const profile = await fetchUserProfile(data.user.id);
+        let profile = await fetchUserProfile(data.user.id);
+        if (!profile) {
+          console.warn('[LOGIN] Profile not found. Attempting Edge Function fallback.');
+
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          if (data.session?.access_token) {
+            headers['Authorization'] = `Bearer ${data.session.access_token}`;
+          } else {
+            console.log('[LOGIN] No access token; not sending Authorization header');
+          }
+
+          const createProfileRes = await fetch(`${getSupabaseUrl()}/functions/v1/create-user-profile`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              user_id: data.user.id,
+              email: data.user.email,
+              display_name: data.user.user_metadata?.display_name || data.user.email?.split('@')[0],
+              country: data.user.user_metadata?.country,
+              state: data.user.user_metadata?.state,
+              city: data.user.user_metadata?.city,
+            }),
+          });
+
+          if (!createProfileRes.ok) {
+            const errorBody = await createProfileRes.json().catch(() => ({}));
+            console.error('[LOGIN] Edge function fallback failed:', errorBody);
+            setAuthError('Failed to create user profile on login. Please try again.');
+            return false;
+          }
+
+          profile = await fetchUserProfile(data.user.id);
+        }
+
         if (profile) {
           if (data.user.email) {
             profile.email = data.user.email;
@@ -191,124 +319,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const register = async (
-    email: string, 
-    password: string, 
-    displayName: string, 
-    location?: LocationData
-  ): Promise<boolean> => {
-    setAuthError(null);
-  
-    try {
-      const userMetadata: any = {
-        display_name: displayName.trim() || email.split('@')[0],
-        ...location
-      };
-  
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: userMetadata
-        },
-      });
-  
-      if (error) {
-        console.error('[REGISTER] Supabase auth error:', error.message);
-        setAuthError(error.message);
-        return false;
-      }
-  
-      if (!data.user) {
-        setAuthError('Registration failed - no user returned');
-        return false;
-      }
-  
-      console.log('[REGISTER] Auth user created:', data.user.id);
-  
-      // Call Edge Function to create user profile
-      const createProfileRes = await fetch(`${getSupabaseUrl()}/functions/v1/create-user-profile`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${data.session?.access_token || ''}`, // Optional
-        },
-        body: JSON.stringify({
-          user_id: data.user.id,
-          email: data.user.email,
-          display_name: userMetadata.display_name,
-          country: userMetadata.country,
-          state: userMetadata.state,
-          city: userMetadata.city
-        }),
-      });
-  
-      if (!createProfileRes.ok) {
-        const error = await createProfileRes.json();
-        console.error('[REGISTER] Edge function failed:', error);
-        setAuthError('Failed to create user profile. Please try again later.');
-        return false;
-      }
-  
-      // If session exists (email confirmation not required), fetch profile immediately
-      if (data.session) {
-        const profile = await fetchUserProfile(data.user.id);
-        if (profile) {
-          if (data.user.email) {
-            profile.email = data.user.email;
-          }
-          setUser(profile);
-          setIsAuthenticated(true);
-          return true;
-        } else {
-          setAuthError('Account created but profile not found. Try logging in again.');
-          return false;
-        }
-      }
-  
-      // If no session, the user will need to confirm their email first
-      return true;
-    } catch (err: any) {
-      console.error('[REGISTER] Unexpected error:', err.message || err);
-      setAuthError('Unexpected error during registration.');
-      return false;
-    }
-  };
-  
-  // Also update your fetchUserProfile function to add better logging
-  async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
-    try {
-      if (!userId) {
-        console.error('[fetchUserProfile] No userId provided');
-        return null;
-      }
-  
-      console.log('[fetchUserProfile] Fetching profile for user:', userId);
-  
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, display_name, role, points, submission_count, last_submission, country, state, city')
-        .eq('id', userId)
-        .single();
-  
-      if (error) {
-        console.error('[fetchUserProfile] Supabase error:', error.message, error);
-        return null;
-      }
-  
-      if (!data) {
-        console.warn('[fetchUserProfile] No user found for ID:', userId);
-        return null;
-      }
-  
-      console.log('[fetchUserProfile] Profile found:', data);
-      return data as UserProfile;
-    } catch (err: any) {
-      console.error('[fetchUserProfile] Unexpected error:', err.message || err);
-      return null;
-    }
-  }
-
   const updateUsername = async (newUsername: string): Promise<boolean> => {
     if (!user) {
       setAuthError('Not authenticated.');
@@ -342,37 +352,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setAuthError('Not authenticated.');
       return false;
     }
-  
+
     try {
-      // Check if location columns exist by attempting the update
       const { error } = await supabase
         .from('users')
-        .update({ 
+        .update({
           country: location.country,
           state: location.state,
-          city: location.city
+          city: location.city,
         })
         .eq('id', user.id);
-  
+
       if (error) {
-        // If the error is about missing columns, the migration hasn't been run yet
         if (error.message?.includes('column') && error.message?.includes('does not exist')) {
           console.error('[updateLocation] Location columns do not exist. Please run the database migration.');
           setAuthError('Location feature is not available. Please contact support.');
           return false;
         }
-        
+
         console.error('[updateLocation] Error:', error.message);
         setAuthError(error.message);
         return false;
       }
-  
-      // Re-fetch the profile to get the latest from DB
+
       const refreshedProfile = await fetchUserProfile(user.id);
       if (refreshedProfile) {
         setUser({ ...refreshedProfile, email: user.email });
       }
-  
+
       return true;
     } catch (err: any) {
       console.error('[updateLocation] Unexpected error:', err.message || err);
