@@ -205,9 +205,12 @@ const LeaderboardPage: React.FC = () => {
           ) : (
             <div>
               {/* Column headers */}
-              <div className="flex justify-between text-xs font-medium text-gray-500 border-b px-4 py-2">
-                <span>{labelKey === "location" ? "Store" : "Name"}</span>
-                <span>Rank</span>
+              <div className="grid grid-cols-3 text-xs font-medium text-gray-500 border-b px-4 py-2 bg-gray-50">
+                <span className="text-left">
+                  {labelKey === "location" ? "Store" : "Name"}
+                </span>
+                <span className="text-center">Score</span>
+                <span className="text-center">Rank</span>
               </div>
 
               {/* Rows */}
@@ -234,38 +237,53 @@ const LeaderboardPage: React.FC = () => {
                   const isTie =
                     idx > 0 && (entry.rank ?? idx + 1) === (data[idx - 1].rank ?? idx);
 
+                  // Color rank badge by normalized score
+                  let badgeColor = "bg-gray-300";
+                  if (normalizedScore >= 1.8) badgeColor = "bg-green-600";
+                  else if (normalizedScore >= 1.4) badgeColor = "bg-green-400";
+                  else if (normalizedScore >= 1.0) badgeColor = "bg-yellow-400";
+                  else badgeColor = "bg-red-400";
+
                   return (
                     <div
                       key={(entry as any)[`${labelKey}_id`] ?? label ?? idx}
-                      className="flex items-center justify-between px-4 py-2 border-b last:border-0 odd:bg-gray-50 hover:bg-gray-100"
+                      className="grid grid-cols-3 items-center px-4 py-2 border-b last:border-0 odd:bg-white even:bg-gray-50 hover:bg-gray-100 text-sm"
                     >
                       {/* Left: Label + details */}
                       <div className="flex flex-col min-w-0">
-                        <div className="font-medium text-sm truncate">{label}</div>
-                        {labelKey === "location" && (
-                          <div className="text-xs text-gray-500 truncate">
-                            {(entry as any).city
-                              ? `${(entry as any).city}${
-                                  (entry as any).state ? `, ${(entry as any).state}` : ""
-                                }`
-                              : ""}
-                          </div>
-                        )}
-                        <div className="text-xs text-gray-500 italic">
-                          {entry.submission_count ?? 0} submissions
+                        <div>
+                          <div className="font-medium truncate">{label}</div>
+                          {labelKey === "location" && (
+                            <div className="text-xs text-gray-500 truncate">
+                              {(entry as any).city
+                                ? `${(entry as any).city}${
+                                    (entry as any).state ? `, ${(entry as any).state}` : ""
+                                  }`
+                                : ""}
+                            </div>
+                          )}
                         </div>
-                        <div className="text-xs text-gray-600">
-                          Score: {Number(normalizedScore ?? 0).toFixed(2)}
+                        <div className="mt-1 flex flex-col text-xs text-gray-500">
+                          <span className="italic">
+                            {entry.submission_count ?? 0} submissions
+                          </span>
                         </div>
                       </div>
 
+                      {/* Middle: Neutral Score */}
+                      <div className="text-center text-gray-800 text-sm">
+                        {Number(normalizedScore ?? 0).toFixed(2)}
+                      </div>
+
                       {/* Right: Rank */}
-                      <div className="flex items-center">
-                        <span className="px-3 py-1 text-sm font-semibold rounded-full bg-gray-200 text-gray-800">
+                      <div className="flex flex-col items-center">
+                        <span
+                          className={`px-3 py-1 text-sm font-semibold rounded-full text-white ${badgeColor}`}
+                        >
                           {rank}
                         </span>
                         {isTie && (
-                          <span className="ml-1 text-xs text-gray-500">(tie)</span>
+                          <span className="text-xs text-gray-500 mt-1">(tie)</span>
                         )}
                       </div>
                     </div>
