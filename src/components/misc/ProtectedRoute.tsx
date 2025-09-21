@@ -5,17 +5,17 @@ import LocationModal from "../common/LocationModal";
 
 interface ProtectedRouteProps {
   children: React.ReactElement;
-  requireLocation?: boolean; // 👈 new optional prop
+  requireLocation?: boolean;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requireLocation = false,
 }) => {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, profileLoading, user } = useAuth();
   const location = useLocation();
 
-  if (isLoading) {
+  if (isLoading || profileLoading) {
     return (
       <div className="p-8 text-center text-sm">
         Loading user session...
@@ -27,7 +27,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 👇 enforce location requirement if enabled
   if (
     requireLocation &&
     (!user?.city || !user?.state || !user?.country)
