@@ -27,6 +27,7 @@ export default function LeaderboardPage() {
   const [crop, setCrop] = useState("");
   const [allCrops, setAllCrops] = useState<CropType[]>([]);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [dataScope, setDataScope] = useState<string>("");
 
   // Leaderboard data
   const [brands, setBrands] = useState<any[]>([]);
@@ -118,7 +119,8 @@ export default function LeaderboardPage() {
     if (isInitializing) return;
 
     const run = async () => {
-      const filters = {
+      // Start with the user's preferred filters
+      let filters = {
         country: location.country,
         state: location.state,
         city: location.city,
@@ -127,11 +129,68 @@ export default function LeaderboardPage() {
       
       console.log("🔍 Fetching leaderboards with filters:", filters);
       
-      const [b, l, s] = await Promise.all([
+      let [b, l, s] = await Promise.all([
         fetchBrandLeaderboard(filters),
         fetchLocationLeaderboard(filters),
         fetchSubmissionCountLeaderboard(filters),
       ]);
+
+      // If no data found with city filter, try without city
+      if ((!b?.length && !l?.length && !s?.length) && filters.city) {
+        console.log("📍 No data found for city, trying state-level data...");
+        filters = { ...filters, city: "" };
+        
+        [b, l, s] = await Promise.all([
+          fetchBrandLeaderboard(filters),
+          fetchLocationLeaderboard(filters),
+          fetchSubmissionCountLeaderboard(filters),
+        ]);
+        
+        if (b?.length || l?.length || s?.length) {
+          setDataScope(`Showing data for ${filters.state}, ${filters.country} (no data available for ${location.city})`);
+        }
+      }
+
+      // If still no data, try country-level
+      if ((!b?.length && !l?.length && !s?.length) && filters.state) {
+        console.log("🌎 No data found for state, trying country-level data...");
+        filters = { ...filters, state: "" };
+        
+        [b, l, s] = await Promise.all([
+          fetchBrandLeaderboard(filters),
+          fetchLocationLeaderboard(filters),
+          fetchSubmissionCountLeaderboard(filters),
+        ]);
+        
+        if (b?.length || l?.length || s?.length) {
+          setDataScope(`Showing data for ${filters.country} (no data available for ${location.state})`);
+        }
+      }
+
+      // If still no data, get all data (no location filters)
+      if (!b?.length && !l?.length && !s?.length) {
+        console.log("🌍 No data found for country, showing all data...");
+        filters = { country: "", state: "", city: "", crop };
+        
+        [b, l, s] = await Promise.all([
+          fetchBrandLeaderboard(filters),
+          fetchLocationLeaderboard(filters),
+          fetchSubmissionCountLeaderboard(filters),
+        ]);
+        
+        if (b?.length || l?.length || s?.length) {
+          setDataScope(`Showing global data (no data available for ${location.country})`);
+        }
+      } else if (filters.city && filters.state && filters.country) {
+        setDataScope(`Showing data for ${filters.city}, ${filters.state}, ${filters.country}`);
+      } else if (filters.state && filters.country) {
+        setDataScope(`Showing data for ${filters.state}, ${filters.country}`);
+      } else if (filters.country) {
+        setDataScope(`Showing data for ${filters.country}`);
+      } else {
+        setDataScope("Showing global data");
+      }
+
       setBrands(b || []);
       setLocations(l || []);
       setSubmissions(s || []);
@@ -188,58 +247,69 @@ export default function LeaderboardPage() {
         </aside>
 
         {/* Leaderboards */}
-        <main className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-          <Card>
-            <CardContent className="p-4">
-              <h2 className="text-lg font-semibold mb-2">Best Locations</h2>
-              {locations.length === 0 ? (
-                <p className="text-gray-500 text-sm">No data available</p>
-              ) : (
-                <ul className="space-y-1">
-                  {locations.map((loc, i) => (
-                    <li key={i} className="text-sm">
-                      {loc.location_name} ({loc.average_normalized_score?.toFixed(2)})
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+        <main className="flex-1 p-4">
+          {/* Data scope indicator */}
+          {dataScope && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-700">
+                📊 {dataScope}
+              </p>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <h2 className="text-lg font-semibold mb-2">Best Locations</h2>
+                {locations.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No data available</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {locations.map((loc, i) => (
+                      <li key={i} className="text-sm">
+                        {loc.location_name} ({loc.average_normalized_score?.toFixed(2)})
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <h2 className="text-lg font-semibold mb-2">Best Brands</h2>
-              {brands.length === 0 ? (
-                <p className="text-gray-500 text-sm">No data available</p>
-              ) : (
-                <ul className="space-y-1">
-                  {brands.map((brand, i) => (
-                    <li key={i} className="text-sm">
-                      {brand.brand_label || brand.brand_name} (
-                      {brand.average_normalized_score?.toFixed(2)})
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+            <Card>
+              <CardContent className="p-4">
+                <h2 className="text-lg font-semibold mb-2">Best Brands</h2>
+                {brands.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No data available</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {brands.map((brand, i) => (
+                      <li key={i} className="text-sm">
+                        {brand.brand_label || brand.brand_name} (
+                        {brand.average_normalized_score?.toFixed(2)})
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <h2 className="text-lg font-semibold mb-2">Most Submissions</h2>
-              {submissions.length === 0 ? (
-                <p className="text-gray-500 text-sm">No data available</p>
-              ) : (
-                <ul className="space-y-1">
-                  {submissions.map((s, i) => (
-                    <li key={i} className="text-sm">
-                      {s.entity_name} ({s.submission_count})
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+            <Card>
+              <CardContent className="p-4">
+                <h2 className="text-lg font-semibold mb-2">Most Submissions</h2>
+                {submissions.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No data available</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {submissions.map((s, i) => (
+                      <li key={i} className="text-sm">
+                        {s.entity_name} ({s.submission_count})
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </main>
       </div>
 
