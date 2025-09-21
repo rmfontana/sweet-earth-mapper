@@ -4,7 +4,6 @@ import LocationSelector from "../components/common/LocationSelector";
 import { fetchCropTypes, CropType } from "../lib/fetchCropTypes";
 import {
   fetchLocationLeaderboard,
-  fetchCropLeaderboard,
   fetchBrandLeaderboard,
   fetchUserLeaderboard,
   LeaderboardEntry,
@@ -37,12 +36,11 @@ const LeaderboardPage: React.FC = () => {
   const [dataScopeMessage, setDataScopeMessage] = useState<string>("");
 
   const [locationData, setLocationData] = useState<LeaderboardEntry[]>([]);
-  const [cropData, setCropData] = useState<LeaderboardEntry[]>([]);
   const [brandData, setBrandData] = useState<LeaderboardEntry[]>([]);
   const [userData, setUserData] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Initialize countryCode/stateCode using locationService for the LocationSelector component
+  // Initialize codes for LocationSelector
   useEffect(() => {
     let mounted = true;
     const init = async () => {
@@ -83,7 +81,12 @@ const LeaderboardPage: React.FC = () => {
       } catch (err) {
         console.error("Error initializing location:", err);
         if (mounted) {
-          setLocation((l) => ({ ...l, country: user.country || "", state: user.state || "", city: user.city || "" }));
+          setLocation((l) => ({
+            ...l,
+            country: user.country || "",
+            state: user.state || "",
+            city: user.city || "",
+          }));
         }
       } finally {
         if (mounted) setIsInitializing(false);
@@ -96,7 +99,7 @@ const LeaderboardPage: React.FC = () => {
     };
   }, [user]);
 
-  // Load crop types
+  // Load crop types (still used in filters)
   useEffect(() => {
     const load = async () => {
       try {
@@ -109,7 +112,7 @@ const LeaderboardPage: React.FC = () => {
     load();
   }, []);
 
-  // Fetch leaderboards: tries with city -> state -> country -> global fallback
+  // Fetch leaderboards
   useEffect(() => {
     if (isInitializing) return;
 
@@ -127,57 +130,55 @@ const LeaderboardPage: React.FC = () => {
 
         console.log("Fetching leaderboards with filters:", filters);
 
-        let [loc, cropL, brand, users] = await Promise.all([
+        let [loc, brand, users] = await Promise.all([
           fetchLocationLeaderboard(filters),
-          fetchCropLeaderboard(filters),
           fetchBrandLeaderboard(filters),
           fetchUserLeaderboard(filters),
         ]);
 
-        // try broader scopes if nothing returned
-        if (mounted && (!loc.length && !cropL.length && !brand.length && !users.length) && filters.city) {
+        // fallback: broaden scope if nothing found
+        if (mounted && (!loc.length && !brand.length && !users.length) && filters.city) {
           filters = { ...filters, city: undefined };
-          [loc, cropL, brand, users] = await Promise.all([
+          [loc, brand, users] = await Promise.all([
             fetchLocationLeaderboard(filters),
-            fetchCropLeaderboard(filters),
             fetchBrandLeaderboard(filters),
             fetchUserLeaderboard(filters),
           ]);
-          if (loc.length || cropL.length || brand.length || users.length) {
-            setDataScopeMessage(`Showing state-level data for ${filters.state}, ${filters.country} (no data for ${location.city})`);
+          if (loc.length || brand.length || users.length) {
+            setDataScopeMessage(
+              `Showing state-level data for ${filters.state}, ${filters.country} (no data for ${location.city})`
+            );
           }
         }
 
-        if (mounted && (!loc.length && !cropL.length && !brand.length && !users.length) && filters.state) {
+        if (mounted && (!loc.length && !brand.length && !users.length) && filters.state) {
           filters = { ...filters, state: undefined };
-          [loc, cropL, brand, users] = await Promise.all([
+          [loc, brand, users] = await Promise.all([
             fetchLocationLeaderboard(filters),
-            fetchCropLeaderboard(filters),
             fetchBrandLeaderboard(filters),
             fetchUserLeaderboard(filters),
           ]);
-          if (loc.length || cropL.length || brand.length || users.length) {
-            setDataScopeMessage(`Showing country-level data for ${filters.country} (no data for ${location.state})`);
+          if (loc.length || brand.length || users.length) {
+            setDataScopeMessage(
+              `Showing country-level data for ${filters.country} (no data for ${location.state})`
+            );
           }
         }
 
-        if (mounted && (!loc.length && !cropL.length && !brand.length && !users.length)) {
-          // global
+        if (mounted && (!loc.length && !brand.length && !users.length)) {
           filters = { country: undefined, state: undefined, city: undefined, crop };
-          [loc, cropL, brand, users] = await Promise.all([
+          [loc, brand, users] = await Promise.all([
             fetchLocationLeaderboard(filters),
-            fetchCropLeaderboard(filters),
             fetchBrandLeaderboard(filters),
             fetchUserLeaderboard(filters),
           ]);
-          if (loc.length || cropL.length || brand.length || users.length) {
+          if (loc.length || brand.length || users.length) {
             setDataScopeMessage("Showing global data (no regional data found)");
           }
         }
 
         if (mounted) {
           setLocationData(loc || []);
-          setCropData(cropL || []);
           setBrandData(brand || []);
           setUserData(users || []);
         }
@@ -211,18 +212,17 @@ const LeaderboardPage: React.FC = () => {
                   (entry as any)[`${labelKey}_name`] ||
                   (entry as any).user_name ||
                   "Unknown";
-                // prefer normalized score from RPC; fallback computeNormalizedScore with average_brix and sensible defaults
+
                 const score = entry.average_normalized_score ?? null;
                 const normalizedScore =
-                  typeof score === "number" ? score : (() => {
-                    // try compute if average_brix present
-                    const avgBrix = entry.average_brix;
-                    if (typeof avgBrix === "number") {
-                      // use computeNormalizedScore with undefined thresholds (RPC should have thresholds but this is best-effort)
-                      return computeNormalizedScore(avgBrix);
-                    }
-                    return 1.5;
-                  })();
+                  typeof score === "number"
+                    ? score
+                    : (() => {
+                        const avgBrix = entry.average_brix;
+                        return typeof avgBrix === "number"
+                          ? computeNormalizedScore(avgBrix)
+                          : 1.5;
+                      })();
 
                 const rank = entry.rank ?? idx + 1;
                 const { bgClass } = rankColorFromNormalized(Number(normalizedScore ?? 1.5));
@@ -241,29 +241,26 @@ const LeaderboardPage: React.FC = () => {
                       </div>
                       <div className="text-sm leading-snug">
                         <div className="font-medium break-words">{label}</div>
-                        {/* keep contextual detail if present (city/state for location) */}
                         {labelKey === "location" && (
                           <div className="text-xs text-gray-500">
-                            {(entry as any).city ? `${(entry as any).city}${(entry as any).state ? `, ${(entry as any).state}` : ""}` : ""}
+                            {(entry as any).city
+                              ? `${(entry as any).city}${
+                                  (entry as any).state ? `, ${(entry as any).state}` : ""
+                                }`
+                              : ""}
                           </div>
                         )}
                       </div>
                     </div>
-
                     <div className="flex flex-col items-end">
-                      <div className={`px-3 py-1 rounded-full text-white text-xs font-semibold ${bgClass}`}>
+                      <div
+                        className={`px-3 py-1 rounded-full text-white text-xs font-semibold ${bgClass}`}
+                      >
                         {Number(normalizedScore ?? 0).toFixed(2)}
                       </div>
-                      {labelKey !== "user" && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {entry.submission_count ?? 0} submissions
-                        </div>
-                      )}
-                      {labelKey === "user" && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {entry.submission_count ?? 0} submissions
-                        </div>
-                      )}
+                      <div className="text-xs text-gray-500 mt-1">
+                        {entry.submission_count ?? 0} submissions
+                      </div>
                     </div>
                   </div>
                 );
@@ -283,9 +280,13 @@ const LeaderboardPage: React.FC = () => {
           {/* Left: Filters */}
           <aside className="w-72 border-r pr-4">
             <h2 className="text-lg font-semibold mb-4">Filters</h2>
-
             <div className="space-y-4">
-              <LocationSelector value={location} onChange={setLocation} required={false} showAutoDetect={true} />
+              <LocationSelector
+                value={location}
+                onChange={setLocation}
+                required={false}
+                showAutoDetect={false} // disable geolocation
+              />
               <div>
                 <label className="block text-sm font-medium mb-2">Crop</label>
                 <select
@@ -301,15 +302,29 @@ const LeaderboardPage: React.FC = () => {
                   ))}
                 </select>
               </div>
-              <div>
+              <div className="flex flex-col space-y-2">
+                <button
+                  onClick={() => {
+                    setLocation({
+                      ...emptyLocation,
+                      country: user?.country || "",
+                      state: user?.state || "",
+                      city: user?.city || "",
+                    });
+                    setCrop("");
+                  }}
+                  className="text-sm text-blue-600 hover:underline text-left"
+                >
+                  Reset to My Location
+                </button>
                 <button
                   onClick={() => {
                     setLocation({ ...emptyLocation });
                     setCrop("");
                   }}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-gray-600 hover:underline text-left"
                 >
-                  Reset filters
+                  Clear Filters
                 </button>
               </div>
             </div>
@@ -322,49 +337,18 @@ const LeaderboardPage: React.FC = () => {
                 {dataScopeMessage}
               </div>
             )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {renderLeaderboardCard("Top Locations", locationData, "location")}
-              {renderLeaderboardCard("Top Crops", cropData, "crop")}
               {renderLeaderboardCard("Top Brands", brandData, "brand")}
-              <Card className="w-full shadow-md rounded-lg">
-                <CardHeader>
-                  <CardTitle className="text-lg font-semibold">Top Users</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {userData.length === 0 ? (
-                    <div className="text-sm text-gray-500 p-3">No user data.</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {userData.map((u, idx) => {
-                        const rank = u.rank ?? idx + 1;
-                        const bgClass = rankColorFromNormalized(Number(u.average_normalized_score ?? 1.5)).bgClass;
-                        return (
-                          <div key={u.user_id ?? idx} className="flex items-center justify-between py-2">
-                            <div className="flex items-start space-x-3">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 ${bgClass}`}>
-                                {rank}
-                              </div>
-                              <div className="text-sm">
-                                <div className="font-medium break-words">{u.user_name}</div>
-                                <div className="text-xs text-gray-500">{u.submission_count ?? 0} submissions</div>
-                              </div>
-                            </div>
-                            <div className="text-sm text-gray-500">{u.submission_count ?? 0}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              {renderLeaderboardCard("Top Users", userData, "user")}
             </div>
           </section>
         </div>
       </main>
-
       {loading && (
-        <div className="fixed bottom-4 right-4 p-3 bg-white border rounded shadow">Updating leaderboards…</div>
+        <div className="fixed bottom-4 right-4 p-3 bg-white border rounded shadow">
+          Updating leaderboards…
+        </div>
       )}
     </div>
   );
