@@ -6,7 +6,6 @@ import React, {
   ReactNode,
 } from 'react';
 import { supabase } from '../integrations/supabase/client';
-// NOTE: We no longer need the getSupabaseUrl utility as we're removing the Edge Function call.
 
 interface UserProfile {
   id: string;
@@ -31,6 +30,7 @@ interface AuthContextType {
   user: UserProfile | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isLoading: boolean;
   authError: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -90,6 +90,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const isAdmin = user?.role === 'admin';
 
@@ -98,8 +99,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (session?.user) {
       const { id, email } = session.user;
       console.log('[Auth] Session established for user:', id);
-      
-      // Defer DB calls to avoid blocking auth state changes
+
+      setIsAuthenticated(true);
+      setAuthError(null);
+
+      // Defer DB calls to fetch the full profile in the background
       setTimeout(async () => {
         try {
           const profile = await ensureProfileExists(id);
@@ -107,20 +111,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (email) {
               profile.email = email;
             }
+            // Update user state with full profile data
             setUser(profile);
-            setIsAuthenticated(true);
-            setAuthError(null);
             console.log('[Auth] Profile loaded successfully for user:', id);
           } else {
             console.error('[Auth] Profile not found after retries for user:', id);
-            setUser(null);
-            setIsAuthenticated(false);
-            setAuthError('User profile not found.');
+            // User is authenticated but we don't have their profile. Keep them authenticated for now.
+            setAuthError('User profile not found. Please contact support.');
           }
         } catch (err: any) {
           console.error('[Auth] Error fetching profile:', err.message || err);
-          setUser(null);
-          setIsAuthenticated(false);
           setAuthError('Error fetching user profile.');
         }
       }, 0);
@@ -133,6 +133,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const loadSession = async () => {
+    setIsLoading(true);
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
 
@@ -146,6 +147,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (err: any) {
       console.error('[Auth] Unexpected error loading session:', err.message || err);
       setAuthError('Unexpected error loading session.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -154,6 +157,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('[Auth] Auth state change:', event);
       handleSessionChange(session);
+      // NOTE: We do NOT set isLoading(false) here, as this is for auth *changes*, 
+      // not the initial load. loadSession handles the initial isLoading=false.
     });
 
     // Then load initial session
@@ -233,7 +238,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (data.user) {
-        // Profile will be loaded via onAuthStateChange
+        // Profile will be loaded via onAuthStateChange which now correctly sets 
+        // isAuthenticated immediately, preventing the race condition.
         console.log('[LOGIN] User authenticated, profile will be loaded automatically');
         return true;
       }
@@ -258,8 +264,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error('[LOGOUT] Unexpected error:', err.message || err);
       setAuthError('Unexpected error during logout.');
     } finally {
-      setUser(null);
+      // The onAuthStateChange listener will ultimately handle setting the state to null/false
+      // but we do this here for immediate responsiveness.
+      setUser(null); 
       setIsAuthenticated(false);
+      setAuthError(null); 
     }
   };
 
@@ -319,6 +328,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return false;
       }
 
+      // Re-fetch profile to get the latest data
       const refreshedProfile = await fetchUserProfile(user.id);
       if (refreshedProfile) {
         setUser({ ...refreshedProfile, email: user.email });
@@ -338,6 +348,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         isAuthenticated,
         isAdmin,
+        isLoading,
         authError,
         login,
         logout,
