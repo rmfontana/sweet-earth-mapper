@@ -8,19 +8,10 @@ import {
   fetchUserLeaderboard,
   LeaderboardEntry,
 } from "../lib/fetchLeaderboards";
-import {
-  rankColorFromNormalized,
-  computeNormalizedScore,
-} from "../lib/getBrixColor";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
+import { computeNormalizedScore } from "../lib/getBrixColor";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { useAuth } from "../contexts/AuthContext";
 import { locationService } from "../lib/locationServiceforRegister";
-import { Button } from "../components/ui/button";
 
 const emptyLocation = {
   country: "",
@@ -48,8 +39,6 @@ const LeaderboardPage: React.FC = () => {
   const [brandData, setBrandData] = useState<LeaderboardEntry[]>([]);
   const [userData, setUserData] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-
-  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Initialize codes for LocationSelector
   useEffect(() => {
@@ -133,10 +122,7 @@ const LeaderboardPage: React.FC = () => {
       setDataScopeMessage("");
       try {
         let filters = {
-          country:
-            location.country && location.country !== "All countries"
-              ? location.country
-              : undefined,
+          country: location.country || undefined,
           state: location.state || undefined,
           city: location.city || undefined,
           crop,
@@ -148,14 +134,8 @@ const LeaderboardPage: React.FC = () => {
           fetchUserLeaderboard(filters),
         ]);
 
-        // fallback: broaden scope
-        if (
-          mounted &&
-          !loc.length &&
-          !brand.length &&
-          !users.length &&
-          filters.city
-        ) {
+        // fallback: broaden scope if nothing found
+        if (mounted && (!loc.length && !brand.length && !users.length) && filters.city) {
           filters = { ...filters, city: undefined };
           [loc, brand, users] = await Promise.all([
             fetchLocationLeaderboard(filters),
@@ -169,13 +149,7 @@ const LeaderboardPage: React.FC = () => {
           }
         }
 
-        if (
-          mounted &&
-          !loc.length &&
-          !brand.length &&
-          !users.length &&
-          filters.state
-        ) {
+        if (mounted && (!loc.length && !brand.length && !users.length) && filters.state) {
           filters = { ...filters, state: undefined };
           [loc, brand, users] = await Promise.all([
             fetchLocationLeaderboard(filters),
@@ -189,7 +163,7 @@ const LeaderboardPage: React.FC = () => {
           }
         }
 
-        if (mounted && !loc.length && !brand.length && !users.length) {
+        if (mounted && (!loc.length && !brand.length && !users.length)) {
           filters = { country: undefined, state: undefined, city: undefined, crop };
           [loc, brand, users] = await Promise.all([
             fetchLocationLeaderboard(filters),
@@ -219,89 +193,85 @@ const LeaderboardPage: React.FC = () => {
     };
   }, [location, crop, isInitializing]);
 
-  const renderLeaderboardCard = (
-    title: string,
-    data: LeaderboardEntry[],
-    labelKey: string
-  ) => {
+  const renderLeaderboardCard = (title: string, data: LeaderboardEntry[], labelKey: string) => {
     return (
-      <Card className="w-full shadow-md rounded-lg">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold">{title}</CardTitle>
+      <Card className="w-full shadow-md rounded-lg overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg font-semibold text-center">{title}</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-0">
           {data.length === 0 ? (
             <div className="text-sm text-gray-500 p-3">No data available.</div>
           ) : (
-            <div className="space-y-2">
-              {data.map((entry, idx) => {
-                const label =
-                  (entry as any)[`${labelKey}_label`] ||
-                  (entry as any)[`${labelKey}_name`] ||
-                  (entry as any).user_name ||
-                  "Unknown";
+            <div>
+              {/* Column headers */}
+              <div className="flex justify-between text-xs font-medium text-gray-500 border-b px-4 py-2">
+                <span>{labelKey === "location" ? "Store" : "Name"}</span>
+                <span>Rank</span>
+              </div>
 
-                const score = entry.average_normalized_score ?? null;
-                const normalizedScore =
-                  typeof score === "number"
-                    ? score
-                    : (() => {
-                        const avgBrix = entry.average_brix;
-                        return typeof avgBrix === "number"
-                          ? computeNormalizedScore(avgBrix)
-                          : 1.5;
-                      })();
+              {/* Rows */}
+              <div>
+                {data.map((entry, idx) => {
+                  const label =
+                    (entry as any)[`${labelKey}_label`] ||
+                    (entry as any)[`${labelKey}_name`] ||
+                    (entry as any).user_name ||
+                    "Unknown";
 
-                const rank = entry.rank ?? idx + 1;
-                const { bgClass } = rankColorFromNormalized(
-                  Number(normalizedScore ?? 1.5)
-                );
+                  const score = entry.average_normalized_score ?? null;
+                  const normalizedScore =
+                    typeof score === "number"
+                      ? score
+                      : (() => {
+                          const avgBrix = entry.average_brix;
+                          return typeof avgBrix === "number"
+                            ? computeNormalizedScore(avgBrix)
+                            : 1.5;
+                        })();
 
-                return (
-                  <div
-                    key={(entry as any)[`${labelKey}_id`] ?? label ?? idx}
-                    className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-gray-50 transition"
-                  >
-                    <div className="flex items-start space-x-3 min-w-0">
-                      <div className="text-sm leading-snug">
-                        <div className="font-medium break-words">{label}</div>
+                  const rank = entry.rank ?? idx + 1;
+                  const isTie =
+                    idx > 0 && (entry.rank ?? idx + 1) === (data[idx - 1].rank ?? idx);
+
+                  return (
+                    <div
+                      key={(entry as any)[`${labelKey}_id`] ?? label ?? idx}
+                      className="flex items-center justify-between px-4 py-2 border-b last:border-0 odd:bg-gray-50 hover:bg-gray-100"
+                    >
+                      {/* Left: Label + details */}
+                      <div className="flex flex-col min-w-0">
+                        <div className="font-medium text-sm truncate">{label}</div>
                         {labelKey === "location" && (
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-gray-500 truncate">
                             {(entry as any).city
                               ? `${(entry as any).city}${
-                                  (entry as any).state
-                                    ? `, ${(entry as any).state}`
-                                    : ""
+                                  (entry as any).state ? `, ${(entry as any).state}` : ""
                                 }`
                               : ""}
                           </div>
                         )}
+                        <div className="text-xs text-gray-500 italic">
+                          {entry.submission_count ?? 0} submissions
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          Score: {Number(normalizedScore ?? 0).toFixed(2)}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Right: Rank + Score + Submissions */}
-                    <div className="flex flex-col items-end mt-2 sm:mt-0 sm:ml-4">
-                      <div
-                        className={`${
-                          rank === 1
-                            ? "w-12 h-12 text-2xl"
-                            : "w-8 h-8 text-base"
-                        } font-bold ${bgClass} text-white rounded-full flex items-center justify-center`}
-                      >
-                        {rank}
-                      </div>
-                      <div
-                        className={`mt-2 px-3 py-1 rounded-full text-white text-xs font-semibold ${bgClass}`}
-                      >
-                        {Number(normalizedScore ?? 0).toFixed(2)}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {entry.submission_count ?? 0} submissions
+                      {/* Right: Rank */}
+                      <div className="flex items-center">
+                        <span className="px-3 py-1 text-sm font-semibold rounded-full bg-gray-200 text-gray-800">
+                          {rank}
+                        </span>
+                        {isTie && (
+                          <span className="ml-1 text-xs text-gray-500">(tie)</span>
+                        )}
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
         </CardContent>
@@ -314,19 +284,15 @@ const LeaderboardPage: React.FC = () => {
       <Header />
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6 lg:p-8">
         <div className="flex flex-col md:flex-row gap-6">
-          {/* Filters */}
-          <aside
-            className={`${
-              filtersOpen ? "block" : "hidden md:block"
-            } w-full md:w-72 border-r pr-4`}
-          >
+          {/* Left: Filters */}
+          <aside className="w-full md:w-72 border-r md:pr-4">
             <h2 className="text-lg font-semibold mb-4">Filters</h2>
             <div className="space-y-4">
               <LocationSelector
                 value={location}
                 onChange={setLocation}
                 required={false}
-                showAutoDetect={false}
+                showAutoDetect={false} // disable geolocation
               />
               <div>
                 <label className="block text-sm font-medium mb-2">Crop</label>
@@ -373,21 +339,11 @@ const LeaderboardPage: React.FC = () => {
 
           {/* Right: Leaderboards */}
           <section className="flex-1">
-            <div className="flex justify-between items-center mb-4">
-              {dataScopeMessage && (
-                <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
-                  {dataScopeMessage}
-                </div>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="md:hidden"
-                onClick={() => setFiltersOpen((prev) => !prev)}
-              >
-                {filtersOpen ? "Hide Filters" : "Show Filters"}
-              </Button>
-            </div>
+            {dataScopeMessage && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
+                {dataScopeMessage}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {renderLeaderboardCard("Top Locations", locationData, "location")}
               {renderLeaderboardCard("Top Brands", brandData, "brand")}

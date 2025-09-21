@@ -208,7 +208,6 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
     ? cities.filter(c => c.name.toLowerCase().includes(citySearch.toLowerCase())).slice(0, 100)
     : cities.slice(0, 100);
 
-
   return (
     <div className="space-y-4">
       {error && (
@@ -251,7 +250,9 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
               className="w-full mt-1 justify-between"
               disabled={disabled || loading.countries}
             >
-              {value.country || (loading.countries ? "Loading countries..." : "Select country")}
+              {value.country === "All countries"
+                ? "All countries"
+                : value.country || (loading.countries ? "Loading countries..." : "Select country")}
               <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
@@ -285,6 +286,21 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
                           </div>
                         </CommandItem>
                       ))}
+                      <CommandItem
+                        key="all"
+                        value="All countries"
+                        onSelect={() =>
+                          onChange({
+                            country: "All countries",
+                            countryCode: "",
+                            state: "",
+                            stateCode: "",
+                            city: "",
+                          })
+                        }
+                      >
+                        🌍 All countries
+                      </CommandItem>
                     </CommandGroup>
                   </>
                 )}
@@ -294,8 +310,8 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
         </Popover>
       </div>
 
-      {/* State/Province Selection (Combobox) */}
-      {value.countryCode && (
+      {/* State/Province Selection */}
+      {value.countryCode && value.country !== "All countries" && (
         <div>
           <Label htmlFor="state">
             State/Province {required && <span className="text-red-500">*</span>}
@@ -350,8 +366,8 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
         </div>
       )}
 
-      {/* City Selection (Combobox) */}
-      {value.countryCode && value.state && (
+      {/* City Selection */}
+      {value.countryCode && value.state && value.country !== "All countries" && (
         <div>
           <Label htmlFor="city">
             City {required && <span className="text-red-500">*</span>}
