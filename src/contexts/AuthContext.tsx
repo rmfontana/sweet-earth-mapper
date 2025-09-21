@@ -277,20 +277,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setAuthError('Not authenticated.');
       return false;
     }
-
+  
     try {
       const { error } = await supabase
         .from('users')
         .update({ display_name: newUsername })
         .eq('id', user.id);
-
+  
       if (error) {
         console.error('[updateUsername] Error:', error.message);
         setAuthError(error.message);
         return false;
       }
-
-      setUser((prev) => (prev ? { ...prev, display_name: newUsername } : null));
+  
+      // re-fetch profile to ensure consistency
+      const refreshedProfile = await fetchUserProfile(user.id);
+      if (refreshedProfile) {
+        setUser({ ...refreshedProfile, email: user.email });
+      }
+  
       return true;
     } catch (err: any) {
       console.error('[updateUsername] Unexpected error:', err.message || err);
