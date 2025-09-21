@@ -137,3 +137,49 @@ export function useBrixColorFromContext(
   
   return getBrixColor(brixLevel, thresholds, mode);
 }
+
+// Map normalized score (1..2 scale) to hex color and tailwind background class
+export function rankColorFromNormalized(
+  normalizedValue: number, // expected ~1.0..2.0
+): { hex: string; bgClass: string } {
+  // Simple graded ranges matching the SQL grade thresholds:
+  // >=1.75 Excellent -> green
+  // >=1.5  Good      -> teal
+  // >=1.25 Poor      -> amber
+  // else    Needs Imp -> gray
+  if (normalizedValue >= 1.75) {
+    return { hex: '#16a34a', bgClass: 'bg-green-500' }; // green
+  }
+  if (normalizedValue >= 1.5) {
+    return { hex: '#0ea5a4', bgClass: 'bg-teal-500' }; // teal
+  }
+  if (normalizedValue >= 1.25) {
+    return { hex: '#f59e0b', bgClass: 'bg-amber-400' }; // amber
+  }
+  return { hex: '#9ca3af', bgClass: 'bg-gray-400' }; // neutral gray
+}
+
+/**
+ * Compute normalized score for a reading given thresholds
+ * This is exactly the same math you used on the map:
+ *  score = (brix - poor) / (excellent - poor) + 1
+ * If thresholds invalid, returns fallbackNormalized (e.g. using global min/max)
+ */
+export function computeNormalizedScore(
+  brix: number,
+  thresholds?: BrixThresholds | null,
+  fallbackMin?: number,
+  fallbackMax?: number
+): number {
+  if (thresholds && typeof thresholds.poor === 'number' && typeof thresholds.excellent === 'number' && thresholds.excellent > thresholds.poor) {
+    return (brix - thresholds.poor) / (thresholds.excellent - thresholds.poor) + 1;
+  }
+
+  // fallback using min/max brix across dataset (expects fallbackMin < fallbackMax)
+  if (typeof fallbackMin === 'number' && typeof fallbackMax === 'number' && fallbackMax > fallbackMin) {
+    return (brix - fallbackMin) / (fallbackMax - fallbackMin) + 1;
+  }
+
+  // final fallback mid score
+  return 1.5;
+}

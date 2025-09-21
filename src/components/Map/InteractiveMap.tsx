@@ -12,10 +12,10 @@ import { MapPin, X, ArrowLeft } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { getMapboxToken } from '@/lib/getMapboxToken';
 import { useCropThresholds } from '../../contexts/CropThresholdContext';
-import { getBrixColor } from '../../lib/getBrixColor';
+import { getBrixColor, computeNormalizedScore, rankColorFromNormalized } from '../../lib/getBrixColor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
-// Leaderboard API imports (import the Filter type so TS knows what we pass)
+// Leaderboard API imports
 import {
   fetchLocationLeaderboard,
   fetchCropLeaderboard,
@@ -38,6 +38,8 @@ type SelectedView =
     }
   | null;
 
+const safeStr = (v?: any) => (v === null || v === undefined ? '' : String(v));
+
 const InteractiveMap: React.FC<InteractiveMapProps> = ({
   userLocation,
   nearMeTriggered,
@@ -46,16 +48,19 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const location = useLocation();
   const { highlightedPoint } = (location.state || {}) as any;
   const { filters, isAdmin } = useFilters();
+
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+
   const [allData, setAllData] = useState<BrixDataPoint[]>([]);
   const [filteredData, setFilteredData] = useState<BrixDataPoint[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<BrixDataPoint | null>(null);
+
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [groupBy, setGroupBy] = useState<'none' | 'crop' | 'brand'>('crop');
-  const [minBrix, setMinBrix] = useState(0);
-  const [maxBrix, setMaxBrix] = useState(1);
+  const [minBrix, setMinBrix] = useState<number>(0);
+  const [maxBrix, setMaxBrix] = useState<number>(1);
   const [isLoading, setIsLoading] = useState(false);
 
   const [selectedEntry, setSelectedEntry] = useState<SelectedView>(null);
@@ -83,14 +88,15 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [selectedPoint]);
 
-  // Compute min/max brix across all data (used as fallback in normalization)
+  // Compute min/max brix across all data (fallback used when thresholds missing)
   useEffect(() => {
-    if (allData.length > 0) {
-      const bVals = allData.map((d) => d.brixLevel).filter((v) => typeof v === 'number');
-      if (bVals.length > 0) {
-        setMinBrix(Math.min(...bVals));
-        setMaxBrix(Math.max(...bVals));
-      }
+    if (!allData || allData.length === 0) return;
+    const bVals = allData
+      .map((d) => d.brixLevel ?? (d as any).brix_value)
+      .filter((v): v is number => typeof v === 'number' && !isNaN(v));
+    if (bVals.length > 0) {
+      setMinBrix(Math.min(...bVals));
+      setMaxBrix(Math.max(...bVals));
     }
   }, [allData]);
 
@@ -116,15 +122,15 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [nearMeTriggered, userLocation, onNearMeHandled]);
 
-  // Initialize map once
+  // Initialize Mapbox
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
 
     let mounted = true;
-    async function init() {
+    (async function init() {
       const token = await getMapboxToken();
       if (!token) {
-        console.error('Mapbox token missing; map disabled');
+        console.error('Failed to retrieve Mapbox token. Map will not initialize.');
         return;
       }
       mapboxgl.accessToken = token;
@@ -140,8 +146,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         setIsMapLoaded(true);
       });
       map.on('error', (e) => console.error('Mapbox error:', e.error));
-    }
-    init();
+    })();
 
     return () => {
       mounted = false;
@@ -153,13 +158,13 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     };
   }, [userLocation]);
 
-  // If a highlighted point comes from navigation, center on it
+  // Center on highlighted point if provided
   useEffect(() => {
     if (highlightedPoint && mapRef.current) {
       const point = allData.find((d) => d.id === highlightedPoint.id);
-      if (point && point.latitude && point.longitude) {
+      if (point && (point.latitude ?? (point as any).lat) && (point.longitude ?? (point as any).lng)) {
         mapRef.current.easeTo({
-          center: [point.longitude, point.latitude],
+          center: [(point.longitude ?? (point as any).lng), (point.latitude ?? (point as any).lat)],
           zoom: 16,
           duration: 1000,
         });
@@ -168,11 +173,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [highlightedPoint, allData]);
 
-  // Draw markers for stores (grouped by store/locationName)
+  // Draw markers grouped by locationName
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
 
-    // Remove existing markers
+    // remove previous markers
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
@@ -180,53 +185,48 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const averageScores: Record<string, number> = {};
 
     for (const point of filteredData) {
-      if (!point.latitude || !point.longitude || !point.locationName) continue;
-      const key = point.locationName;
-      if (!storeGroups[key]) storeGroups[key] = [];
-      storeGroups[key].push(point);
+      const lat = point.latitude ?? (point as any).lat;
+      const lon = point.longitude ?? (point as any).lng;
+      const locName = point.locationName ?? (point as any).location_name ?? (point as any).place_label ?? null;
+      if (!lat || !lon || !locName) continue;
+      if (!storeGroups[locName]) storeGroups[locName] = [];
+      storeGroups[locName].push(point);
     }
 
     Object.entries(storeGroups).forEach(([storeName, points]) => {
-      if (points.length === 0) return;
+      if (!points || points.length === 0) return;
 
       let totalScore = 0;
       let validCount = 0;
 
       for (const p of points) {
-        const cropType = p.cropType || p.cropLabel || 'unknown';
-        const thresholds = cache?.[cropType];
+        const cropKey = (p.cropType ?? p.cropLabel ?? (p as any).crop_name ?? 'unknown').toString();
+        const thresholds = cache?.[cropKey];
 
-        if (
-          thresholds &&
-          typeof thresholds.poor === 'number' &&
-          typeof thresholds.excellent === 'number' &&
-          thresholds.excellent > thresholds.poor
-        ) {
-          const score = (p.brixLevel - thresholds.poor) / (thresholds.excellent - thresholds.poor) + 1;
-          totalScore += score;
-          validCount++;
-        } else if (maxBrix > minBrix) {
-          totalScore += (p.brixLevel - minBrix) / (maxBrix - minBrix) + 1;
+        let normalized = 1.5;
+        const brixVal = p.brixLevel ?? (p as any).brix_value;
+        if (typeof brixVal === 'number' && !isNaN(brixVal)) {
+          normalized = computeNormalizedScore(brixVal, thresholds ?? null, minBrix, maxBrix);
+          totalScore += normalized;
           validCount++;
         }
       }
 
       averageScores[storeName] = validCount > 0 ? totalScore / validCount : 1.5;
 
-      const firstPoint = points[0];
-      if (!firstPoint.latitude || !firstPoint.longitude) return;
+      const first = points[0];
+      const lat = first.latitude ?? (first as any).lat;
+      const lon = first.longitude ?? (first as any).lng;
+      if (!lat || !lon) return;
 
-      const markerColor = getBrixColor(
-        averageScores[storeName],
-        { poor: 1.0, average: 1.25, good: 1.5, excellent: 1.75 },
-        'hex'
-      );
+      // Use getBrixColor in 'hex' mode for marker dot color (consistent with leaderboard)
+      const markerHex = getBrixColor(averageScores[storeName], { poor: 1.0, average: 1.25, good: 1.5, excellent: 1.75 }, 'hex');
 
-      // Build marker DOM
+      // marker DOM
       const markerContainer = document.createElement('div');
-      markerContainer.className = 'flex flex-col items-center cursor-pointer';
+      markerContainer.className = 'flex flex-col items-center cursor-pointer select-none';
       const dot = document.createElement('div');
-      dot.style.backgroundColor = markerColor;
+      dot.style.backgroundColor = markerHex;
       dot.style.width = '12px';
       dot.style.height = '12px';
       dot.style.borderRadius = '50%';
@@ -241,27 +241,26 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       label.style.padding = '2px 8px';
       label.style.borderRadius = '4px';
       label.style.fontSize = '12px';
-      label.style.fontWeight = 'bold';
+      label.style.fontWeight = '600';
       label.style.whiteSpace = 'nowrap';
-      label.style.maxWidth = '100px';
+      label.style.maxWidth = '140px';
+      label.style.overflow = 'hidden';
+      label.style.textOverflow = 'ellipsis';
       markerContainer.appendChild(label);
 
       const marker = new mapboxgl.Marker({ element: markerContainer, anchor: 'bottom' })
-        .setLngLat([firstPoint.longitude, firstPoint.latitude])
+        .setLngLat([lon, lat])
         .addTo(mapRef.current!);
 
       markersRef.current.push(marker);
 
-      // Click handler selects that store (we pass first point for drill-down)
-      markerContainer.addEventListener('click', () => {
-        setSelectedPoint(firstPoint);
-      });
+      markerContainer.addEventListener('click', () => setSelectedPoint(first));
     });
 
-    // Deselect point when clicking map (but not marker)
+    // Deselect on map click not on marker
     const mapClickListener = (e: mapboxgl.MapMouseEvent) => {
       const isMarkerClick = markersRef.current.some((m) =>
-        m.getElement().contains(e.originalEvent.target as Node)
+        m.getElement().contains(e.originalEvent.target as Node),
       );
       if (!isMarkerClick) setSelectedPoint(null);
     };
@@ -272,52 +271,52 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     };
   }, [filteredData, isMapLoaded, cache, minBrix, maxBrix]);
 
-  // Fetch leaderboard data for clicked store
-useEffect(() => {
-  if (!selectedPoint) {
-    setLocationLeaderboard([]);
-    setCropLeaderboard([]);
-    setBrandLeaderboard([]);
-    return;
-  }
-
-  // Build filters in camelCase
-  const localFilters: Filter = {
-    city: selectedPoint.city ?? undefined,
-    state: selectedPoint.state ?? undefined,
-    country: selectedPoint.country ?? undefined,
-    // optionally crop if you want to narrow leaderboards:
-    // crop: selectedPoint.cropLabel ?? undefined,
-  };
-
-  setIsLoading(true);
-
-  Promise.all([
-    fetchLocationLeaderboard(localFilters),
-    fetchCropLeaderboard(localFilters),
-    fetchBrandLeaderboard(localFilters),
-  ])
-    .then(([loc, crop, brand]) => {
-      setLocationLeaderboard(loc || []);
-      setCropLeaderboard(crop || []);
-      setBrandLeaderboard(brand || []);
-    })
-    .catch((err) => {
-      console.error('Error fetching leaderboard:', err);
+  // Fetch leaderboards for the selected store (if any)
+  useEffect(() => {
+    if (!selectedPoint) {
       setLocationLeaderboard([]);
       setCropLeaderboard([]);
       setBrandLeaderboard([]);
-    })
-    .finally(() => setIsLoading(false));
-}, [selectedPoint, filters]);
+      return;
+    }
 
-  // Render helper for a single submission row
+    setIsLoading(true);
+
+    const placeId = (selectedPoint as any).placeId ?? (selectedPoint as any).place_id ?? null;
+    const localFilters: Filter = {
+      city: selectedPoint.city ?? (selectedPoint as any).city_name ?? undefined,
+      state: selectedPoint.state ?? undefined,
+      country: selectedPoint.country ?? undefined,
+      // you can pass crop if needed later
+    };
+
+    Promise.all([
+      fetchLocationLeaderboard(localFilters),
+      fetchCropLeaderboard(localFilters),
+      fetchBrandLeaderboard(localFilters),
+    ])
+      .then(([loc, crop, brand]) => {
+        setLocationLeaderboard(loc || []);
+        setCropLeaderboard(crop || []);
+        setBrandLeaderboard(brand || []);
+      })
+      .catch((err) => {
+        console.error('Error fetching leaderboard:', err);
+        setLocationLeaderboard([]);
+        setCropLeaderboard([]);
+        setBrandLeaderboard([]);
+      })
+      .finally(() => setIsLoading(false));
+  }, [selectedPoint, filters]);
+
+  // Render helper for a single submission row (used in "All" tab and drilldown)
   const renderSubmissionItem = (sub: BrixDataPoint, key: string) => {
-    const cropType = sub.cropType || sub.cropLabel || 'unknown';
-    const thresholds = cache?.[cropType];
-    const brixPillColor = getBrixColor(
-      sub.brixLevel,
-      thresholds || {
+    const cropKey = (sub.cropType ?? sub.cropLabel ?? (sub as any).crop_name ?? 'unknown').toString();
+    const thresholds = cache?.[cropKey];
+    const brixVal = sub.brixLevel ?? (sub as any).brix_value;
+    const pillClass = getBrixColor(
+      typeof brixVal === 'number' ? brixVal : null,
+      thresholds ?? {
         poor: minBrix,
         average: (minBrix + maxBrix) / 2,
         good: maxBrix * 0.8,
@@ -328,32 +327,33 @@ useEffect(() => {
 
     return (
       <div key={key} className="flex justify-between items-start py-2">
-        <div className="flex flex-col">
-          <span className="font-semibold text-base">{sub.cropLabel || 'Unknown Crop'}</span>
-          <span className="text-xs text-gray-500 mt-1">
-            {sub.brandLabel || 'Unknown Brand'} -{' '}
+        <div className="flex flex-col min-w-0">
+          <span className="font-semibold text-base truncate">{safeStr(sub.cropLabel ?? sub.cropType ?? 'Unknown Crop')}</span>
+          <span className="text-xs text-gray-500 mt-1 truncate">
+            {safeStr(sub.brandLabel ?? sub.brandName ?? 'Unknown Brand')} —{' '}
             {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
           </span>
         </div>
-        <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${brixPillColor}`}>
-          {sub.brixLevel}
+        <div
+          className={`flex-shrink-0 min-w-[48px] px-3 py-1 text-center font-bold text-sm text-white rounded-full ${pillClass}`}
+        >
+          {typeof brixVal === 'number' ? brixVal : '—'}
         </div>
       </div>
     );
   };
 
-  // Drill-down submissions for selected entry (crop or brand)
+  // Drill-down submissions for a selected crop/brand inside a store
   const renderDetailedSubmissions = () => {
     if (!selectedEntry || !selectedPoint) return null;
 
+    const placeIdVal = (selectedPoint as any).placeId ?? (selectedPoint as any).place_id;
     const filteredSubmissions = allData
       .filter((d) => {
-        const placeId = (d as any).placeId ?? (d as any).place_id;
-        return placeId === ((selectedPoint as any).placeId ?? (selectedPoint as any).place_id);
+        const pid = (d as any).placeId ?? (d as any).place_id;
+        return pid === placeIdVal;
       })
-      .filter((d) =>
-        selectedEntry.type === 'crop' ? d.cropLabel === selectedEntry.label : d.brandLabel === selectedEntry.label
-      );
+      .filter((d) => (selectedEntry.type === 'crop' ? (d.cropLabel ?? d.cropType) === selectedEntry.label : (d.brandLabel ?? d.brandName) === selectedEntry.label));
 
     return (
       <div className="flex flex-col h-full">
@@ -376,7 +376,7 @@ useEffect(() => {
     );
   };
 
-  // Main leaderboard area shown in the right-hand panel
+  // Main right-panel leaderboard render
   const renderLeaderboard = () => {
     if (!selectedPoint) {
       return (
@@ -394,11 +394,8 @@ useEffect(() => {
       return <div className="p-4 text-center">Loading leaderboards...</div>;
     }
 
-    if (selectedEntry) {
-      return renderDetailedSubmissions();
-    }
+    if (selectedEntry) return renderDetailedSubmissions();
 
-    // Show tabs (All / Crop / Brand)
     return (
       <Tabs defaultValue="crop" value={groupBy} onValueChange={(val) => setGroupBy(val as any)}>
         <TabsList className="grid w-full grid-cols-3">
@@ -410,17 +407,16 @@ useEffect(() => {
         <TabsContent value="none" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2 text-base">
-              All Submissions ({allData.filter((d) => (d as any).placeId === (selectedPoint as any).placeId).length})
+              All Submissions ({allData.filter((d) => ((d as any).placeId ?? (d as any).place_id) === ((selectedPoint as any).placeId ?? (selectedPoint as any).place_id)).length})
             </h4>
             <div className="divide-y divide-gray-200">
               {allData
-                .filter((d) => (d as any).placeId === (selectedPoint as any).placeId)
+                .filter((d) => ((d as any).placeId ?? (d as any).place_id) === ((selectedPoint as any).placeId ?? (selectedPoint as any).place_id))
                 .map((sub) => renderSubmissionItem(sub, sub.id))}
             </div>
           </div>
         </TabsContent>
 
-        {/* Crop & Brand lists — use the leaderboards fetched from RPCs */}
         <TabsContent value="crop" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2 text-base">Top Crops</h4>
@@ -428,29 +424,35 @@ useEffect(() => {
               {cropLeaderboard.length === 0 ? (
                 <div className="text-sm text-gray-500 p-3">No crop data.</div>
               ) : (
-                cropLeaderboard.map((c) => (
-                  <div
-                    key={c.crop_id ?? c.crop_name}
-                    className="p-2 cursor-pointer hover:bg-gray-50"
-                    onClick={() =>
-                      setSelectedEntry({
-                        type: 'crop',
-                        id: String(c.crop_id ?? c.crop_name),
-                        label: c.crop_label ?? c.crop_name ?? 'Unknown',
-                      })
-                    }
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="font-medium">{c.crop_label ?? c.crop_name}</div>
+                cropLeaderboard.map((c) => {
+                  const normalized = Number(c.average_normalized_score ?? 1.5);
+                  const rankColor = rankColorFromNormalized(normalized);
+                  const label = c.crop_label ?? c.crop_name ?? 'Unknown';
+                  return (
+                    <div
+                      key={c.crop_id ?? c.crop_name}
+                      className="p-2 cursor-pointer hover:bg-gray-50 flex justify-between items-center"
+                      onClick={() =>
+                        setSelectedEntry({
+                          type: 'crop',
+                          id: String(c.crop_id ?? c.crop_name),
+                          label,
+                        })
+                      }
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{label}</div>
                         <div className="text-xs text-gray-500">Submissions: {c.submission_count ?? '-'}</div>
                       </div>
-                      <div className="text-sm font-semibold">
-                        {(c.average_normalized_score ?? 0).toFixed(2)}
+                      <div className="flex items-center space-x-2">
+                        <div className={`w-8 h-6 rounded text-white flex items-center justify-center text-sm ${rankColor.bgClass}`}>
+                          {(c.rank ?? '-') as any}
+                        </div>
+                        <div className="text-sm font-semibold">{normalized.toFixed(2)}</div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -463,29 +465,35 @@ useEffect(() => {
               {brandLeaderboard.length === 0 ? (
                 <div className="text-sm text-gray-500 p-3">No brand data.</div>
               ) : (
-                brandLeaderboard.map((b) => (
-                  <div
-                    key={b.brand_id ?? b.brand_name}
-                    className="p-2 cursor-pointer hover:bg-gray-50"
-                    onClick={() =>
-                      setSelectedEntry({
-                        type: 'brand',
-                        id: String(b.brand_id ?? b.brand_name),
-                        label: b.brand_label ?? b.brand_name ?? 'Unknown',
-                      })
-                    }
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="font-medium">{b.brand_label ?? b.brand_name}</div>
+                brandLeaderboard.map((b) => {
+                  const normalized = Number(b.average_normalized_score ?? 1.5);
+                  const rankColor = rankColorFromNormalized(normalized);
+                  const label = b.brand_label ?? b.brand_name ?? 'Unknown';
+                  return (
+                    <div
+                      key={b.brand_id ?? b.brand_name}
+                      className="p-2 cursor-pointer hover:bg-gray-50 flex justify-between items-center"
+                      onClick={() =>
+                        setSelectedEntry({
+                          type: 'brand',
+                          id: String(b.brand_id ?? b.brand_name),
+                          label,
+                        })
+                      }
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{label}</div>
                         <div className="text-xs text-gray-500">Submissions: {b.submission_count ?? '-'}</div>
                       </div>
-                      <div className="text-sm font-semibold">
-                        {(b.average_normalized_score ?? 0).toFixed(2)}
+                      <div className="flex items-center space-x-2">
+                        <div className={`w-8 h-6 rounded text-white flex items-center justify-center text-sm ${rankColor.bgClass}`}>
+                          {(b.rank ?? '-') as any}
+                        </div>
+                        <div className="text-sm font-semibold">{normalized.toFixed(2)}</div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -494,19 +502,27 @@ useEffect(() => {
     );
   };
 
+  // Panel header values (handle snake/camel)
+  const locTitle = selectedPoint?.locationName ?? (selectedPoint as any)?.location_name ?? safeStr((selectedPoint as any)?.place_label ?? '');
+  const street = selectedPoint?.streetAddress ?? (selectedPoint as any)?.street_address ?? '';
+  const city = selectedPoint?.city ?? (selectedPoint as any)?.city ?? '';
+  const state = selectedPoint?.state ?? (selectedPoint as any)?.state ?? '';
+
   return (
     <div className="relative w-full h-full flex flex-row">
       <div ref={mapContainer} className="absolute inset-0 rounded-md shadow-md" />
       <Card className="absolute inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl z-50 flex flex-col h-full">
         <CardHeader className="p-4 flex-shrink-0 flex flex-row items-start justify-between">
-          <div>
-            {selectedPoint && (
+          <div className="min-w-0">
+            {selectedPoint ? (
               <>
-                <CardTitle className="text-lg font-semibold">{selectedPoint.locationName}</CardTitle>
-                <p className="text-sm text-gray-500 mt-1">
-                  {selectedPoint.streetAddress}, {selectedPoint.city}, {selectedPoint.state}
+                <CardTitle className="text-lg font-semibold truncate">{locTitle}</CardTitle>
+                <p className="text-sm text-gray-500 mt-1 truncate">
+                  {street ? `${street}, ` : ''}{city}{city && state ? `, ${state}` : state ? `, ${state}` : ''}
                 </p>
               </>
+            ) : (
+              <CardTitle className="text-lg font-semibold">Location details</CardTitle>
             )}
           </div>
           {selectedPoint && (
@@ -515,7 +531,10 @@ useEffect(() => {
             </Button>
           )}
         </CardHeader>
-        <CardContent className="p-4 pt-0 flex-1 overflow-y-auto">{renderLeaderboard()}</CardContent>
+
+        <CardContent className="p-4 pt-0 flex-1 overflow-y-auto">
+          {renderLeaderboard()}
+        </CardContent>
       </Card>
     </div>
   );
