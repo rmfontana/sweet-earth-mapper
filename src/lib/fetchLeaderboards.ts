@@ -8,6 +8,8 @@ export type Filter = {
   state?: string;
   country?: string;
   crop?: string;
+  locationName?: string;
+  placeId?: string;
 };
 
 export interface LeaderboardEntry {
@@ -34,19 +36,18 @@ async function fetchLeaderboard<R extends LeaderboardEntry>(
   filters: Filter = {}
 ): Promise<R[]> {
   const { city, state, country, crop } = filters;
-
   console.log(`🔍 Fetching ${rpcName} with filters:`, { city, state, country, crop });
 
   const params = {
-    city_filter: city ?? null,
-    state_filter: state ?? null,
-    country_filter: country ?? null,
-    crop_filter: crop ?? null,
+    country_filter: country || null,
+    state_filter: state || null,
+    city_filter: city || null,
+    crop_filter: crop || null,
   };
 
   try {
     const { data, error } = await supabase.rpc(rpcName, params);
-
+    
     if (error) {
       console.error(`❌ Error fetching ${rpcName}:`, error);
       throw error;
@@ -61,7 +62,6 @@ async function fetchLeaderboard<R extends LeaderboardEntry>(
             item[field] = isNaN(val) ? 0 : val;
           }
         });
-
         return item;
       });
     } else {

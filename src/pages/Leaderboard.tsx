@@ -170,7 +170,7 @@ export default function LeaderboardPage() {
       // If still no data, get all data (no location filters)
       if (!b?.length && !l?.length && !s?.length) {
         console.log("🌍 No data found for country, showing all data...");
-        filters = { country: "", state: "", city: "", crop };
+        filters = { country: undefined, state: undefined, city: undefined, crop };
         
         [b, l, s] = await Promise.all([
           fetchBrandLeaderboard(filters),
