@@ -3,7 +3,7 @@ import Header from "../components/Layout/Header";
 import {
   fetchBrandLeaderboard,
   fetchLocationLeaderboard,
-  fetchSubmissionCountLeaderboard,
+  fetchUserLeaderboard,
 } from "@/lib/fetchLeaderboards";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -132,7 +132,7 @@ export default function LeaderboardPage() {
       let [b, l, s] = await Promise.all([
         fetchBrandLeaderboard(filters),
         fetchLocationLeaderboard(filters),
-        fetchSubmissionCountLeaderboard(filters),
+        fetchUserLeaderboard(filters),
       ]);
 
       // If no data found with city filter, try without city
@@ -143,7 +143,7 @@ export default function LeaderboardPage() {
         [b, l, s] = await Promise.all([
           fetchBrandLeaderboard(filters),
           fetchLocationLeaderboard(filters),
-          fetchSubmissionCountLeaderboard(filters),
+          fetchUserLeaderboard(filters), 
         ]);
         
         if (b?.length || l?.length || s?.length) {
@@ -159,7 +159,7 @@ export default function LeaderboardPage() {
         [b, l, s] = await Promise.all([
           fetchBrandLeaderboard(filters),
           fetchLocationLeaderboard(filters),
-          fetchSubmissionCountLeaderboard(filters),
+          fetchUserLeaderboard(filters), // Changed from fetchSubmissionCountLeaderboard
         ]);
         
         if (b?.length || l?.length || s?.length) {
@@ -175,7 +175,7 @@ export default function LeaderboardPage() {
         [b, l, s] = await Promise.all([
           fetchBrandLeaderboard(filters),
           fetchLocationLeaderboard(filters),
-          fetchSubmissionCountLeaderboard(filters),
+          fetchUserLeaderboard(filters), // Changed from fetchSubmissionCountLeaderboard
         ]);
         
         if (b?.length || l?.length || s?.length) {
@@ -267,7 +267,11 @@ export default function LeaderboardPage() {
                   <ul className="space-y-1">
                     {locations.map((loc, i) => (
                       <li key={i} className="text-sm">
-                        {loc.location_name} ({loc.average_normalized_score?.toFixed(2)})
+                        <span className="font-medium">{loc.location_name}</span>
+                        <span className="text-gray-600"> ({loc.average_normalized_score?.toFixed(2)})</span>
+                        {loc.city && loc.state && (
+                          <span className="text-gray-500 text-xs block">{loc.city}, {loc.state}</span>
+                        )}
                       </li>
                     ))}
                   </ul>

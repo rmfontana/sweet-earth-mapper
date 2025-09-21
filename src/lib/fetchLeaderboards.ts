@@ -86,8 +86,8 @@ export async function fetchLocationLeaderboard(filters: Filter = {}) {
   return await fetchLeaderboard('get_location_leaderboard', filters);
 }
 
-export async function fetchSubmissionCountLeaderboard(filters: Filter = {}) {
-  return await fetchLeaderboard('get_submission_count_leaderboard', filters);
+export async function fetchUserLeaderboard(filters: Filter = {}) {
+  return await fetchLeaderboard('get_user_leaderboard', filters);
 }
 
 // Utility function for debugging in browser console
@@ -95,5 +95,5 @@ if (typeof window !== 'undefined') {
   (window as any).fetchBrandLeaderboard = fetchBrandLeaderboard;
   (window as any).fetchCropLeaderboard = fetchCropLeaderboard;
   (window as any).fetchLocationLeaderboard = fetchLocationLeaderboard;
-  (window as any).fetchSubmissionCountLeaderboard = fetchSubmissionCountLeaderboard;
+  (window as any).fetchUserLeaderboard = fetchUserLeaderboard;
 }
