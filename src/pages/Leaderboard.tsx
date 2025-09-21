@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "../components/Layout/Header";
 import LocationSelector from "../components/common/LocationSelector";
 import { fetchCropTypes, CropType } from "../lib/fetchCropTypes";
@@ -8,8 +9,16 @@ import {
   fetchUserLeaderboard,
   LeaderboardEntry,
 } from "../lib/fetchLeaderboards";
-import { computeNormalizedScore } from "../lib/getBrixColor";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import {
+  computeNormalizedScore,
+  rankColorFromNormalized,
+} from "../lib/getBrixColor";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
 import { useAuth } from "../contexts/AuthContext";
 import { locationService } from "../lib/locationServiceforRegister";
 
@@ -23,6 +32,7 @@ const emptyLocation = {
 
 const LeaderboardPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [location, setLocation] = useState(() => ({
     ...emptyLocation,
@@ -135,7 +145,13 @@ const LeaderboardPage: React.FC = () => {
         ]);
 
         // fallback: broaden scope if nothing found
-        if (mounted && (!loc.length && !brand.length && !users.length) && filters.city) {
+        if (
+          mounted &&
+          !loc.length &&
+          !brand.length &&
+          !users.length &&
+          filters.city
+        ) {
           filters = { ...filters, city: undefined };
           [loc, brand, users] = await Promise.all([
             fetchLocationLeaderboard(filters),
@@ -149,7 +165,13 @@ const LeaderboardPage: React.FC = () => {
           }
         }
 
-        if (mounted && (!loc.length && !brand.length && !users.length) && filters.state) {
+        if (
+          mounted &&
+          !loc.length &&
+          !brand.length &&
+          !users.length &&
+          filters.state
+        ) {
           filters = { ...filters, state: undefined };
           [loc, brand, users] = await Promise.all([
             fetchLocationLeaderboard(filters),
@@ -163,7 +185,7 @@ const LeaderboardPage: React.FC = () => {
           }
         }
 
-        if (mounted && (!loc.length && !brand.length && !users.length)) {
+        if (mounted && !loc.length && !brand.length && !users.length) {
           filters = { country: undefined, state: undefined, city: undefined, crop };
           [loc, brand, users] = await Promise.all([
             fetchLocationLeaderboard(filters),
@@ -193,14 +215,33 @@ const LeaderboardPage: React.FC = () => {
     };
   }, [location, crop, isInitializing]);
 
-  const renderLeaderboardCard = (title: string, data: LeaderboardEntry[], labelKey: string) => {
+  const handleNavigate = (
+    filters: Record<string, string | undefined>,
+    labelKey: string
+  ) => {
+    if (labelKey === "user") return; // Users not clickable
+    const params = new URLSearchParams(
+      Object.entries(filters).filter(([_, v]) => v)
+    ).toString();
+    navigate(`/data?${params}`);
+  };
+
+  const renderLeaderboardCard = (
+    title: string,
+    data: LeaderboardEntry[],
+    labelKey: string
+  ) => {
     return (
       <Card className="w-full shadow-md rounded-lg overflow-hidden">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold text-center">{title}</CardTitle>
+          <CardTitle className="text-lg font-semibold text-center">
+            {title}
+          </CardTitle>
         </CardHeader>
         <CardContent className="px-0">
-          {data.length === 0 ? (
+          {loading ? (
+            <div className="text-sm text-gray-500 p-3">Loading…</div>
+          ) : data.length === 0 ? (
             <div className="text-sm text-gray-500 p-3">No data available.</div>
           ) : (
             <div>
@@ -234,39 +275,52 @@ const LeaderboardPage: React.FC = () => {
                         })();
 
                   const rank = entry.rank ?? idx + 1;
-                  const isTie =
-                    idx > 0 && (entry.rank ?? idx + 1) === (data[idx - 1].rank ?? idx);
+                  const prevRank = idx > 0 ? data[idx - 1].rank ?? idx : null;
+                  const isTie = prevRank !== null && prevRank === rank;
 
-                  // Color rank badge by normalized score
-                  let badgeColor = "bg-gray-300";
-                  if (normalizedScore >= 1.8) badgeColor = "bg-green-600";
-                  else if (normalizedScore >= 1.4) badgeColor = "bg-green-400";
-                  else if (normalizedScore >= 1.0) badgeColor = "bg-yellow-400";
-                  else badgeColor = "bg-red-400";
+                  const { bgClass } = rankColorFromNormalized(normalizedScore);
 
                   return (
                     <div
                       key={(entry as any)[`${labelKey}_id`] ?? label ?? idx}
-                      className="grid grid-cols-3 items-center px-4 py-2 border-b last:border-0 odd:bg-white even:bg-gray-50 hover:bg-gray-100 text-sm"
+                      onClick={() =>
+                        handleNavigate(
+                          {
+                            crop,
+                            ...(labelKey === "location" && {
+                              place: (entry as any).location_label,
+                              city: (entry as any).city,
+                              state: (entry as any).state,
+                              country: (entry as any).country,
+                            }),
+                            ...(labelKey === "brand" && {
+                              brand: (entry as any).brand_label,
+                              country: (entry as any).country,
+                            }),
+                          },
+                          labelKey
+                        )
+                      }
+                      className={`grid grid-cols-3 items-center px-4 py-2 border-b last:border-0 odd:bg-white even:bg-gray-50 hover:bg-gray-100 text-sm ${
+                        labelKey !== "user" ? "cursor-pointer" : ""
+                      }`}
                     >
                       {/* Left: Label + details */}
                       <div className="flex flex-col min-w-0">
-                        <div>
-                          <div className="font-medium truncate">{label}</div>
-                          {labelKey === "location" && (
-                            <div className="text-xs text-gray-500 truncate">
-                              {(entry as any).city
-                                ? `${(entry as any).city}${
-                                    (entry as any).state ? `, ${(entry as any).state}` : ""
-                                  }`
-                                : ""}
-                            </div>
-                          )}
-                        </div>
-                        <div className="mt-1 flex flex-col text-xs text-gray-500">
-                          <span className="italic">
-                            {entry.submission_count ?? 0} submissions
-                          </span>
+                        <div className="font-medium">{label}</div>
+                        {labelKey === "location" && (
+                          <div className="text-xs text-gray-500">
+                            {(entry as any).city
+                              ? `${(entry as any).city}${
+                                  (entry as any).state
+                                    ? `, ${(entry as any).state}`
+                                    : ""
+                                }`
+                              : ""}
+                          </div>
+                        )}
+                        <div className="mt-1 text-xs text-gray-500 italic">
+                          {entry.submission_count ?? 0} submissions
                         </div>
                       </div>
 
@@ -278,12 +332,14 @@ const LeaderboardPage: React.FC = () => {
                       {/* Right: Rank */}
                       <div className="flex flex-col items-center">
                         <span
-                          className={`px-3 py-1 text-sm font-semibold rounded-full text-white ${badgeColor}`}
+                          className={`px-3 py-1 text-sm font-semibold rounded-full text-white ${bgClass}`}
                         >
                           {rank}
                         </span>
                         {isTie && (
-                          <span className="text-xs text-gray-500 mt-1">(tie)</span>
+                          <span className="text-xs text-gray-500 mt-1">
+                            (tie)
+                          </span>
                         )}
                       </div>
                     </div>
@@ -310,7 +366,7 @@ const LeaderboardPage: React.FC = () => {
                 value={location}
                 onChange={setLocation}
                 required={false}
-                showAutoDetect={false} // disable geolocation
+                showAutoDetect={false}
               />
               <div>
                 <label className="block text-sm font-medium mb-2">Crop</label>
