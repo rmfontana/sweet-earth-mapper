@@ -899,15 +899,10 @@ export type Database = {
         Returns: {
           average_brix: number
           average_normalized_score: number
-          average_normalized_score_threshold: number
           brand_id: string
           brand_label: string
           brand_name: string
-          excellent_normalized_score: number
-          good_normalized_score: number
           grade: string
-          min_normalized_score: number
-          poor_normalized_score: number
           rank: number
           submission_count: number
         }[]
@@ -969,6 +964,35 @@ export type Database = {
       get_proj4_from_srid: {
         Args: { "": number }
         Returns: string
+      }
+      get_submission_count_leaderboard: {
+        Args: {
+          city_filter?: string
+          country_filter?: string
+          crop_filter?: string
+          state_filter?: string
+        }
+        Returns: {
+          entity_id: string
+          entity_name: string
+          entity_type: string
+          rank: number
+          submission_count: number
+        }[]
+      }
+      get_user_leaderboard: {
+        Args: {
+          city_filter?: string
+          country_filter?: string
+          crop_filter?: string
+          state_filter?: string
+        }
+        Returns: {
+          rank: number
+          submission_count: number
+          user_id: string
+          user_name: string
+        }[]
       }
       get_user_role: {
         Args: { user_uuid: string }
