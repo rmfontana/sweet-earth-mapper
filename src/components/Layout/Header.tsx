@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { useAuth } from '../../contexts/AuthContext';
-import { Eye, Database, Plus, User, LogOut } from 'lucide-react';
+import { Eye, Database, Plus, User, LogOut, Trophy } from 'lucide-react';
 
 const Header = () => {
   const { user, logout } = useAuth();
@@ -44,7 +44,7 @@ const Header = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
+          <Link to="/leaderboard" className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">B</span>
             </div>
@@ -54,13 +54,23 @@ const Header = () => {
           {/* Navigation - only if authenticated */}
           {user && (
             <nav className="hidden md:flex space-x-1">
+              <Link to="/leaderboard">
+                <Button
+                  variant={isActive('/leaderboard') ? 'default' : 'ghost'}
+                  className="flex items-center space-x-2"
+                >
+                  <Trophy className="w-4 h-4" />
+                  <span>Leaderboard</span>
+                </Button>
+              </Link>
+
               <Link to="/map">
                 <Button
                   variant={isActive('/map') ? 'default' : 'ghost'}
                   className="flex items-center space-x-2"
                 >
                   <Eye className="w-4 h-4" />
-                   <span>Explorer</span>
+                  <span>Explorer</span>
                 </Button>
               </Link>
 

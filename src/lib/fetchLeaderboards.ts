@@ -6,6 +6,7 @@ const supabase = createClient(getSupabaseUrl(), getPublishableKey());
 export type Filter = {
   location_name?: string;
   place_id?: string;
+  city?: string;
   state?: string;
   country?: string;
 };
@@ -32,9 +33,9 @@ async function fetchLeaderboard<R extends LeaderboardEntry>(
   rpcName: string,
   filters: Filter = {}
 ): Promise<R[]> {
-  const { location_name, place_id, state, country } = filters;
+  const { location_name, place_id, city, state, country } = filters;
   
-  console.log(`🔍 Fetching ${rpcName} with filters:`, { location_name, place_id, state, country });
+  console.log(`🔍 Fetching ${rpcName} with filters:`, { location_name, place_id, city, state, country });
   
   // Convert place_id to UUID format if it's provided
   let place_id_uuid = null;
@@ -47,6 +48,7 @@ async function fetchLeaderboard<R extends LeaderboardEntry>(
   const params = {
     location_name_filter: location_name ?? null,
     place_id_filter: place_id_uuid,
+    city_filter: city ?? null,
     state_filter: state ?? null,
     country_filter: country ?? null,
   };

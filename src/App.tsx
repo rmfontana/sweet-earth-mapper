@@ -2,10 +2,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider, useAuth } from "./contexts/AuthContext"; // <--- Import useAuth
-import Index from "./pages/Index";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import MapView from "./pages/MapView";
+import Leaderboard from "./pages/Leaderboard";
 import DataBrowser from "./pages/DataBrowser";
 import DataEntry from "./pages/DataEntry";
 import YourData from "./pages/YourData";
@@ -13,20 +13,16 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 import VerifyEmailNotice from "./pages/VerifyEmailNotice";
-import Profile from './pages/Profile';
-import ProtectedRoute from './components/misc/ProtectedRoute';
-import { Skeleton } from "@/components/ui/skeleton"; 
-
+import Profile from "./pages/Profile";
+import ProtectedRoute from "./components/misc/ProtectedRoute";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const queryClient = new QueryClient();
 
-// A wrapper component to manage the initial loading state
 const RootContent = () => {
   const { isLoading } = useAuth();
-  
-  // If we are still checking the initial session, render a loading state
+
   if (isLoading) {
-    // You can replace this with a more sophisticated splash screen
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-xl">Loading application data...</p>
@@ -35,22 +31,31 @@ const RootContent = () => {
     );
   }
 
-  // Once loading is complete, render the router
   return (
     <BrowserRouter>
       <Routes>
+        {/* Redirect root to leaderboard */}
+        <Route path="/" element={<Navigate to="/leaderboard" replace />} />
+
         {/* Public routes */}
-        <Route path="/" element={<Index />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmailNotice />} />
         <Route path="*" element={<NotFound />} />
 
-        {/* Protected routes wrapped with ProtectedRoute */}
+        {/* Protected routes */}
+        <Route
+          path="/leaderboard"
+          element={
+            <ProtectedRoute requireLocation>
+              <Leaderboard />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/map"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requireLocation>
               <MapView />
             </ProtectedRoute>
           }
@@ -90,9 +95,8 @@ const RootContent = () => {
       </Routes>
     </BrowserRouter>
   );
-}
+};
 
-// Main App component now wraps RootContent with providers
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
