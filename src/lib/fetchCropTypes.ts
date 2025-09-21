@@ -4,6 +4,7 @@ import { BrixThresholds } from './getBrixQuality';
 export interface CropType {
   id: string;
   name: string;
+  label: string | null;
 }
 
 /**

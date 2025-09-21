@@ -1,3 +1,4 @@
+// src/components/Map/InteractiveMap.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -14,25 +15,28 @@ import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor } from '../../lib/getBrixColor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
-// Leaderboard API imports
+// Leaderboard API imports (import the Filter type so TS knows what we pass)
 import {
   fetchLocationLeaderboard,
   fetchCropLeaderboard,
   fetchBrandLeaderboard,
   LeaderboardEntry,
+  type Filter,
 } from '../../lib/fetchLeaderboards';
 
 interface InteractiveMapProps {
-  userLocation: { lat: number; lng: number }; // 🔒 required now
+  userLocation: { lat: number; lng: number };
   nearMeTriggered?: boolean;
   onNearMeHandled?: () => void;
 }
 
-type SelectedView = {
-  type: 'crop' | 'brand';
-  id: string;
-  label: string;
-} | null;
+type SelectedView =
+  | {
+      type: 'crop' | 'brand';
+      id: string;
+      label: string;
+    }
+  | null;
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({
   userLocation,
@@ -40,9 +44,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   onNearMeHandled,
 }) => {
   const location = useLocation();
-  const { highlightedPoint } = location.state || {};
+  const { highlightedPoint } = (location.state || {}) as any;
   const { filters, isAdmin } = useFilters();
-  const mapContainer = useRef<HTMLDivElement>(null);
+  const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [allData, setAllData] = useState<BrixDataPoint[]>([]);
@@ -61,17 +65,17 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   const { cache, loading: thresholdsLoading } = useCropThresholds();
 
-  // Fetch all data
+  // Fetch all submissions
   useEffect(() => {
     fetchFormattedSubmissions()
-      .then((data) => setAllData(data))
+      .then((data) => setAllData(data || []))
       .catch((error) => {
         console.error('Error fetching submissions:', error);
         setAllData([]);
       });
   }, []);
 
-  // Reset tab when new store is selected
+  // Reset grouping/drill state when a store gets selected
   useEffect(() => {
     if (selectedPoint) {
       setGroupBy('crop');
@@ -79,21 +83,28 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [selectedPoint]);
 
-  // Calculate min/max Brix
+  // Compute min/max brix across all data (used as fallback in normalization)
   useEffect(() => {
     if (allData.length > 0) {
-      const brixValues = allData.map((d) => d.brixLevel);
-      setMinBrix(Math.min(...brixValues));
-      setMaxBrix(Math.max(...brixValues));
+      const bVals = allData.map((d) => d.brixLevel).filter((v) => typeof v === 'number');
+      if (bVals.length > 0) {
+        setMinBrix(Math.min(...bVals));
+        setMaxBrix(Math.max(...bVals));
+      }
     }
   }, [allData]);
 
-  // Filter data
+  // Apply client-side filters from FilterContext
   useEffect(() => {
-    setFilteredData(applyFilters(allData, filters, isAdmin));
+    try {
+      setFilteredData(applyFilters(allData, filters, isAdmin));
+    } catch (err) {
+      console.error('Error applying filters to submissions:', err);
+      setFilteredData(allData);
+    }
   }, [filters, allData, isAdmin]);
 
-  // Handle "Near Me" → recenter on profile location
+  // "Near Me" centering
   useEffect(() => {
     if (nearMeTriggered && userLocation && mapRef.current) {
       mapRef.current.easeTo({
@@ -105,33 +116,35 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [nearMeTriggered, userLocation, onNearMeHandled]);
 
-  // Initialize Mapbox
+  // Initialize map once
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
 
-    async function initializeMap() {
+    let mounted = true;
+    async function init() {
       const token = await getMapboxToken();
       if (!token) {
-        console.error('Failed to retrieve Mapbox token. Map will not initialize.');
+        console.error('Mapbox token missing; map disabled');
         return;
       }
-
       mapboxgl.accessToken = token;
       const map = new mapboxgl.Map({
-        container: mapContainer.current,
+        container: mapContainer.current!,
         style: 'mapbox://styles/mapbox/satellite-v9',
-        center: [userLocation.lng, userLocation.lat], // 🔒 profile location
+        center: [userLocation.lng, userLocation.lat],
         zoom: 10,
       });
-
       mapRef.current = map;
-      map.on('load', () => setIsMapLoaded(true));
+      map.on('load', () => {
+        if (!mounted) return;
+        setIsMapLoaded(true);
+      });
       map.on('error', (e) => console.error('Mapbox error:', e.error));
     }
-
-    initializeMap();
+    init();
 
     return () => {
+      mounted = false;
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -140,7 +153,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     };
   }, [userLocation]);
 
-  // Center map on highlighted point
+  // If a highlighted point comes from navigation, center on it
   useEffect(() => {
     if (highlightedPoint && mapRef.current) {
       const point = allData.find((d) => d.id === highlightedPoint.id);
@@ -155,21 +168,23 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [highlightedPoint, allData]);
 
-  // Draw markers
+  // Draw markers for stores (grouped by store/locationName)
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
 
+    // Remove existing markers
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
     const storeGroups: Record<string, BrixDataPoint[]> = {};
     const averageScores: Record<string, number> = {};
 
-    filteredData.forEach((point) => {
-      if (!point.latitude || !point.longitude || !point.locationName) return;
-      if (!storeGroups[point.locationName]) storeGroups[point.locationName] = [];
-      storeGroups[point.locationName].push(point);
-    });
+    for (const point of filteredData) {
+      if (!point.latitude || !point.longitude || !point.locationName) continue;
+      const key = point.locationName;
+      if (!storeGroups[key]) storeGroups[key] = [];
+      storeGroups[key].push(point);
+    }
 
     Object.entries(storeGroups).forEach(([storeName, points]) => {
       if (points.length === 0) return;
@@ -177,37 +192,37 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       let totalScore = 0;
       let validCount = 0;
 
-      points.forEach((p) => {
+      for (const p of points) {
         const cropType = p.cropType || p.cropLabel || 'unknown';
         const thresholds = cache?.[cropType];
+
         if (
           thresholds &&
           typeof thresholds.poor === 'number' &&
           typeof thresholds.excellent === 'number' &&
           thresholds.excellent > thresholds.poor
         ) {
-          const score =
-            (p.brixLevel - thresholds.poor) / (thresholds.excellent - thresholds.poor) + 1;
+          const score = (p.brixLevel - thresholds.poor) / (thresholds.excellent - thresholds.poor) + 1;
           totalScore += score;
           validCount++;
         } else if (maxBrix > minBrix) {
           totalScore += (p.brixLevel - minBrix) / (maxBrix - minBrix) + 1;
           validCount++;
         }
-      });
+      }
 
       averageScores[storeName] = validCount > 0 ? totalScore / validCount : 1.5;
 
       const firstPoint = points[0];
       if (!firstPoint.latitude || !firstPoint.longitude) return;
 
-      const markerColor = getBrixColor(averageScores[storeName], {
-        poor: 1.0,
-        average: 1.25,
-        good: 1.5,
-        excellent: 1.75,
-      }, 'hex');
+      const markerColor = getBrixColor(
+        averageScores[storeName],
+        { poor: 1.0, average: 1.25, good: 1.5, excellent: 1.75 },
+        'hex'
+      );
 
+      // Build marker DOM
       const markerContainer = document.createElement('div');
       markerContainer.className = 'flex flex-col items-center cursor-pointer';
       const dot = document.createElement('div');
@@ -236,12 +251,17 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         .addTo(mapRef.current!);
 
       markersRef.current.push(marker);
-      markerContainer.addEventListener('click', () => setSelectedPoint(firstPoint));
+
+      // Click handler selects that store (we pass first point for drill-down)
+      markerContainer.addEventListener('click', () => {
+        setSelectedPoint(firstPoint);
+      });
     });
 
+    // Deselect point when clicking map (but not marker)
     const mapClickListener = (e: mapboxgl.MapMouseEvent) => {
       const isMarkerClick = markersRef.current.some((m) =>
-        m.getElement().contains(e.originalEvent.target as Node),
+        m.getElement().contains(e.originalEvent.target as Node)
       );
       if (!isMarkerClick) setSelectedPoint(null);
     };
@@ -252,41 +272,46 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     };
   }, [filteredData, isMapLoaded, cache, minBrix, maxBrix]);
 
-  // Fetch leaderboard data
-  useEffect(() => {
-    if (!selectedPoint || !selectedPoint.placeId) {
+  // Fetch leaderboard data for clicked store
+useEffect(() => {
+  if (!selectedPoint) {
+    setLocationLeaderboard([]);
+    setCropLeaderboard([]);
+    setBrandLeaderboard([]);
+    return;
+  }
+
+  // Build filters in camelCase
+  const localFilters: Filter = {
+    city: selectedPoint.city ?? undefined,
+    state: selectedPoint.state ?? undefined,
+    country: selectedPoint.country ?? undefined,
+    // optionally crop if you want to narrow leaderboards:
+    // crop: selectedPoint.cropLabel ?? undefined,
+  };
+
+  setIsLoading(true);
+
+  Promise.all([
+    fetchLocationLeaderboard(localFilters),
+    fetchCropLeaderboard(localFilters),
+    fetchBrandLeaderboard(localFilters),
+  ])
+    .then(([loc, crop, brand]) => {
+      setLocationLeaderboard(loc || []);
+      setCropLeaderboard(crop || []);
+      setBrandLeaderboard(brand || []);
+    })
+    .catch((err) => {
+      console.error('Error fetching leaderboard:', err);
       setLocationLeaderboard([]);
       setCropLeaderboard([]);
       setBrandLeaderboard([]);
-      return;
-    }
+    })
+    .finally(() => setIsLoading(false));
+}, [selectedPoint, filters]);
 
-    setIsLoading(true);
-    const localFilters = {
-      location_name: selectedPoint.locationName,
-      place_id: selectedPoint.placeId,
-    };
-
-    Promise.all([
-      fetchLocationLeaderboard(localFilters),
-      fetchCropLeaderboard(localFilters),
-      fetchBrandLeaderboard(localFilters),
-    ])
-      .then(([loc, crop, brand]) => {
-        setLocationLeaderboard(loc);
-        setCropLeaderboard(crop);
-        setBrandLeaderboard(brand);
-      })
-      .catch((err) => {
-        console.error('Error fetching leaderboard:', err);
-        setLocationLeaderboard([]);
-        setCropLeaderboard([]);
-        setBrandLeaderboard([]);
-      })
-      .finally(() => setIsLoading(false));
-  }, [selectedPoint, filters]);
-
-  // Helper to render submission
+  // Render helper for a single submission row
   const renderSubmissionItem = (sub: BrixDataPoint, key: string) => {
     const cropType = sub.cropType || sub.cropLabel || 'unknown';
     const thresholds = cache?.[cropType];
@@ -298,7 +323,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         good: maxBrix * 0.8,
         excellent: maxBrix,
       },
-      'bg',
+      'bg'
     );
 
     return (
@@ -310,25 +335,24 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
           </span>
         </div>
-        <div
-          className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${brixPillColor}`}
-        >
+        <div className={`flex-shrink-0 min-w-[40px] px-2 py-1 text-center font-bold text-sm text-white rounded-full ${brixPillColor}`}>
           {sub.brixLevel}
         </div>
       </div>
     );
   };
 
-  // Drill-down submissions
+  // Drill-down submissions for selected entry (crop or brand)
   const renderDetailedSubmissions = () => {
-    if (!selectedEntry) return null;
+    if (!selectedEntry || !selectedPoint) return null;
 
     const filteredSubmissions = allData
-      .filter((d) => d.placeId === selectedPoint?.placeId)
+      .filter((d) => {
+        const placeId = (d as any).placeId ?? (d as any).place_id;
+        return placeId === ((selectedPoint as any).placeId ?? (selectedPoint as any).place_id);
+      })
       .filter((d) =>
-        selectedEntry.type === 'crop'
-          ? d.cropLabel === selectedEntry.label
-          : d.brandLabel === selectedEntry.label,
+        selectedEntry.type === 'crop' ? d.cropLabel === selectedEntry.label : d.brandLabel === selectedEntry.label
       );
 
     return (
@@ -352,6 +376,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     );
   };
 
+  // Main leaderboard area shown in the right-hand panel
   const renderLeaderboard = () => {
     if (!selectedPoint) {
       return (
@@ -373,6 +398,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       return renderDetailedSubmissions();
     }
 
+    // Show tabs (All / Crop / Brand)
     return (
       <Tabs defaultValue="crop" value={groupBy} onValueChange={(val) => setGroupBy(val as any)}>
         <TabsList className="grid w-full grid-cols-3">
@@ -384,19 +410,86 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <TabsContent value="none" className="mt-4">
           <div>
             <h4 className="font-semibold mb-2 text-base">
-              All Submissions (
-              {allData.filter((d) => d.placeId === selectedPoint.placeId).length})
+              All Submissions ({allData.filter((d) => (d as any).placeId === (selectedPoint as any).placeId).length})
             </h4>
             <div className="divide-y divide-gray-200">
               {allData
-                .filter((d) => d.placeId === selectedPoint.placeId)
+                .filter((d) => (d as any).placeId === (selectedPoint as any).placeId)
                 .map((sub) => renderSubmissionItem(sub, sub.id))}
             </div>
           </div>
         </TabsContent>
 
-        {/* Crop & Brand tabs trimmed for brevity – same as your existing code */}
-        {/* ... */}
+        {/* Crop & Brand lists — use the leaderboards fetched from RPCs */}
+        <TabsContent value="crop" className="mt-4">
+          <div>
+            <h4 className="font-semibold mb-2 text-base">Top Crops</h4>
+            <div className="divide-y divide-gray-100">
+              {cropLeaderboard.length === 0 ? (
+                <div className="text-sm text-gray-500 p-3">No crop data.</div>
+              ) : (
+                cropLeaderboard.map((c) => (
+                  <div
+                    key={c.crop_id ?? c.crop_name}
+                    className="p-2 cursor-pointer hover:bg-gray-50"
+                    onClick={() =>
+                      setSelectedEntry({
+                        type: 'crop',
+                        id: String(c.crop_id ?? c.crop_name),
+                        label: c.crop_label ?? c.crop_name ?? 'Unknown',
+                      })
+                    }
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="font-medium">{c.crop_label ?? c.crop_name}</div>
+                        <div className="text-xs text-gray-500">Submissions: {c.submission_count ?? '-'}</div>
+                      </div>
+                      <div className="text-sm font-semibold">
+                        {(c.average_normalized_score ?? 0).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="brand" className="mt-4">
+          <div>
+            <h4 className="font-semibold mb-2 text-base">Top Brands</h4>
+            <div className="divide-y divide-gray-100">
+              {brandLeaderboard.length === 0 ? (
+                <div className="text-sm text-gray-500 p-3">No brand data.</div>
+              ) : (
+                brandLeaderboard.map((b) => (
+                  <div
+                    key={b.brand_id ?? b.brand_name}
+                    className="p-2 cursor-pointer hover:bg-gray-50"
+                    onClick={() =>
+                      setSelectedEntry({
+                        type: 'brand',
+                        id: String(b.brand_id ?? b.brand_name),
+                        label: b.brand_label ?? b.brand_name ?? 'Unknown',
+                      })
+                    }
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="font-medium">{b.brand_label ?? b.brand_name}</div>
+                        <div className="text-xs text-gray-500">Submissions: {b.submission_count ?? '-'}</div>
+                      </div>
+                      <div className="text-sm font-semibold">
+                        {(b.average_normalized_score ?? 0).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
     );
   };
@@ -417,12 +510,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             )}
           </div>
           {selectedPoint && (
-            <Button
-              onClick={() => setSelectedPoint(null)}
-              variant="ghost"
-              size="icon"
-              className="p-1"
-            >
+            <Button onClick={() => setSelectedPoint(null)} variant="ghost" size="icon" className="p-1">
               <X size={20} />
             </Button>
           )}
