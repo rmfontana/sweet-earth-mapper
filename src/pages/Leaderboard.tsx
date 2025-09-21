@@ -195,6 +195,37 @@ const LeaderboardPage: React.FC = () => {
     };
   }, [location, crop, isInitializing]);
 
+  // Reset to My Location with proper codes
+  const handleResetToMyLocation = async () => {
+    try {
+      const countries = await locationService.getCountries();
+      const userCountry = countries.find(
+        (c) => c.name.toLowerCase() === user?.country?.toLowerCase()
+      );
+      const countryCode = userCountry?.code || "";
+
+      let stateCode = "";
+      if (countryCode && user?.state) {
+        const states = await locationService.getStates(countryCode);
+        const userState = states.find(
+          (s) => s.name.toLowerCase() === user.state.toLowerCase()
+        );
+        stateCode = userState?.adminCode1 || "";
+      }
+
+      setLocation({
+        country: userCountry?.name || user?.country || "",
+        countryCode,
+        state: user?.state || "",
+        stateCode,
+        city: user?.city || "",
+      });
+      setCrop("");
+    } catch (err) {
+      console.error("Failed to reset location:", err);
+    }
+  };
+
   const renderLeaderboardCard = (title: string, data: LeaderboardEntry[], labelKey: string) => {
     return (
       <Card className="w-full shadow-md rounded-lg">
@@ -205,7 +236,7 @@ const LeaderboardPage: React.FC = () => {
           {data.length === 0 ? (
             <div className="text-sm text-gray-500 p-3">No data available.</div>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y">
               {data.map((entry, idx) => {
                 const label =
                   (entry as any)[`${labelKey}_label`] ||
@@ -230,34 +261,39 @@ const LeaderboardPage: React.FC = () => {
                 return (
                   <div
                     key={(entry as any)[`${labelKey}_id`] ?? label ?? idx}
-                    className="flex items-center justify-between py-2"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between py-3"
                   >
-                    <div className="flex items-start space-x-3 min-w-0">
+                    {/* Left: Label + City/State */}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm sm:text-base break-words">{label}</div>
+                      {labelKey === "location" && (
+                        <div className="text-xs text-gray-500">
+                          {(entry as any).city
+                            ? `${(entry as any).city}${
+                                (entry as any).state ? `, ${(entry as any).state}` : ""
+                              }`
+                            : ""}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Rank + Score + Submissions */}
+                    <div className="flex flex-col items-end mt-2 sm:mt-0 sm:ml-4">
+                      {/* Rank circle */}
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 ${bgClass}`}
-                        aria-hidden
+                        className={`text-2xl font-bold ${bgClass} text-white rounded-full w-12 h-12 flex items-center justify-center`}
                       >
                         {rank}
                       </div>
-                      <div className="text-sm leading-snug">
-                        <div className="font-medium break-words">{label}</div>
-                        {labelKey === "location" && (
-                          <div className="text-xs text-gray-500">
-                            {(entry as any).city
-                              ? `${(entry as any).city}${
-                                  (entry as any).state ? `, ${(entry as any).state}` : ""
-                                }`
-                              : ""}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end">
+
+                      {/* Score pill */}
                       <div
-                        className={`px-3 py-1 rounded-full text-white text-xs font-semibold ${bgClass}`}
+                        className={`mt-2 px-3 py-1 rounded-full text-white text-xs font-semibold ${bgClass}`}
                       >
                         {Number(normalizedScore ?? 0).toFixed(2)}
                       </div>
+
+                      {/* Submissions */}
                       <div className="text-xs text-gray-500 mt-1">
                         {entry.submission_count ?? 0} submissions
                       </div>
@@ -276,16 +312,16 @@ const LeaderboardPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6 lg:p-8">
-        <div className="flex gap-6">
+        <div className="flex flex-col lg:flex-row gap-6">
           {/* Left: Filters */}
-          <aside className="w-72 border-r pr-4">
+          <aside className="w-full lg:w-72 lg:border-r lg:pr-4">
             <h2 className="text-lg font-semibold mb-4">Filters</h2>
             <div className="space-y-4">
               <LocationSelector
                 value={location}
                 onChange={setLocation}
                 required={false}
-                showAutoDetect={false} // disable geolocation
+                showAutoDetect={false}
               />
               <div>
                 <label className="block text-sm font-medium mb-2">Crop</label>
@@ -304,15 +340,7 @@ const LeaderboardPage: React.FC = () => {
               </div>
               <div className="flex flex-col space-y-2">
                 <button
-                  onClick={() => {
-                    setLocation({
-                      ...emptyLocation,
-                      country: user?.country || "",
-                      state: user?.state || "",
-                      city: user?.city || "",
-                    });
-                    setCrop("");
-                  }}
+                  onClick={handleResetToMyLocation}
                   className="text-sm text-blue-600 hover:underline text-left"
                 >
                   Reset to My Location
