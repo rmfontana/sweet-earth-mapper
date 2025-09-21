@@ -883,37 +883,26 @@ export type Database = {
       get_brand_leaderboard: {
         Args:
           | {
+              city_filter: string
               country_filter: string
               location_name_filter: string
               place_id_filter: string
               state_filter: string
             }
-          | { filters?: Json }
-        Returns: {
-          avg_normalized_score: number
-          brand_id: string
-          brand_name: string
-          grade: string
-          rank: number
-          submission_count: number
-        }[]
-      }
-      get_crop_leaderboard: {
-        Args:
           | {
-              country_filter: string
-              location_name_filter: string
-              place_id_filter: string
-              state_filter: string
+              city_filter?: string
+              country_filter?: string
+              crop_filter?: string
+              state_filter?: string
             }
           | { filters?: Json }
         Returns: {
           average_brix: number
           average_normalized_score: number
           average_normalized_score_threshold: number
-          crop_id: string
-          crop_label: string
-          crop_name: string
+          brand_id: string
+          brand_label: string
+          brand_name: string
           excellent_normalized_score: number
           good_normalized_score: number
           grade: string
@@ -923,13 +912,45 @@ export type Database = {
           submission_count: number
         }[]
       }
-      get_location_leaderboard: {
+      get_crop_leaderboard: {
         Args:
           | {
+              city_filter: string
               country_filter: string
               location_name_filter: string
               place_id_filter: string
               state_filter: string
+            }
+          | {
+              city_filter?: string
+              country_filter?: string
+              crop_filter?: string
+              state_filter?: string
+            }
+          | { filters?: Json }
+        Returns: {
+          avg_normalized_score: number
+          crop_id: string
+          crop_name: string
+          grade: string
+          rank: number
+          submission_count: number
+        }[]
+      }
+      get_location_leaderboard: {
+        Args:
+          | {
+              city_filter: string
+              country_filter: string
+              location_name_filter: string
+              place_id_filter: string
+              state_filter: string
+            }
+          | {
+              city_filter?: string
+              country_filter?: string
+              crop_filter?: string
+              state_filter?: string
             }
           | { filters?: Json }
         Returns: {

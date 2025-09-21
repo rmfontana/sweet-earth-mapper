@@ -7,13 +7,13 @@ export type Filter = {
   city?: string;
   state?: string;
   country?: string;
-  crop?: string; // <-- NEW
+  crop?: string;
 };
 
 export interface LeaderboardEntry {
   [key: string]: any;
-  average_normalized_score: number;
-  average_brix: number;
+  average_normalized_score?: number;
+  average_brix?: number;
   submission_count: number;
   rank: number;
   crop_name?: string;
@@ -24,6 +24,9 @@ export interface LeaderboardEntry {
   crop_id?: string;
   brand_id?: string;
   location_id?: string;
+  entity_type?: string;
+  entity_id?: string;
+  entity_name?: string;
 }
 
 async function fetchLeaderboard<R extends LeaderboardEntry>(
@@ -50,7 +53,7 @@ async function fetchLeaderboard<R extends LeaderboardEntry>(
     }
 
     if (Array.isArray(data)) {
-      return data.map((item, index) => {
+      return data.map((item) => {
         // normalize numeric fields
         ['average_normalized_score', 'average_brix', 'submission_count', 'rank'].forEach(field => {
           if (item[field] !== null && item[field] !== undefined) {
@@ -83,9 +86,14 @@ export async function fetchLocationLeaderboard(filters: Filter = {}) {
   return await fetchLeaderboard('get_location_leaderboard', filters);
 }
 
+export async function fetchSubmissionCountLeaderboard(filters: Filter = {}) {
+  return await fetchLeaderboard('get_submission_count_leaderboard', filters);
+}
+
 // Utility function for debugging in browser console
 if (typeof window !== 'undefined') {
   (window as any).fetchBrandLeaderboard = fetchBrandLeaderboard;
   (window as any).fetchCropLeaderboard = fetchCropLeaderboard;
   (window as any).fetchLocationLeaderboard = fetchLocationLeaderboard;
+  (window as any).fetchSubmissionCountLeaderboard = fetchSubmissionCountLeaderboard;
 }
