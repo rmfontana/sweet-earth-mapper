@@ -10,26 +10,95 @@ import { useAuth } from "@/contexts/AuthContext";
 import LocationModal from "@/components/common/LocationModal";
 import { fetchCropTypes, CropType } from "@/lib/fetchCropTypes";
 import LocationSelector from "@/components/common/LocationSelector";
+import { locationService } from "@/lib/locationServiceforRegister";
 
 export default function LeaderboardPage() {
   const { user } = useAuth();
 
   // Structured location filter
   const [location, setLocation] = useState({
-    country: user?.country || "",
-    countryCode: "",   // from LocationSelector
-    state: user?.state || "",
+    country: "",
+    countryCode: "",
+    state: "",
     stateCode: "",
-    city: user?.city || "",
+    city: "",
   });
 
   const [crop, setCrop] = useState("");
   const [allCrops, setAllCrops] = useState<CropType[]>([]);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Leaderboard data
   const [brands, setBrands] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<any[]>([]);
+
+  // Initialize location from user data
+  useEffect(() => {
+    const initializeLocation = async () => {
+      if (!user?.country) {
+        setIsInitializing(false);
+        return;
+      }
+
+      try {
+        // Get all countries to find the country code
+        const countries = await locationService.getCountries();
+        const userCountry = countries.find(c => 
+          c.name.toLowerCase() === user.country.toLowerCase()
+        );
+
+        if (!userCountry) {
+          console.warn("User's country not found in location service:", user.country);
+          setLocation({
+            country: user.country,
+            countryCode: "",
+            state: user.state || "",
+            stateCode: "",
+            city: user.city || "",
+          });
+          setIsInitializing(false);
+          return;
+        }
+
+        let stateCode = "";
+        if (user.state && userCountry.code) {
+          try {
+            const states = await locationService.getStates(userCountry.code);
+            const userState = states.find(s => 
+              s.name.toLowerCase() === user.state.toLowerCase()
+            );
+            stateCode = userState?.adminCode1 || "";
+          } catch (error) {
+            console.warn("Error loading states for user's country:", error);
+          }
+        }
+
+        setLocation({
+          country: userCountry.name,
+          countryCode: userCountry.code,
+          state: user.state || "",
+          stateCode: stateCode,
+          city: user.city || "",
+        });
+
+      } catch (error) {
+        console.error("Error initializing user location:", error);
+        // Fallback to basic user data
+        setLocation({
+          country: user.country,
+          countryCode: "",
+          state: user.state || "",
+          stateCode: "",
+          city: user.city || "",
+        });
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initializeLocation();
+  }, [user]);
 
   // Load crop types
   useEffect(() => {
@@ -44,8 +113,10 @@ export default function LeaderboardPage() {
     loadCrops();
   }, []);
 
-  // Fetch leaderboards when filters change
+  // Fetch leaderboards when filters change (but only after initialization)
   useEffect(() => {
+    if (isInitializing) return;
+
     const run = async () => {
       const filters = {
         country: location.country,
@@ -53,6 +124,9 @@ export default function LeaderboardPage() {
         city: location.city,
         crop,
       };
+      
+      console.log("🔍 Fetching leaderboards with filters:", filters);
+      
       const [b, l, s] = await Promise.all([
         fetchBrandLeaderboard(filters),
         fetchLocationLeaderboard(filters),
@@ -63,7 +137,21 @@ export default function LeaderboardPage() {
       setSubmissions(s || []);
     };
     run();
-  }, [location, crop]);
+  }, [location, crop, isInitializing]);
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading your location...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -104,40 +192,52 @@ export default function LeaderboardPage() {
           <Card>
             <CardContent className="p-4">
               <h2 className="text-lg font-semibold mb-2">Best Locations</h2>
-              <ul className="space-y-1">
-                {locations.map((loc, i) => (
-                  <li key={i}>
-                    {loc.location_name} ({loc.average_normalized_score?.toFixed(2)})
-                  </li>
-                ))}
-              </ul>
+              {locations.length === 0 ? (
+                <p className="text-gray-500 text-sm">No data available</p>
+              ) : (
+                <ul className="space-y-1">
+                  {locations.map((loc, i) => (
+                    <li key={i} className="text-sm">
+                      {loc.location_name} ({loc.average_normalized_score?.toFixed(2)})
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
 
           <Card>
             <CardContent className="p-4">
               <h2 className="text-lg font-semibold mb-2">Best Brands</h2>
-              <ul className="space-y-1">
-                {brands.map((brand, i) => (
-                  <li key={i}>
-                    {brand.brand_label || brand.brand_name} (
-                    {brand.average_normalized_score?.toFixed(2)})
-                  </li>
-                ))}
-              </ul>
+              {brands.length === 0 ? (
+                <p className="text-gray-500 text-sm">No data available</p>
+              ) : (
+                <ul className="space-y-1">
+                  {brands.map((brand, i) => (
+                    <li key={i} className="text-sm">
+                      {brand.brand_label || brand.brand_name} (
+                      {brand.average_normalized_score?.toFixed(2)})
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
 
           <Card>
             <CardContent className="p-4">
               <h2 className="text-lg font-semibold mb-2">Most Submissions</h2>
-              <ul className="space-y-1">
-                {submissions.map((s, i) => (
-                  <li key={i}>
-                    {s.entity_name} ({s.submission_count})
-                  </li>
-                ))}
-              </ul>
+              {submissions.length === 0 ? (
+                <p className="text-gray-500 text-sm">No data available</p>
+              ) : (
+                <ul className="space-y-1">
+                  {submissions.map((s, i) => (
+                    <li key={i} className="text-sm">
+                      {s.entity_name} ({s.submission_count})
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
         </main>
