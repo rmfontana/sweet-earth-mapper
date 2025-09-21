@@ -142,22 +142,19 @@ export function useBrixColorFromContext(
 export function rankColorFromNormalized(
   normalizedValue: number, // expected ~1.0..2.0
 ): { hex: string; bgClass: string } {
-  // Simple graded ranges matching the SQL grade thresholds:
-  // >=1.75 Excellent -> green
-  // >=1.5  Good      -> teal
-  // >=1.25 Poor      -> amber
-  // else    Needs Imp -> gray
+  // Match semantic buckets from colorMap
   if (normalizedValue >= 1.75) {
-    return { hex: '#16a34a', bgClass: 'bg-green-500' }; // green
+    return { hex: colorMap.hex.excellent, bgClass: colorMap.bg.excellent };
   }
   if (normalizedValue >= 1.5) {
-    return { hex: '#0ea5a4', bgClass: 'bg-teal-500' }; // teal
+    return { hex: colorMap.hex.good, bgClass: colorMap.bg.good };
   }
   if (normalizedValue >= 1.25) {
-    return { hex: '#f59e0b', bgClass: 'bg-amber-400' }; // amber
+    return { hex: colorMap.hex.average, bgClass: colorMap.bg.average };
   }
-  return { hex: '#9ca3af', bgClass: 'bg-gray-400' }; // neutral gray
+  return { hex: colorMap.hex.poor, bgClass: colorMap.bg.poor };
 }
+
 
 /**
  * Compute normalized score for a reading given thresholds

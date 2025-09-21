@@ -88,7 +88,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [selectedPoint]);
 
-  // Compute min/max brix across all data (fallback used when thresholds missing)
+  // Compute min/max brix across all data
   useEffect(() => {
     if (!allData || allData.length === 0) return;
     const bVals = allData
@@ -100,12 +100,12 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [allData]);
 
-  // Apply client-side filters from FilterContext
+  // Apply filters
   useEffect(() => {
     try {
       setFilteredData(applyFilters(allData, filters, isAdmin));
     } catch (err) {
-      console.error('Error applying filters to submissions:', err);
+      console.error('Error applying filters:', err);
       setFilteredData(allData);
     }
   }, [filters, allData, isAdmin]);
@@ -173,11 +173,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [highlightedPoint, allData]);
 
-  // Draw markers grouped by locationName
+  // Draw markers (no rank text, just colored dot + label)
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
 
-    // remove previous markers
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
@@ -219,12 +218,15 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const lon = first.longitude ?? (first as any).lng;
       if (!lat || !lon) return;
 
-      // Use getBrixColor in 'hex' mode for marker dot color (consistent with leaderboard)
-      const markerHex = getBrixColor(averageScores[storeName], { poor: 1.0, average: 1.25, good: 1.5, excellent: 1.75 }, 'hex');
+      const markerHex = getBrixColor(
+        averageScores[storeName],
+        { poor: 1.0, average: 1.25, good: 1.5, excellent: 1.75 },
+        'hex'
+      );
 
-      // marker DOM
       const markerContainer = document.createElement('div');
       markerContainer.className = 'flex flex-col items-center cursor-pointer select-none';
+
       const dot = document.createElement('div');
       dot.style.backgroundColor = markerHex;
       dot.style.width = '12px';
@@ -257,10 +259,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       markerContainer.addEventListener('click', () => setSelectedPoint(first));
     });
 
-    // Deselect on map click not on marker
     const mapClickListener = (e: mapboxgl.MapMouseEvent) => {
       const isMarkerClick = markersRef.current.some((m) =>
-        m.getElement().contains(e.originalEvent.target as Node),
+        m.getElement().contains(e.originalEvent.target as Node)
       );
       if (!isMarkerClick) setSelectedPoint(null);
     };
@@ -444,11 +445,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                         <div className="font-medium truncate">{label}</div>
                         <div className="text-xs text-gray-500">Submissions: {c.submission_count ?? '-'}</div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <div className={`w-8 h-6 rounded text-white flex items-center justify-center text-sm ${rankColor.bgClass}`}>
-                          {(c.rank ?? '-') as any}
-                        </div>
-                        <div className="text-sm font-semibold">{normalized.toFixed(2)}</div>
+                      <div
+                        className={`w-12 h-6 rounded text-white flex items-center justify-center text-sm ${rankColor.bgClass}`}
+                      >
+                        {normalized.toFixed(2)}
                       </div>
                     </div>
                   );
@@ -485,11 +485,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                         <div className="font-medium truncate">{label}</div>
                         <div className="text-xs text-gray-500">Submissions: {b.submission_count ?? '-'}</div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <div className={`w-8 h-6 rounded text-white flex items-center justify-center text-sm ${rankColor.bgClass}`}>
-                          {(b.rank ?? '-') as any}
-                        </div>
-                        <div className="text-sm font-semibold">{normalized.toFixed(2)}</div>
+                      <div
+                        className={`w-12 h-6 rounded text-white flex items-center justify-center text-sm ${rankColor.bgClass}`}
+                      >
+                        {normalized.toFixed(2)}
                       </div>
                     </div>
                   );
