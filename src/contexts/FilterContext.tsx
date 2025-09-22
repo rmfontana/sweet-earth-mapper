@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { MapFilter } from '../types'; // Import the updated MapFilter
-import { supabase } from '@/integrations/supabase/client';
 
 // Define default filter values for consistency
 export const DEFAULT_MAP_FILTERS: MapFilter = {
@@ -32,29 +31,12 @@ interface FilterProviderProps {
 }
 
 export const FilterProvider: React.FC<FilterProviderProps> = ({ children }) => {
-  const [isAdmin, setIsAdmin] = useState(false);
+  const isAdmin = false;
   const [totalSubmissions, setTotalSubmissions] = useState(0);
   const [filteredCount, setFilteredCount] = useState(0);
 
   // Initialize filters with the default values
   const [filters, setFilters] = useState<MapFilter>(DEFAULT_MAP_FILTERS);
-
-  // Load user role from Supabase on mount
-  useEffect(() => {
-    const getUserRole = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setIsAdmin(false);
-        return;
-      }
-      // TODO: Implement proper role checking when profiles table is available
-      // For now, setting to false as per previous instructions
-      setIsAdmin(false);
-    };
-    getUserRole();
-  }, []);
 
   // For non-admin users, always enforce verifiedOnly = true
   const updateFilters: React.Dispatch<React.SetStateAction<MapFilter>> = (action) => {

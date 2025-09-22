@@ -7,10 +7,10 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated, isLoading, authError } = useAuth();
+  const { isAuthenticated, isLoading, authError, profileLoading } = useAuth();
   const location = useLocation();
 
-  if (isLoading) {
+  if (isLoading || profileLoading) {
     return (
       <div className="p-8 text-center text-sm">
         Loading user session...

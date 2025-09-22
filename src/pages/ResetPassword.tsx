@@ -21,7 +21,7 @@ const ResetPassword = () => {
   const [sessionEstablished, setSessionEstablished] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   
-  const { updatePassword, authError, isAuthenticated } = useAuth();
+  const { updatePassword, authError, isAuthenticated, handleAuthCallback } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -150,14 +150,10 @@ const ResetPassword = () => {
           title: "Password updated!",
           description: "Your password has been successfully updated",
         });
-        // Redirect authenticated users to main app, not login
-        setTimeout(() => {
-          if (isAuthenticated) {
-            navigate('/');
-          } else {
-            navigate('/login');
-          }
-        }, 3000);
+
+        // Refresh auth state and go straight to the app
+        await handleAuthCallback();
+        navigate('/leaderboard');
       } else {
         console.error('Password update failed:', authError);
         setFormError(authError || 'Failed to update password');
@@ -212,8 +208,8 @@ const ResetPassword = () => {
 
             <CardContent>
               <Button asChild className="w-full">
-                <Link to={isAuthenticated ? "/" : "/login"}>
-                  {isAuthenticated ? "Continue to App" : "Continue to Login"}
+                <Link to="/leaderboard">
+                  Continue to App
                 </Link>
               </Button>
             </CardContent>
@@ -250,6 +246,34 @@ const ResetPassword = () => {
                   <AlertDescription>{formError}</AlertDescription>
                 </Alert>
               )}
+
+              <div>
+                <Label htmlFor="currentPassword">Previous Password (optional)</Label>
+                <div className="mt-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <Input
+                    id="currentPassword"
+                    name="currentPassword"
+                    type="password"
+                    autoComplete="current-password"
+                    value={currentPassword}
+                    onChange={(e) => {
+                      setCurrentPassword(e.target.value);
+                      if (formError) setFormError('');
+                    }}
+                    className="pl-10"
+                    placeholder="Enter your previous password (optional)"
+                    maxLength={100}
+                  />
+                </div>
+                {currentPassword && password === currentPassword && (
+                  <p className="text-xs text-destructive mt-1">
+                    New password must be different from your previous password.
+                  </p>
+                )}
+              </div>
 
               <div>
                 <Label htmlFor="password">New Password</Label>
@@ -328,7 +352,7 @@ const ResetPassword = () => {
 
               <Button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || (currentPassword !== '' && password === currentPassword)}
                 className="w-full"
               >
                 {isLoading ? 'Updating Password...' : 'Update Password'}
