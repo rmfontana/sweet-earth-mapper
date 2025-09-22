@@ -24,26 +24,37 @@ export const CropThresholdProvider: React.FC<CropThresholdProviderProps> = ({ ch
   const reloadCache = async () => {
     setLoading(true);
 
-    // Fetch crop types dynamically from DB
-    const cropTypes = await fetchCropTypes();
+    try {
+      // Fetch crop types dynamically from DB
+      const cropTypes = await fetchCropTypes();
+      console.log('🌾 CropThresholdContext: Fetched crop types:', cropTypes.map(c => c.name));
 
-    const newCache: CropThresholdCache = {};
+      const newCache: CropThresholdCache = {};
 
-    await Promise.all(
-      cropTypes.map(async (cropType) => {
-        try {
-          const cropData = await fetchBrixByCrop(cropType.name);
-          if (cropData?.brixLevels) {
-            newCache[cropType.name] = cropData.brixLevels;
+      await Promise.all(
+        cropTypes.map(async (cropType) => {
+          try {
+            const normalizedCropName = cropType.name.toLowerCase().trim();
+            const cropData = await fetchBrixByCrop(normalizedCropName);
+            if (cropData?.brixLevels) {
+              newCache[normalizedCropName] = cropData.brixLevels;
+              console.log(`🌾 CropThresholdContext: Cached thresholds for ${normalizedCropName}:`, cropData.brixLevels);
+            } else {
+              console.warn(`🌾 CropThresholdContext: No brix levels found for ${normalizedCropName}`);
+            }
+          } catch (error) {
+            console.error(`🌾 CropThresholdContext: Failed to fetch brix for ${cropType.name}`, error);
           }
-        } catch (error) {
-          console.error(`Failed to fetch brix for ${cropType.name}`, error);
-        }
-      })
-    );
+        })
+      );
 
-    setCache(newCache);
-    setLoading(false);
+      console.log('🌾 CropThresholdContext: Final cache keys:', Object.keys(newCache));
+      setCache(newCache);
+    } catch (error) {
+      console.error('🌾 CropThresholdContext: Error reloading cache:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

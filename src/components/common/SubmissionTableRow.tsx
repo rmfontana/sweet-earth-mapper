@@ -63,9 +63,9 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
       {/* BRIX Level Cell - uses dynamic color from useBrixColorFromContext */}
       <TableCell className="text-center py-3 px-4">
         <Badge
-          className={`${brixColorClass} text-white px-3 py-1 rounded-xl font-bold text-base shadow-sm`} // Changed rounded-lg to rounded-xl
+          className={`${brixColorClass} text-white px-3 py-1 rounded-xl font-bold text-base shadow-sm`}
         >
-          {brixColorClass === 'bg-gray-300' ? 'N/A' : submission.brixLevel}
+          {submission.brixLevel ?? 'N/A'}
         </Badge>
       </TableCell>
 
