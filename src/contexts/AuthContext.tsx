@@ -97,7 +97,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isAdmin = user?.role === "admin";
 
-  const handleSessionChange = async (session: any) => {
+  // Synchronous state updates only
+  const handleSessionChange = (session: any) => {
     if (session?.user) {
       const { id, email } = session.user;
 
@@ -105,49 +106,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setAuthError(null);
       setProfileLoading(true);
 
-      try {
-        const profile = await ensureProfileExists(id);
-        if (profile) {
-          if (email) profile.email = email;
-          setUser(profile);
-        } else {
-          console.warn("User profile not found, creating minimal profile");
-          // Create a minimal user profile to prevent blocking
-          const minimalProfile: UserProfile = {
-            id,
-            display_name: email?.split('@')[0] || 'User',
-            role: 'contributor',
-            email: email || null,
-            country: null,
-            state: null,
-            city: null,
-            points: 0,
-            submission_count: 0,
-          };
-          setUser(minimalProfile);
-        }
-      } catch (err: any) {
-        console.error("Error fetching user profile:", err);
-        // Don't block user access, just log error
-        const minimalProfile: UserProfile = {
-          id,
-          display_name: email?.split('@')[0] || 'User',
-          role: 'contributor',
-          email: email || null,
-          country: null,
-          state: null,
-          city: null,
-          points: 0,
-          submission_count: 0,
-        };
-        setUser(minimalProfile);
-      } finally {
-        setProfileLoading(false);
-      }
+      // Create minimal profile immediately to prevent blocking
+      const minimalProfile: UserProfile = {
+        id,
+        display_name: email?.split('@')[0] || 'User',
+        role: 'contributor',
+        email: email || null,
+        country: null,
+        state: null,
+        city: null,
+        points: 0,
+        submission_count: 0,
+      };
+      setUser(minimalProfile);
+
+      // Defer profile fetching to avoid deadlock
+      setTimeout(() => {
+        fetchAndUpdateProfile(id, email);
+      }, 0);
     } else {
       setUser(null);
       setIsAuthenticated(false);
       setAuthError(null);
+      setProfileLoading(false);
+    }
+  };
+
+  // Async profile fetching - called after state updates
+  const fetchAndUpdateProfile = async (userId: string, email: string | undefined) => {
+    try {
+      const profile = await ensureProfileExists(userId);
+      if (profile) {
+        if (email) profile.email = email;
+        setUser(profile);
+      } else {
+        console.warn("User profile not found, keeping minimal profile");
+      }
+    } catch (err: any) {
+      console.error("Error fetching user profile:", err);
+      // Keep the minimal profile that was already set
+    } finally {
       setProfileLoading(false);
     }
   };
@@ -165,7 +163,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      await handleSessionChange(session);
+      handleSessionChange(session);
     } catch (err: any) {
       setAuthError("Unexpected error loading session.");
     } finally {
@@ -174,12 +172,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    // Set up auth state listener FIRST - synchronous callbacks only
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      await handleSessionChange(session);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      handleSessionChange(session);
     });
 
+    // THEN check for existing session
     loadSession();
 
     return () => subscription.unsubscribe();
