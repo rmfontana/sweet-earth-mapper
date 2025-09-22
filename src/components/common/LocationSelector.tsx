@@ -145,14 +145,151 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
     setError(null);
     try {
       const detectedLocation = await locationService.getUserLocation();
-      if (detectedLocation) {
-        onChange(detectedLocation);
-      } else {
+      console.log('Raw detected location:', detectedLocation);
+      
+      if (!detectedLocation) {
         setError('Unable to detect your location. Please select manually.');
+        return;
       }
+
+      // Ensure countries are loaded first
+      let currentCountries = countries;
+      if (currentCountries.length === 0) {
+        console.log('Loading countries for auto-detect...');
+        const countriesData = await locationService.getCountries();
+        setCountries(countriesData);
+        currentCountries = countriesData;
+      }
+
+      // Find matching country with robust fuzzy matching
+      let matchedCountry = null;
+      
+      // Try exact matches first
+      matchedCountry = currentCountries.find(c => 
+        c.name.toLowerCase() === detectedLocation.country.toLowerCase() ||
+        c.code.toLowerCase() === detectedLocation.countryCode?.toLowerCase()
+      );
+      
+      // Try fuzzy matching if exact match fails
+      if (!matchedCountry) {
+        const countryVariants = [
+          detectedLocation.country,
+          detectedLocation.country.replace(/United States.*/, 'United States'),
+          detectedLocation.country.replace(/.*States.*/, 'United States'),
+          detectedLocation.country.replace(/.*Kingdom.*/, 'United Kingdom'),
+          detectedLocation.country.replace(/\s+of\s+.*/, '').trim(), // Remove "of America" etc.
+        ].filter(Boolean);
+        
+        for (const variant of countryVariants) {
+          matchedCountry = currentCountries.find(c => 
+            c.name.toLowerCase().includes(variant.toLowerCase()) ||
+            variant.toLowerCase().includes(c.name.toLowerCase())
+          );
+          if (matchedCountry) {
+            console.log(`Matched country "${detectedLocation.country}" to "${matchedCountry.name}" using variant "${variant}"`);
+            break;
+          }
+        }
+      }
+
+      if (!matchedCountry) {
+        console.warn('Could not match detected country:', detectedLocation.country);
+        setError(`Could not find "${detectedLocation.country}" in our country list. Please select manually.`);
+        return;
+      }
+
+      console.log('Matched country:', matchedCountry);
+
+      // Set country and load states
+      const newLocationData = {
+        country: matchedCountry.name,
+        countryCode: matchedCountry.code,
+        state: '',
+        stateCode: '',
+        city: ''
+      };
+
+      // Load and match state if detected
+      if (detectedLocation.state) {
+        try {
+          console.log('Loading states for country:', matchedCountry.code);
+          const statesData = await locationService.getStates(matchedCountry.code);
+          setStates(statesData);
+          
+          if (statesData.length > 0) {
+            // Find matching state
+            let matchedState = statesData.find(s => 
+              s.name.toLowerCase() === detectedLocation.state.toLowerCase() ||
+              s.adminCode1?.toLowerCase() === detectedLocation.stateCode?.toLowerCase()
+            );
+
+            // Try partial matching if exact fails
+            if (!matchedState) {
+              matchedState = statesData.find(s => 
+                s.name.toLowerCase().includes(detectedLocation.state.toLowerCase()) ||
+                detectedLocation.state.toLowerCase().includes(s.name.toLowerCase())
+              );
+            }
+
+            if (matchedState) {
+              console.log('Matched state:', matchedState);
+              newLocationData.state = matchedState.name;
+              newLocationData.stateCode = matchedState.adminCode1;
+
+              // Load and match city if detected
+              if (detectedLocation.city) {
+                try {
+                  console.log('Loading cities for state:', matchedState.adminCode1);
+                  const citiesData = await locationService.getCities(matchedCountry.code, matchedState.adminCode1);
+                  setCities(citiesData);
+                  
+                  if (citiesData.length > 0) {
+                    // Find matching city
+                    let matchedCity = citiesData.find(c => 
+                      c.name.toLowerCase() === detectedLocation.city.toLowerCase()
+                    );
+
+                    // Try partial matching if exact fails
+                    if (!matchedCity) {
+                      matchedCity = citiesData.find(c => 
+                        c.name.toLowerCase().includes(detectedLocation.city.toLowerCase()) ||
+                        detectedLocation.city.toLowerCase().includes(c.name.toLowerCase())
+                      );
+                    }
+
+                    if (matchedCity) {
+                      console.log('Matched city:', matchedCity);
+                      newLocationData.city = matchedCity.name;
+                    } else {
+                      console.warn(`Could not match detected city "${detectedLocation.city}" in ${matchedState.name}`);
+                    }
+                  }
+                } catch (err) {
+                  console.warn('Error loading cities for auto-detect:', err);
+                }
+              }
+            } else {
+              console.warn(`Could not match detected state "${detectedLocation.state}" in ${matchedCountry.name}`);
+            }
+          }
+        } catch (err) {
+          console.warn('Error loading states for auto-detect:', err);
+        }
+      }
+
+      console.log('Final auto-detected location data:', newLocationData);
+      onChange(newLocationData);
+
+      // Show success message if we got at least country + state
+      if (newLocationData.state) {
+        setError(null);
+      } else if (newLocationData.country) {
+        setError(`Detected your country as ${newLocationData.country}. Please select your state/province manually.`);
+      }
+
     } catch (err) {
+      console.error('Error in auto-detect:', err);
       setError('Failed to detect location. Please select manually.');
-      console.error('Error detecting location:', err);
     } finally {
       setLoading(prev => ({ ...prev, autoDetect: false }));
     }
@@ -208,8 +345,31 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
     ? cities.filter(c => c.name.toLowerCase().includes(citySearch.toLowerCase())).slice(0, 100)
     : cities.slice(0, 100);
 
+  // Add debugging info display (remove this in production)
+  const debugInfo = process.env.NODE_ENV === 'development' ? (
+    <div style={{ 
+      backgroundColor: '#f8f9fa', 
+      padding: '10px', 
+      margin: '10px 0',
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      border: '1px solid #dee2e6',
+      borderRadius: '4px'
+    }}>
+      <strong>DEBUG INFO:</strong><br />
+      Country: "{value.country}" (code: "{value.countryCode}")<br />
+      State: "{value.state}" (code: "{value.stateCode}")<br />
+      City: "{value.city}"<br />
+      Countries loaded: {countries.length}<br />
+      States loaded: {states.length}<br />
+      Cities loaded: {cities.length}
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-4">
+      {debugInfo}
+      
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
