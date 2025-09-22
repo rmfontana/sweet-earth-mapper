@@ -209,9 +209,14 @@ const Register = () => {
         
         navigate('/login');
       } else {
+        // Check if it's a 422 error specifically
+        const errorMessage = authError?.includes('422') 
+          ? 'Account creation failed due to server configuration. Please try again or contact support if the issue persists.'
+          : authError || 'Registration failed. Please try again.';
+          
         setFormErrors(prev => ({
           ...prev,
-          general: authError || 'Registration failed. Please try again.',
+          general: errorMessage,
         }));
       }
     } catch (error) {

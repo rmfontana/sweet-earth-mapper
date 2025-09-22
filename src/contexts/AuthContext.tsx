@@ -203,15 +203,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         password,
         options: {
           data: userMetadata,
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/`,
         },
       });
 
       if (error) {
-        // Parse password validation errors more specifically
+        console.error('Signup error:', { error, code: error.status });
+        
+        // Handle specific error codes and messages
         let userFriendlyMessage = error.message;
         
-        if (error.message.includes('Password should be at least 6 characters')) {
+        // Handle 422 Unprocessable Content errors specifically
+        if (error.status === 422) {
+          userFriendlyMessage = 'Unable to create account. This might be due to server configuration. Please try again in a few moments.';
+        } else if (error.message.includes('Password should be at least 6 characters')) {
           userFriendlyMessage = 'Password must be at least 6 characters long.';
         } else if (error.message.includes('Password should contain at least one uppercase')) {
           userFriendlyMessage = 'Password must contain at least one uppercase letter.';
@@ -221,6 +226,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           userFriendlyMessage = 'Password must contain at least one number.';
         } else if (error.message.includes('User already registered')) {
           userFriendlyMessage = 'An account with this email already exists. Please try logging in instead.';
+        } else if (error.message.includes('Unable to validate email address')) {
+          userFriendlyMessage = 'Please enter a valid email address.';
+        } else if (error.message.includes('Invalid email')) {
+          userFriendlyMessage = 'Please enter a valid email address.';
         }
         
         setAuthError(userFriendlyMessage);
