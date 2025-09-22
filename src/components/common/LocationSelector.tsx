@@ -345,37 +345,8 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
     ? cities.filter(c => c.name.toLowerCase().includes(citySearch.toLowerCase())).slice(0, 100)
     : cities.slice(0, 100);
 
-  // Add debugging info display (remove this in production)
-  const debugInfo = process.env.NODE_ENV === 'development' ? (
-    <div style={{ 
-      backgroundColor: '#f8f9fa', 
-      padding: '10px', 
-      margin: '10px 0',
-      fontSize: '12px',
-      fontFamily: 'monospace',
-      border: '1px solid #dee2e6',
-      borderRadius: '4px'
-    }}>
-      <strong>DEBUG INFO:</strong><br />
-      Country: "{value.country}" (code: "{value.countryCode}")<br />
-      State: "{value.state}" (code: "{value.stateCode}")<br />
-      City: "{value.city}"<br />
-      Countries loaded: {countries.length}<br />
-      States loaded: {states.length}<br />
-      Cities loaded: {cities.length}
-    </div>
-  ) : null;
-
   return (
     <div className="space-y-4">
-      {debugInfo}
-      
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
 
       {showAutoDetect && (
         <div className="flex justify-center">
