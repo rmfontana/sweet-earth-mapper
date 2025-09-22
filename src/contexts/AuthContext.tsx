@@ -103,7 +103,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       setIsAuthenticated(true);
       setAuthError(null);
-      setProfileLoading(true); // 👈 start profile loading
+      setProfileLoading(true);
 
       try {
         const profile = await ensureProfileExists(id);
@@ -111,12 +111,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (email) profile.email = email;
           setUser(profile);
         } else {
-          setAuthError("User profile not found. Please contact support.");
+          console.warn("User profile not found, creating minimal profile");
+          // Create a minimal user profile to prevent blocking
+          const minimalProfile: UserProfile = {
+            id,
+            display_name: email?.split('@')[0] || 'User',
+            role: 'contributor',
+            email: email || null,
+            country: null,
+            state: null,
+            city: null,
+            points: 0,
+            submission_count: 0,
+          };
+          setUser(minimalProfile);
         }
       } catch (err: any) {
-        setAuthError("Error fetching user profile.");
+        console.error("Error fetching user profile:", err);
+        // Don't block user access, just log error
+        const minimalProfile: UserProfile = {
+          id,
+          display_name: email?.split('@')[0] || 'User',
+          role: 'contributor',
+          email: email || null,
+          country: null,
+          state: null,
+          city: null,
+          points: 0,
+          submission_count: 0,
+        };
+        setUser(minimalProfile);
       } finally {
-        setProfileLoading(false); // 👈 done loading
+        setProfileLoading(false);
       }
     } else {
       setUser(null);

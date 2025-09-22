@@ -55,7 +55,7 @@ const RootContent = () => {
         <Route
           path="/leaderboard"
           element={
-            <ProtectedRoute requireLocation>
+            <ProtectedRoute>
               <Leaderboard />
             </ProtectedRoute>
           }
@@ -63,7 +63,7 @@ const RootContent = () => {
         <Route
           path="/map"
           element={
-            <ProtectedRoute requireLocation>
+            <ProtectedRoute>
               <MapView />
             </ProtectedRoute>
           }

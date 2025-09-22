@@ -1,21 +1,16 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import LocationModal from "../common/LocationModal";
 
 interface ProtectedRouteProps {
   children: React.ReactElement;
-  requireLocation?: boolean;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
-  children,
-  requireLocation = false,
-}) => {
-  const { isAuthenticated, isLoading, profileLoading, user } = useAuth();
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const { isAuthenticated, isLoading, authError } = useAuth();
   const location = useLocation();
 
-  if (isLoading || profileLoading) {
+  if (isLoading) {
     return (
       <div className="p-8 text-center text-sm">
         Loading user session...
@@ -23,15 +18,23 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+  if (authError) {
+    return (
+      <div className="p-8 text-center text-sm text-destructive">
+        {authError}
+        <br />
+        <button 
+          onClick={() => window.location.href = '/login'} 
+          className="mt-2 text-primary hover:underline"
+        >
+          Return to Login
+        </button>
+      </div>
+    );
   }
 
-  if (
-    requireLocation &&
-    (!user?.city || !user?.state || !user?.country)
-  ) {
-    return <LocationModal />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return children;
