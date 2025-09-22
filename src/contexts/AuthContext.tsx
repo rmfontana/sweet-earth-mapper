@@ -205,7 +205,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
 
       if (error) {
-        setAuthError(error.message);
+        console.error('Login error:', error);
+        
+        // Parse specific error messages for better UX
+        let userFriendlyMessage = error.message;
+        
+        if (error.message.includes('Email not confirmed')) {
+          userFriendlyMessage = 'Please verify your email address before logging in. Check your inbox for the verification link.';
+        } else if (error.message.includes('Invalid login credentials')) {
+          userFriendlyMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else if (error.message.includes('Too many requests')) {
+          userFriendlyMessage = 'Too many login attempts. Please wait a moment before trying again.';
+        }
+        
+        setAuthError(userFriendlyMessage);
         return false;
       }
 

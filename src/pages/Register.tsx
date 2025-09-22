@@ -174,29 +174,27 @@ const Register = () => {
       );
 
       if (success) {
-        if (authError && (authError.includes('email') || authError.includes('confirm'))) {
-          toast({
-            title: 'Registration Successful!',
-            description: 'Please check your email to confirm your account before signing in.',
-          });
-          navigate('/verify-email', { 
-            state: { email: formData.email.trim() } 
-          });
-        } else if (isAuthenticated) {
-          toast({
-            title: 'Welcome to BRIX!',
-            description: `Account created successfully! Welcome, ${formData.display_name.trim()}!`,
-          });
-          navigate('/');
-        } else {
-          toast({
-            title: 'Registration Successful!',
-            description: 'Your account has been created. You can now sign in.',
-          });
-          navigate('/login', { 
-            state: { email: formData.email.trim() } 
-          });
-        }
+        // Always show email verification message
+        toast({
+          title: 'Check Your Email!',
+          description: 'We\'ve sent you a verification link. Please check your email and click the link to activate your account before logging in.',
+          duration: 8000, // Show longer for this important message
+        });
+        
+        // Reset form and redirect to login
+        setFormData({
+          display_name: '',
+          email: '',
+          password: '',
+          confirmPassword: '',
+          country: '',
+          countryCode: '',
+          state: '',
+          stateCode: '',
+          city: '',
+        });
+        
+        navigate('/login');
       } else {
         setFormErrors(prev => ({
           ...prev,

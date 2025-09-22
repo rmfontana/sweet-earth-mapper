@@ -24,17 +24,36 @@ const ResetPassword = () => {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    // Check if we have the required access token or session
+    // Check for Supabase password reset parameters
+    const type = searchParams.get('type');
     const accessToken = searchParams.get('access_token');
     const refreshToken = searchParams.get('refresh_token');
     
-    if (!accessToken || !refreshToken) {
+    // Also check for potential error states
+    const error = searchParams.get('error');
+    const errorDescription = searchParams.get('error_description');
+    
+    if (error) {
       toast({
         title: "Invalid reset link",
-        description: "This password reset link is invalid or has expired",
+        description: errorDescription || 'Password reset link is invalid or has expired.',
         variant: "destructive",
       });
       navigate('/forgot-password');
+      return;
+    }
+    
+    if (type === 'recovery' && accessToken && refreshToken) {
+      // Valid recovery link - allow password reset
+      return;
+    } else {
+      toast({
+        title: "Invalid reset link",
+        description: 'Invalid or expired password reset link. Please request a new one.',
+        variant: "destructive",
+      });
+      navigate('/forgot-password');
+      return;
     }
   }, [searchParams, navigate, toast]);
 

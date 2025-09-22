@@ -197,6 +197,8 @@ export class LocationService {
 
             if (data.geonames && data.geonames.length > 0) {
               const place = data.geonames[0];
+              
+              // Return format matching what LocationSelector expects
               resolve({
                 country: place.countryName,
                 countryCode: place.countryCode,
