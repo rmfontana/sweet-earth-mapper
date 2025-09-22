@@ -44,6 +44,8 @@ interface AuthContextType {
   updateUsername: (newUsername: string) => Promise<boolean>;
   updateLocation: (location: LocationData) => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
+  sendPasswordResetOTP: (email: string) => Promise<boolean>;
+  resetPasswordWithOTP: (email: string, token: string, password: string) => Promise<boolean>;
   updatePassword: (password: string) => Promise<boolean>;
   handleAuthCallback: () => Promise<boolean>;
 }
@@ -180,7 +182,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
 
       if (error) {
-        setAuthError(error.message);
+        // Parse password validation errors more specifically
+        let userFriendlyMessage = error.message;
+        
+        if (error.message.includes('Password should be at least 6 characters')) {
+          userFriendlyMessage = 'Password must be at least 6 characters long.';
+        } else if (error.message.includes('Password should contain at least one uppercase')) {
+          userFriendlyMessage = 'Password must contain at least one uppercase letter.';
+        } else if (error.message.includes('Password should contain at least one lowercase')) {
+          userFriendlyMessage = 'Password must contain at least one lowercase letter.';
+        } else if (error.message.includes('Password should contain at least one number')) {
+          userFriendlyMessage = 'Password must contain at least one number.';
+        } else if (error.message.includes('User already registered')) {
+          userFriendlyMessage = 'An account with this email already exists. Please try logging in instead.';
+        }
+        
+        setAuthError(userFriendlyMessage);
         return false;
       }
 
@@ -325,6 +342,59 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const sendPasswordResetOTP = async (email: string): Promise<boolean> => {
+    setAuthError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password-otp`,
+      });
+      
+      if (error) {
+        setAuthError(error.message);
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      setAuthError("Failed to send password reset code");
+      return false;
+    }
+  };
+
+  const resetPasswordWithOTP = async (email: string, token: string, password: string): Promise<boolean> => {
+    setAuthError(null);
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'recovery'
+      });
+
+      if (error) {
+        if (error.message.includes('Token has expired')) {
+          setAuthError('The reset code has expired. Please request a new one.');
+        } else if (error.message.includes('Invalid token')) {
+          setAuthError('Invalid reset code. Please check the code and try again.');
+        } else {
+          setAuthError(error.message);
+        }
+        return false;
+      }
+
+      // Now update the password
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      
+      if (updateError) {
+        setAuthError(updateError.message);
+        return false;
+      }
+
+      return true;
+    } catch (err: any) {
+      setAuthError("Failed to reset password");
+      return false;
+    }
+  };
+
   const updatePassword = async (password: string): Promise<boolean> => {
     setAuthError(null);
     try {
@@ -384,6 +454,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         updateUsername,
         updateLocation,
         resetPassword,
+        sendPasswordResetOTP,
+        resetPasswordWithOTP,
         updatePassword,
         handleAuthCallback,
       }}

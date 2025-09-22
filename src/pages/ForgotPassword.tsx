@@ -14,7 +14,7 @@ const ForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   
-  const { resetPassword, authError } = useAuth();
+  const { sendPasswordResetOTP, authError } = useAuth();
   const { toast } = useToast();
 
   const isValidEmail = (email: string): boolean => {
@@ -43,19 +43,19 @@ const ForgotPassword = () => {
     }
 
     setIsLoading(true);
-    const success = await resetPassword(email.trim());
+    const success = await sendPasswordResetOTP(email.trim());
     setIsLoading(false);
 
     if (success) {
       setIsSuccess(true);
       toast({
-        title: "Reset link sent!",
-        description: "Check your email for password reset instructions",
+        title: "Reset code sent!",
+        description: "Check your email for a 6-digit reset code",
       });
     } else {
       toast({
         title: "Error",
-        description: authError || "Failed to send reset email",
+        description: authError || "Failed to send reset code",
         variant: "destructive",
       });
     }
@@ -79,7 +79,7 @@ const ForgotPassword = () => {
                 <span>Check Your Email</span>
               </CardTitle>
               <p className="text-center text-sm text-muted-foreground mt-4">
-                We've sent password reset instructions to <strong>{email}</strong>
+                We've sent a 6-digit reset code to <strong>{email}</strong>
               </p>
             </CardHeader>
 
@@ -89,10 +89,18 @@ const ForgotPassword = () => {
               </p>
 
               <Button asChild className="w-full">
-                <Link to="/login">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Back to Login
+                <Link to={`/reset-password-otp?email=${encodeURIComponent(email)}`}>
+                  Enter Reset Code
                 </Link>
               </Button>
+              
+              <div className="mt-4">
+                <Button asChild variant="outline" className="w-full">
+                  <Link to="/login">
+                    <ArrowLeft className="w-4 h-4 mr-2" /> Back to Login
+                  </Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -116,7 +124,7 @@ const ForgotPassword = () => {
               Reset Your Password
             </CardTitle>
             <p className="text-center text-sm text-muted-foreground">
-              Enter your email address and we'll send you a link to reset your password.
+              Enter your email address and we'll send you a 6-digit reset code.
             </p>
           </CardHeader>
 

@@ -16,6 +16,7 @@ import VerifyEmailNotice from "./pages/VerifyEmailNotice";
 import Profile from "./pages/Profile";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import ResetPasswordOTP from "./pages/ResetPasswordOTP";
 import AuthCallback from "./pages/AuthCallback";
 import ProtectedRoute from "./components/misc/ProtectedRoute";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,6 +47,7 @@ const RootContent = () => {
         <Route path="/verify-email" element={<VerifyEmailNotice />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/reset-password-otp" element={<ResetPasswordOTP />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="*" element={<NotFound />} />
 

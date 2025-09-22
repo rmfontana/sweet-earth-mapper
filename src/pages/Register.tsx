@@ -10,6 +10,7 @@ import { Checkbox } from '../components/ui/checkbox';
 import { Eye, EyeOff, User, Mail, Lock } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 import LocationSelector from '../components/common/LocationSelector';
+import { PasswordStrengthIndicator } from '../components/PasswordStrengthIndicator';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -42,6 +43,15 @@ const Register = () => {
     }
   }, [isAuthenticated, navigate]);
 
+  const validatePassword = (pass: string): string[] => {
+    const errors: string[] = [];
+    if (pass.length < 6) errors.push('Password must be at least 6 characters');
+    if (!/[A-Z]/.test(pass)) errors.push('Password must contain an uppercase letter');
+    if (!/[a-z]/.test(pass)) errors.push('Password must contain a lowercase letter');
+    if (!/\d/.test(pass)) errors.push('Password must contain a number');
+    return errors;
+  };
+
   const validateBasicForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -59,8 +69,11 @@ const Register = () => {
 
     if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    } else {
+      const passwordErrors = validatePassword(formData.password);
+      if (passwordErrors.length > 0) {
+        newErrors.password = passwordErrors[0];
+      }
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -339,10 +352,16 @@ const Register = () => {
                         {showPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
                       </button>
                     </div>
-                    {formErrors.password && (
-                      <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>
-                    )}
-                  </div>
+                     {formErrors.password && (
+                       <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>
+                     )}
+                     
+                     {formData.password && (
+                       <div className="mt-3">
+                         <PasswordStrengthIndicator password={formData.password} />
+                       </div>
+                     )}
+                   </div>
 
                   {/* Confirm password */}
                   <div>
