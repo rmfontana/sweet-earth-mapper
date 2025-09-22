@@ -19,8 +19,9 @@ const ResetPassword = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [formError, setFormError] = useState('');
   const [sessionEstablished, setSessionEstablished] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
   
-  const { updatePassword, authError } = useAuth();
+  const { updatePassword, authError, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -124,6 +125,12 @@ const ResetPassword = () => {
       return;
     }
 
+    // Check if new password is same as current password (if we have it)
+    if (currentPassword && password === currentPassword) {
+      setFormError('Please choose a different password than your current one');
+      return;
+    }
+
     const passwordErrors = validatePassword(password);
     if (passwordErrors.length > 0) {
       setFormError(`Password must contain: ${passwordErrors.join(', ')}`);
@@ -143,9 +150,13 @@ const ResetPassword = () => {
           title: "Password updated!",
           description: "Your password has been successfully updated",
         });
-        // Redirect to login after 3 seconds
+        // Redirect authenticated users to main app, not login
         setTimeout(() => {
-          navigate('/login');
+          if (isAuthenticated) {
+            navigate('/');
+          } else {
+            navigate('/login');
+          }
         }, 3000);
       } else {
         console.error('Password update failed:', authError);
@@ -201,7 +212,9 @@ const ResetPassword = () => {
 
             <CardContent>
               <Button asChild className="w-full">
-                <Link to="/login">Continue to Login</Link>
+                <Link to={isAuthenticated ? "/" : "/login"}>
+                  {isAuthenticated ? "Continue to App" : "Continue to Login"}
+                </Link>
               </Button>
             </CardContent>
           </Card>
@@ -251,7 +264,11 @@ const ResetPassword = () => {
                     autoComplete="new-password"
                     required
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      // Clear form error when user starts typing
+                      if (formError) setFormError('');
+                    }}
                     className="pl-10 pr-10"
                     placeholder="Enter your new password"
                     maxLength={100}
@@ -286,7 +303,11 @@ const ResetPassword = () => {
                     autoComplete="new-password"
                     required
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      // Clear form error when user starts typing
+                      if (formError) setFormError('');
+                    }}
                     className="pl-10 pr-10"
                     placeholder="Confirm your new password"
                     maxLength={100}

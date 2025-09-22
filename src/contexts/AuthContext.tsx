@@ -436,7 +436,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { error } = await supabase.auth.updateUser({ password });
       
       if (error) {
-        setAuthError(error.message);
+        // Handle specific error messages
+        if (error.message.includes('New password should be different from the old password')) {
+          setAuthError('Please choose a different password than your current one.');
+        } else {
+          setAuthError(error.message);
+        }
         return false;
       }
       return true;
