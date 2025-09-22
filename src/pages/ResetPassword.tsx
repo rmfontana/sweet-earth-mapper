@@ -8,6 +8,7 @@ import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Eye, EyeOff, Lock, CheckCircle } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
+import { supabase } from '../integrations/supabase/client';
 
 const ResetPassword = () => {
   const [password, setPassword] = useState('');
@@ -17,6 +18,7 @@ const ResetPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [formError, setFormError] = useState('');
+  const [sessionEstablished, setSessionEstablished] = useState(false);
   
   const { updatePassword, authError } = useAuth();
   const { toast } = useToast();
@@ -24,37 +26,79 @@ const ResetPassword = () => {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    // Check for Supabase password reset parameters
-    const type = searchParams.get('type');
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
-    
-    // Also check for potential error states
-    const error = searchParams.get('error');
-    const errorDescription = searchParams.get('error_description');
-    
-    if (error) {
+    const establishSession = async () => {
+      setIsLoading(true);
+      
+      // Get URL parameters
+      const type = searchParams.get('type');
+      const accessToken = searchParams.get('access_token');
+      const refreshToken = searchParams.get('refresh_token');
+      const error = searchParams.get('error');
+      const errorDescription = searchParams.get('error_description');
+      
+      // Debug logging
+      console.log('Password reset URL params:', {
+        type,
+        hasAccessToken: !!accessToken,
+        hasRefreshToken: !!refreshToken,
+        error,
+        errorDescription
+      });
+      
+      // Handle URL errors first
+      if (error) {
+        console.error('URL contains error:', error, errorDescription);
+        toast({
+          title: "Reset link error",
+          description: errorDescription || 'Password reset link contains an error.',
+          variant: "destructive",
+        });
+        navigate('/forgot-password');
+        return;
+      }
+      
+      // Check if we have the required parameters for password reset
+      if (type === 'recovery' && accessToken && refreshToken) {
+        try {
+          // Establish session from URL parameters
+          const { data, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          
+          if (sessionError) {
+            console.error('Failed to establish session:', sessionError);
+            toast({
+              title: "Invalid reset link",
+              description: 'This reset link has expired or is invalid. Please request a new one.',
+              variant: "destructive",
+            });
+            navigate('/forgot-password');
+            return;
+          }
+          
+          if (data.session) {
+            console.log('Session established successfully for password reset');
+            setSessionEstablished(true);
+            setIsLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error('Exception establishing session:', err);
+        }
+      }
+      
+      // If we get here, something went wrong
+      console.error('Invalid password reset parameters or session establishment failed');
       toast({
         title: "Invalid reset link",
-        description: errorDescription || 'Password reset link is invalid or has expired.',
+        description: 'This password reset link is invalid or has expired. Please request a new one.',
         variant: "destructive",
       });
       navigate('/forgot-password');
-      return;
-    }
+    };
     
-    if (type === 'recovery' && accessToken && refreshToken) {
-      // Valid recovery link - allow password reset
-      return;
-    } else {
-      toast({
-        title: "Invalid reset link",
-        description: 'Invalid or expired password reset link. Please request a new one.',
-        variant: "destructive",
-      });
-      navigate('/forgot-password');
-      return;
-    }
+    establishSession();
   }, [searchParams, navigate, toast]);
 
   const validatePassword = (pass: string): string[] => {
@@ -87,23 +131,51 @@ const ResetPassword = () => {
     }
 
     setIsLoading(true);
-    const success = await updatePassword(password);
-    setIsLoading(false);
-
-    if (success) {
-      setIsSuccess(true);
-      toast({
-        title: "Password updated!",
-        description: "Your password has been successfully updated",
-      });
-      // Redirect to login after 3 seconds
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
-    } else {
-      setFormError(authError || 'Failed to update password');
+    
+    try {
+      console.log('Attempting password update...');
+      const success = await updatePassword(password);
+      console.log('Password update result:', success);
+      
+      if (success) {
+        setIsSuccess(true);
+        toast({
+          title: "Password updated!",
+          description: "Your password has been successfully updated",
+        });
+        // Redirect to login after 3 seconds
+        setTimeout(() => {
+          navigate('/login');
+        }, 3000);
+      } else {
+        console.error('Password update failed:', authError);
+        setFormError(authError || 'Failed to update password');
+      }
+    } catch (err) {
+      console.error('Exception during password update:', err);
+      setFormError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  // Show loading while establishing session
+  if (isLoading && !sessionEstablished) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <p className="mt-2 text-sm text-muted-foreground">Verifying reset link...</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (isSuccess) {
     return (
