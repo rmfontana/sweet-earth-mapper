@@ -43,6 +43,9 @@ interface AuthContextType {
   ) => Promise<boolean>;
   updateUsername: (newUsername: string) => Promise<boolean>;
   updateLocation: (location: LocationData) => Promise<boolean>;
+  resetPassword: (email: string) => Promise<boolean>;
+  updatePassword: (password: string) => Promise<boolean>;
+  handleAuthCallback: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -92,7 +95,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isAdmin = user?.role === "admin";
 
-  const handleSessionChange = (session: any) => {
+  const handleSessionChange = async (session: any) => {
     if (session?.user) {
       const { id, email } = session.user;
 
@@ -100,21 +103,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setAuthError(null);
       setProfileLoading(true); // 👈 start profile loading
 
-      setTimeout(async () => {
-        try {
-          const profile = await ensureProfileExists(id);
-          if (profile) {
-            if (email) profile.email = email;
-            setUser(profile);
-          } else {
-            setAuthError("User profile not found. Please contact support.");
-          }
-        } catch (err: any) {
-          setAuthError("Error fetching user profile.");
-        } finally {
-          setProfileLoading(false); // 👈 done loading
+      try {
+        const profile = await ensureProfileExists(id);
+        if (profile) {
+          if (email) profile.email = email;
+          setUser(profile);
+        } else {
+          setAuthError("User profile not found. Please contact support.");
         }
-      }, 0);
+      } catch (err: any) {
+        setAuthError("Error fetching user profile.");
+      } finally {
+        setProfileLoading(false); // 👈 done loading
+      }
     } else {
       setUser(null);
       setIsAuthenticated(false);
@@ -136,7 +137,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      handleSessionChange(session);
+      await handleSessionChange(session);
     } catch (err: any) {
       setAuthError("Unexpected error loading session.");
     } finally {
@@ -147,8 +148,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      handleSessionChange(session);
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      await handleSessionChange(session);
     });
 
     loadSession();
@@ -174,7 +175,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         password,
         options: {
           data: userMetadata,
-          emailRedirectTo: `${window.location.origin}/`,
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
@@ -293,6 +294,68 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const resetPassword = async (email: string): Promise<boolean> => {
+    setAuthError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      
+      if (error) {
+        setAuthError(error.message);
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      setAuthError("Failed to send password reset email");
+      return false;
+    }
+  };
+
+  const updatePassword = async (password: string): Promise<boolean> => {
+    setAuthError(null);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      
+      if (error) {
+        setAuthError(error.message);
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      setAuthError("Failed to update password");
+      return false;
+    }
+  };
+
+  const handleAuthCallback = async (): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        setAuthError(error.message);
+        return false;
+      }
+
+      if (session?.user) {
+        const profile = await ensureProfileExists(session.user.id);
+        if (profile) {
+          if (session.user.email) profile.email = session.user.email;
+          setUser(profile);
+          setIsAuthenticated(true);
+        }
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      setAuthError("Authentication verification failed");
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -307,6 +370,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         register,
         updateUsername,
         updateLocation,
+        resetPassword,
+        updatePassword,
+        handleAuthCallback,
       }}
     >
       {children}

@@ -14,6 +14,9 @@ import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 import VerifyEmailNotice from "./pages/VerifyEmailNotice";
 import Profile from "./pages/Profile";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import AuthCallback from "./pages/AuthCallback";
 import ProtectedRoute from "./components/misc/ProtectedRoute";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -41,6 +44,9 @@ const RootContent = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmailNotice />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="*" element={<NotFound />} />
 
         {/* Protected routes */}
