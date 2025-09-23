@@ -45,9 +45,10 @@ interface BottomSheetProps {
   children: React.ReactNode;
   title: string;
   subtitle?: string;
+  selectedPoint: any;
 }
 
-const BottomSheet: React.FC<BottomSheetProps> = ({ isOpen, onClose, children, title, subtitle }) => {
+const BottomSheet: React.FC<BottomSheetProps> = ({ isOpen, onClose, children, title, subtitle, selectedPoint }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartY, setDragStartY] = useState(0);
   const [sheetHeight, setSheetHeight] = useState('45vh');
@@ -157,23 +158,23 @@ const BottomSheet: React.FC<BottomSheetProps> = ({ isOpen, onClose, children, ti
         </div>
       </div>
 
-      {/* Desktop Right Panel */}
-      <div className="hidden md:block absolute inset-y-0 right-0 w-80 z-50">
-        <Card className="h-full bg-white rounded-l-lg shadow-2xl flex flex-col">
-          <CardHeader className="flex-shrink-0 flex flex-row items-start justify-between p-4">
-            <div className="min-w-0">
-              <CardTitle className="text-lg font-semibold truncate">{title}</CardTitle>
-              {subtitle && <p className="text-sm text-gray-500 mt-1 truncate">{subtitle}</p>}
-            </div>
+      {/* Desktop Right Panel - Always show on desktop */}
+      <Card className="hidden md:flex absolute inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl z-50 flex-col h-full">
+        <CardHeader className="p-4 flex-shrink-0 flex flex-row items-start justify-between">
+          <div className="min-w-0">
+            <CardTitle className="text-lg font-semibold truncate">{title}</CardTitle>
+            {subtitle && <p className="text-sm text-gray-500 mt-1 truncate">{subtitle}</p>}
+          </div>
+          {selectedPoint && (
             <Button onClick={onClose} variant="ghost" size="icon" className="p-1">
               <X size={20} />
             </Button>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto p-4 pt-0">
-            {children}
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardHeader>
+        <CardContent className="p-4 pt-0 flex-1 overflow-y-auto">
+          {children}
+        </CardContent>
+      </Card>
     </>
   );
 };
@@ -209,7 +210,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [brandLeaderboard, setBrandLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   const { cache, loading: thresholdsLoading } = useCropThresholds();
-// Fetch all submissions
+
+  // All your existing useEffect hooks remain the same...
   useEffect(() => {
     fetchFormattedSubmissions()
       .then((data) => setAllData(data || []))
@@ -218,14 +220,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         setAllData([]);
       });
   }, []);
- // Reset grouping/drill state when a store gets selected
+
   useEffect(() => {
     if (selectedPoint) {
       setGroupBy('crop');
       setSelectedEntry(null);
     }
   }, [selectedPoint]);
-// Compute min/max brix across all data
+
   useEffect(() => {
     if (!allData || allData.length === 0) return;
     const bVals = allData
@@ -236,7 +238,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setMaxBrix(Math.max(...bVals));
     }
   }, [allData]);
-// Apply filters
+
   useEffect(() => {
     try {
       setFilteredData(applyFilters(allData, filters, isAdmin));
@@ -245,7 +247,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setFilteredData(allData);
     }
   }, [filters, allData, isAdmin]);
-// "Near Me" centering
+
   useEffect(() => {
     if (nearMeTriggered && userLocation && mapRef.current) {
       mapRef.current.easeTo({
@@ -256,7 +258,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       onNearMeHandled?.();
     }
   }, [nearMeTriggered, userLocation, onNearMeHandled]);
-// Initialize Mapbox
+
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
 
@@ -291,7 +293,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
     };
   }, [userLocation]);
-// Center on highlighted point if provided
+
   useEffect(() => {
     if (highlightedPoint && mapRef.current) {
       const point = allData.find((d) => d.id === highlightedPoint.id);
@@ -306,7 +308,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     }
   }, [highlightedPoint, allData]);
 
-  // Draw markers (no rank text, just colored dot + label)
+  // Draw markers (your existing marker logic)
   useEffect(() => {
     if (!mapRef.current || !isMapLoaded) return;
 
@@ -405,7 +407,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     };
   }, [filteredData, isMapLoaded, cache, minBrix, maxBrix]);
 
-  // Fetch leaderboards for the selected store (if any)
+  // Fetch leaderboards (your existing logic)
   useEffect(() => {
     if (!selectedPoint) {
       setLocationLeaderboard([]);
@@ -442,7 +444,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       .finally(() => setIsLoading(false));
   }, [selectedPoint, filters]);
 
-  // Render helper for a single submission row (used in "All" tab and drilldown)
+  // Your existing render helper functions
   const renderSubmissionItem = (sub: BrixDataPoint, key: string) => {
     const cropKey = (sub.cropType ?? sub.cropLabel ?? (sub as any).crop_name ?? 'unknown').toString();
     const thresholds = cache?.[cropKey];
@@ -652,6 +654,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         onClose={() => setSelectedPoint(null)}
         title={selectedPoint ? locTitle : "Location details"}
         subtitle={selectedPoint ? `${street ? `${street}, ` : ''}${city}${city && state ? `, ${state}` : state ? `, ${state}` : ''}` : undefined}
+        selectedPoint={selectedPoint}
       >
         {renderLeaderboard()}
       </BottomSheet>
