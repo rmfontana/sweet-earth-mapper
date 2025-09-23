@@ -45,7 +45,7 @@ const Register = () => {
 
   const validatePassword = (pass: string): string[] => {
     const errors: string[] = [];
-    if (pass.length < 6) errors.push('Password must be at least 6 characters');
+    if (pass.length < 8) errors.push('Password must be at least 8 characters');
     if (!/[A-Z]/.test(pass)) errors.push('Password must contain an uppercase letter');
     if (!/[a-z]/.test(pass)) errors.push('Password must contain a lowercase letter');
     if (!/\d/.test(pass)) errors.push('Password must contain a number');

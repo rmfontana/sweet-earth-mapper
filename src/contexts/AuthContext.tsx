@@ -216,8 +216,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Handle 422 Unprocessable Content errors specifically
         if (error.status === 422) {
           userFriendlyMessage = 'Unable to create account. This might be due to server configuration. Please try again in a few moments.';
-        } else if (error.message.includes('Password should be at least 6 characters')) {
-          userFriendlyMessage = 'Password must be at least 6 characters long.';
+        } else if (error.message.includes('Password should be at least 8 characters') || error.message.includes('Password should be at least 6 characters')) {
+          userFriendlyMessage = 'Password must be at least 8 characters long.';
         } else if (error.message.includes('Password should contain at least one uppercase')) {
           userFriendlyMessage = 'Password must contain at least one uppercase letter.';
         } else if (error.message.includes('Password should contain at least one lowercase')) {

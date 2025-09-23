@@ -11,7 +11,7 @@ export const PasswordStrengthIndicator: React.FC<PasswordStrengthIndicatorProps>
   className = '' 
 }) => {
   const requirements = [
-    { label: 'At least 6 characters', test: (pass: string) => pass.length >= 6 },
+    { label: 'At least 8 characters', test: (pass: string) => pass.length >= 8 },
     { label: 'One uppercase letter', test: (pass: string) => /[A-Z]/.test(pass) },
     { label: 'One lowercase letter', test: (pass: string) => /[a-z]/.test(pass) },
     { label: 'One number', test: (pass: string) => /\d/.test(pass) },
