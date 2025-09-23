@@ -21,9 +21,8 @@ export function BottomSheet({
   title,
 }: BottomSheetProps) {
   return (
-    <Sheet.Root open={open} onOpenChange={onOpenChange} modal>
+    <Sheet.Root open={open} onOpenChange={onOpenChange} modal={false}>
       <Sheet.Portal>
-        <Sheet.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
         <Sheet.Content
           className={cn(
             "fixed bottom-0 left-0 right-0 z-50 flex flex-col rounded-t-2xl bg-white shadow-lg animate-in slide-in-from-bottom duration-300",
