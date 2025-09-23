@@ -73,6 +73,24 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   // mobile sheet visibility (start open by default)
   const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(true);
+  const isMobile = useIsMobile();
+
+  // determine if mobile device
+  function useIsMobile(breakpoint = 768) {
+    const [isMobile, setIsMobile] = useState(
+      typeof window !== "undefined" ? window.innerWidth < breakpoint : false
+    );
+  
+    useEffect(() => {
+      function handleResize() {
+        setIsMobile(window.innerWidth < breakpoint);
+      }
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }, [breakpoint]);
+  
+    return isMobile;
+  }
 
   // Fetch submissions once
   useEffect(() => {
@@ -557,32 +575,32 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <div className="flex-1 overflow-y-auto p-4">{renderLeaderboard()}</div>
       </div>
 
-      {/* Mobile BottomSheet — uses reusable bottom-sheet component */}
-      <div className="md:hidden">
-        <BottomSheet
-          open={mobileSheetOpen}
-          onOpenChange={setMobileSheetOpen}
-          title={locTitle || "Location details"}
-          className="pointer-events-auto"
-        >
-          {/* Content */}
-          <div className="mb-4">{renderLeaderboard()}</div>
-        </BottomSheet>
-
-        {/* Floating reopen button */}
-        {!mobileSheetOpen && (
-          <div className="fixed bottom-4 right-4 z-50 md:hidden">
-            <Button
-              onClick={() => setMobileSheetOpen(true)}
-              variant="default"
-              size="sm"
-              className="shadow-lg bg-blue-600 text-white hover:bg-blue-700"
+      {/* Mobile BottomSheet — only render when actually mobile */}
+        {isMobile && (
+          <>
+            <BottomSheet
+              open={mobileSheetOpen}
+              onOpenChange={setMobileSheetOpen}
+              title={locTitle || "Location details"}
+              className="pointer-events-auto"
             >
-              Explore BRIX Data
-            </Button>
-          </div>
+              <div className="mb-4">{renderLeaderboard()}</div>
+            </BottomSheet>
+
+            {!mobileSheetOpen && (
+              <div className="fixed bottom-4 right-4 z-50">
+                <Button
+                  onClick={() => setMobileSheetOpen(true)}
+                  variant="default"
+                  size="sm"
+                  className="shadow-lg bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  Explore BRIX Data
+                </Button>
+              </div>
+            )}
+          </>
         )}
-      </div>
     </div>
   );
 };
