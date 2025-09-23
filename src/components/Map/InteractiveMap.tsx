@@ -547,38 +547,50 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       {/* Mobile BottomSheet — uses your reusable bottom-sheet component */}
       <div className="md:hidden">
-        <BottomSheet initialSnap="half" className="pointer-events-auto" >
+        <BottomSheet
+          open={mobileSheetOpen}
+          onOpenChange={setMobileSheetOpen}
+          title={locTitle || "Location details"}
+          className="pointer-events-auto"
+        >
           {/* Header area inside sheet */}
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="min-w-0">
-                <h3 className="text-lg font-semibold truncate">{locTitle || 'Location details'}</h3>
-                {selectedPoint && <p className="text-sm text-gray-500 truncate mt-1">{`${street ? `${street}, ` : ''}${city}${city && state ? `, ${state}` : state ? `, ${state}` : ''}`}</p>}
-              </div>
-
-              <div className="flex items-center space-x-2">
-                {selectedPoint && (
-                  <Button onClick={() => { setSelectedPoint(null); }} variant="ghost" size="icon">
-                    <X size={20} />
-                  </Button>
-                )}
-                {/* close sheet button (if the user wants to hide the sheet entirely) */}
-                <Button onClick={() => setMobileSheetOpen(false)} variant="ghost" size="icon">
-                  <span className="sr-only">Close sheet</span>
-                  <X size={18} />
-                </Button>
-              </div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="min-w-0">
+              <h3 className="text-lg font-semibold truncate">
+                {locTitle || "Location details"}
+              </h3>
+              {selectedPoint && (
+                <p className="text-sm text-gray-500 truncate mt-1">
+                  {`${street ? `${street}, ` : ""}${city}${
+                    city && state ? `, ${state}` : state ? `, ${state}` : ""
+                  }`}
+                </p>
+              )}
             </div>
 
-            {/* Content */}
-            <div className="mb-4">{renderLeaderboard()}</div>
+            {selectedPoint && (
+              <Button
+                onClick={() => setSelectedPoint(null)}
+                variant="ghost"
+                size="icon"
+              >
+                <X size={20} />
+              </Button>
+            )}
           </div>
+
+          {/* Content */}
+          <div className="mb-4">{renderLeaderboard()}</div>
         </BottomSheet>
 
         {/* If user closed sheet, show small floating reopen button */}
         {!mobileSheetOpen && (
           <div className="fixed bottom-4 right-4 z-50 md:hidden">
-            <Button onClick={() => setMobileSheetOpen(true)} variant="outline" size="sm">
+            <Button
+              onClick={() => setMobileSheetOpen(true)}
+              variant="outline"
+              size="sm"
+            >
               Show details
             </Button>
           </div>
