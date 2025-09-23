@@ -1,5 +1,5 @@
 // src/components/Map/InteractiveMap.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { BrixDataPoint } from '../../types';
@@ -38,6 +38,146 @@ type SelectedView =
     }
   | null;
 
+// Bottom Sheet Component
+interface BottomSheetProps {
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  title: string;
+  subtitle?: string;
+}
+
+const BottomSheet: React.FC<BottomSheetProps> = ({ isOpen, onClose, children, title, subtitle }) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartY, setDragStartY] = useState(0);
+  const [sheetHeight, setSheetHeight] = useState('45vh');
+  const [dragOffset, setDragOffset] = useState(0);
+  const sheetRef = useRef<HTMLDivElement>(null);
+
+  const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    setIsDragging(true);
+    const startY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    setDragStartY(startY);
+    setDragOffset(0);
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const currentY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const diff = currentY - dragStartY;
+    
+    if (diff > 0) {
+      setDragOffset(Math.min(diff, 200));
+    } else {
+      setDragOffset(Math.max(diff, -200));
+    }
+  }, [isDragging, dragStartY]);
+
+  const handleDragEnd = useCallback(() => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    document.body.style.userSelect = '';
+    
+    if (dragOffset > 100) {
+      onClose();
+    } else if (dragOffset < -100) {
+      setSheetHeight('80vh');
+    } else {
+      setSheetHeight('45vh');
+    }
+    setDragOffset(0);
+  }, [isDragging, dragOffset, onClose]);
+
+  useEffect(() => {
+    if (isDragging) {
+      const handleMouseMove = (e: MouseEvent) => handleDragMove(e);
+      const handleMouseUp = () => handleDragEnd();
+      const handleTouchMove = (e: TouchEvent) => handleDragMove(e);
+      const handleTouchEnd = () => handleDragEnd();
+      
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+      document.addEventListener('touchend', handleTouchEnd);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
+      };
+    }
+  }, [isDragging, handleDragMove, handleDragEnd]);
+
+  if (!isOpen) return null;
+
+  const transform = `translateY(${dragOffset}px)`;
+  const opacity = Math.max(0.7, 1 - Math.abs(dragOffset) / 300);
+
+  return (
+    <>
+      {/* Mobile Bottom Sheet */}
+      <div className="md:hidden">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-20 z-40"
+          style={{ opacity }}
+          onClick={onClose}
+        />
+        
+        <div
+          ref={sheetRef}
+          className="fixed bottom-0 left-0 right-0 bg-white rounded-t-xl shadow-2xl z-50 flex flex-col transition-all duration-300 ease-out"
+          style={{ 
+            height: sheetHeight,
+            transform: isDragging ? transform : 'translateY(0)',
+          }}
+        >
+          <div
+            className="flex-shrink-0 py-3 px-4 cursor-grab active:cursor-grabbing"
+            onMouseDown={handleDragStart}
+            onTouchStart={handleDragStart}
+          >
+            <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-lg font-semibold truncate">{title}</h3>
+                {subtitle && <p className="text-sm text-gray-500 truncate mt-1">{subtitle}</p>}
+              </div>
+              <Button onClick={onClose} variant="ghost" size="icon" className="flex-shrink-0">
+                <X size={20} />
+              </Button>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-hidden px-4 pb-4">
+            {children}
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Right Panel */}
+      <div className="hidden md:block absolute inset-y-0 right-0 w-80 z-50">
+        <Card className="h-full bg-white rounded-l-lg shadow-2xl flex flex-col">
+          <CardHeader className="flex-shrink-0 flex flex-row items-start justify-between p-4">
+            <div className="min-w-0">
+              <CardTitle className="text-lg font-semibold truncate">{title}</CardTitle>
+              {subtitle && <p className="text-sm text-gray-500 mt-1 truncate">{subtitle}</p>}
+            </div>
+            <Button onClick={onClose} variant="ghost" size="icon" className="p-1">
+              <X size={20} />
+            </Button>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto p-4 pt-0">
+            {children}
+          </CardContent>
+        </Card>
+      </div>
+    </>
+  );
+};
+
 const safeStr = (v?: any) => (v === null || v === undefined ? '' : String(v));
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({
@@ -69,8 +209,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [brandLeaderboard, setBrandLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   const { cache, loading: thresholdsLoading } = useCropThresholds();
-
-  // Fetch all submissions
+// Fetch all submissions
   useEffect(() => {
     fetchFormattedSubmissions()
       .then((data) => setAllData(data || []))
@@ -79,16 +218,14 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
         setAllData([]);
       });
   }, []);
-
-  // Reset grouping/drill state when a store gets selected
+ // Reset grouping/drill state when a store gets selected
   useEffect(() => {
     if (selectedPoint) {
       setGroupBy('crop');
       setSelectedEntry(null);
     }
   }, [selectedPoint]);
-
-  // Compute min/max brix across all data
+// Compute min/max brix across all data
   useEffect(() => {
     if (!allData || allData.length === 0) return;
     const bVals = allData
@@ -99,8 +236,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setMaxBrix(Math.max(...bVals));
     }
   }, [allData]);
-
-  // Apply filters
+// Apply filters
   useEffect(() => {
     try {
       setFilteredData(applyFilters(allData, filters, isAdmin));
@@ -109,8 +245,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setFilteredData(allData);
     }
   }, [filters, allData, isAdmin]);
-
-  // "Near Me" centering
+// "Near Me" centering
   useEffect(() => {
     if (nearMeTriggered && userLocation && mapRef.current) {
       mapRef.current.easeTo({
@@ -121,8 +256,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       onNearMeHandled?.();
     }
   }, [nearMeTriggered, userLocation, onNearMeHandled]);
-
-  // Initialize Mapbox
+// Initialize Mapbox
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
 
@@ -157,8 +291,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
     };
   }, [userLocation]);
-
-  // Center on highlighted point if provided
+// Center on highlighted point if provided
   useEffect(() => {
     if (highlightedPoint && mapRef.current) {
       const point = allData.find((d) => d.id === highlightedPoint.id);
@@ -288,7 +421,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       city: selectedPoint.city ?? (selectedPoint as any).city_name ?? undefined,
       state: selectedPoint.state ?? undefined,
       country: selectedPoint.country ?? undefined,
-      // you can pass crop if needed later
     };
 
     Promise.all([
@@ -327,9 +459,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     );
 
     return (
-      <div key={key} className="flex justify-between items-start py-2">
-        <div className="flex flex-col min-w-0">
-          <span className="font-semibold text-base truncate">{safeStr(sub.cropLabel ?? sub.cropType ?? 'Unknown Crop')}</span>
+      <div key={key} className="flex justify-between items-start py-3 border-b border-gray-100 last:border-b-0">
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className="font-semibold text-sm truncate">{safeStr(sub.cropLabel ?? sub.cropType ?? 'Unknown Crop')}</span>
           <span className="text-xs text-gray-500 mt-1 truncate">
             {safeStr(sub.brandLabel ?? sub.brandName ?? 'Unknown Brand')} —{' '}
             {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}
@@ -344,7 +476,6 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     );
   };
 
-  // Drill-down submissions for a selected crop/brand inside a store
   const renderDetailedSubmissions = () => {
     if (!selectedEntry || !selectedPoint) return null;
 
@@ -358,7 +489,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
     return (
       <div className="flex flex-col h-full">
-        <div className="flex items-center space-x-2 pb-4 border-b">
+        <div className="flex items-center space-x-2 pb-4 border-b mb-4">
           <Button variant="ghost" size="icon" onClick={() => setSelectedEntry(null)}>
             <ArrowLeft size={20} />
           </Button>
@@ -366,18 +497,17 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             Submissions for {selectedEntry.label} ({filteredSubmissions.length})
           </h4>
         </div>
-        <div className="divide-y divide-gray-200 mt-4 overflow-y-auto">
+        <div className="overflow-y-auto space-y-0">
           {filteredSubmissions.length > 0 ? (
             filteredSubmissions.map((sub) => renderSubmissionItem(sub, sub.id))
           ) : (
-            <div className="text-center text-gray-500 py-4">No submissions found.</div>
+            <div className="text-center text-gray-500 py-8">No submissions found.</div>
           )}
         </div>
       </div>
     );
   };
 
-  // Main right-panel leaderboard render
   const renderLeaderboard = () => {
     if (!selectedPoint) {
       return (
@@ -385,7 +515,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <MapPin className="w-16 h-16 text-gray-300 mb-4" />
           <p className="text-xl font-semibold text-gray-700">Ready to Explore?</p>
           <p className="text-sm text-gray-500 mt-2">
-            Click on a marker to view detailed bionutrient rankings and data for that location.
+            {/* Mobile-optimized text */}
+            <span className="md:hidden">Tap on a marker to view detailed bionutrient rankings.</span>
+            <span className="hidden md:inline">Click on a marker to view detailed bionutrient rankings and data for that location.</span>
           </p>
         </div>
       );
@@ -398,110 +530,114 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (selectedEntry) return renderDetailedSubmissions();
 
     return (
-      <Tabs defaultValue="crop" value={groupBy} onValueChange={(val) => setGroupBy(val as any)}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="none">All</TabsTrigger>
-          <TabsTrigger value="crop">Crop</TabsTrigger>
-          <TabsTrigger value="brand">Brand</TabsTrigger>
-        </TabsList>
+      <div className="h-full flex flex-col">
+        <Tabs defaultValue="crop" value={groupBy} onValueChange={(val) => setGroupBy(val as any)} className="flex-1 flex flex-col">
+          <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsTrigger value="none">All</TabsTrigger>
+            <TabsTrigger value="crop">Crop</TabsTrigger>
+            <TabsTrigger value="brand">Brand</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="none" className="mt-4">
-          <div>
-            <h4 className="font-semibold mb-2 text-base">
-              All Submissions ({allData.filter((d) => ((d as any).placeId ?? (d as any).place_id) === ((selectedPoint as any).placeId ?? (selectedPoint as any).place_id)).length})
-            </h4>
-            <div className="divide-y divide-gray-200">
-              {allData
-                .filter((d) => ((d as any).placeId ?? (d as any).place_id) === ((selectedPoint as any).placeId ?? (selectedPoint as any).place_id))
-                .map((sub) => renderSubmissionItem(sub, sub.id))}
-            </div>
-          </div>
-        </TabsContent>
+          <div className="flex-1 overflow-hidden">
+            <TabsContent value="none" className="mt-0 h-full overflow-y-auto">
+              <div>
+                <h4 className="font-semibold mb-3 text-base">
+                  All Submissions ({allData.filter((d) => ((d as any).placeId ?? (d as any).place_id) === ((selectedPoint as any).placeId ?? (selectedPoint as any).place_id)).length})
+                </h4>
+                <div className="space-y-0">
+                  {allData
+                    .filter((d) => ((d as any).placeId ?? (d as any).place_id) === ((selectedPoint as any).placeId ?? (selectedPoint as any).place_id))
+                    .map((sub) => renderSubmissionItem(sub, sub.id))}
+                </div>
+              </div>
+            </TabsContent>
 
-        <TabsContent value="crop" className="mt-4">
-          <div>
-            <h4 className="font-semibold mb-2 text-base">Top Crops</h4>
-            <div className="divide-y divide-gray-100">
-              {cropLeaderboard.length === 0 ? (
-                <div className="text-sm text-gray-500 p-3">No crop data.</div>
-              ) : (
-                cropLeaderboard.map((c) => {
-                  const normalized = Number(c.average_normalized_score ?? 1.5);
-                  const rankColor = rankColorFromNormalized(normalized);
-                  const label = c.crop_label ?? c.crop_name ?? 'Unknown';
-                  return (
-                    <div
-                      key={c.crop_id ?? c.crop_name}
-                      className="p-2 cursor-pointer hover:bg-gray-50 flex justify-between items-center"
-                      onClick={() =>
-                        setSelectedEntry({
-                          type: 'crop',
-                          id: String(c.crop_id ?? c.crop_name),
-                          label,
-                        })
-                      }
-                    >
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{label}</div>
-                        <div className="text-xs text-gray-500">Submissions: {c.submission_count ?? '-'}</div>
-                      </div>
-                      <div
-                        className={`w-12 h-6 rounded text-white flex items-center justify-center text-sm ${rankColor.bgClass}`}
-                      >
-                        {normalized.toFixed(2)}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </TabsContent>
+            <TabsContent value="crop" className="mt-0 h-full overflow-y-auto">
+              <div>
+                <h4 className="font-semibold mb-3 text-base">Top Crops</h4>
+                <div className="space-y-2">
+                  {cropLeaderboard.length === 0 ? (
+                    <div className="text-sm text-gray-500 p-3 text-center">No crop data.</div>
+                  ) : (
+                    cropLeaderboard.map((c) => {
+                      const normalized = Number(c.average_normalized_score ?? 1.5);
+                      const rankColor = rankColorFromNormalized(normalized);
+                      const label = c.crop_label ?? c.crop_name ?? 'Unknown';
+                      return (
+                        <div
+                          key={c.crop_id ?? c.crop_name}
+                          className="p-3 cursor-pointer hover:bg-gray-50 active:bg-gray-100 rounded-lg flex justify-between items-center transition-colors"
+                          onClick={() =>
+                            setSelectedEntry({
+                              type: 'crop',
+                              id: String(c.crop_id ?? c.crop_name),
+                              label,
+                            })
+                          }
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium truncate">{label}</div>
+                            <div className="text-xs text-gray-500">Submissions: {c.submission_count ?? '-'}</div>
+                          </div>
+                          <div
+                            className={`w-14 h-7 rounded-full text-white flex items-center justify-center text-sm font-semibold ${rankColor.bgClass}`}
+                          >
+                            {normalized.toFixed(1)}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </TabsContent>
 
-        <TabsContent value="brand" className="mt-4">
-          <div>
-            <h4 className="font-semibold mb-2 text-base">Top Brands</h4>
-            <div className="divide-y divide-gray-100">
-              {brandLeaderboard.length === 0 ? (
-                <div className="text-sm text-gray-500 p-3">No brand data.</div>
-              ) : (
-                brandLeaderboard.map((b) => {
-                  const normalized = Number(b.average_normalized_score ?? 1.5);
-                  const rankColor = rankColorFromNormalized(normalized);
-                  const label = b.brand_label ?? b.brand_name ?? 'Unknown';
-                  return (
-                    <div
-                      key={b.brand_id ?? b.brand_name}
-                      className="p-2 cursor-pointer hover:bg-gray-50 flex justify-between items-center"
-                      onClick={() =>
-                        setSelectedEntry({
-                          type: 'brand',
-                          id: String(b.brand_id ?? b.brand_name),
-                          label,
-                        })
-                      }
-                    >
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{label}</div>
-                        <div className="text-xs text-gray-500">Submissions: {b.submission_count ?? '-'}</div>
-                      </div>
-                      <div
-                        className={`w-12 h-6 rounded text-white flex items-center justify-center text-sm ${rankColor.bgClass}`}
-                      >
-                        {normalized.toFixed(2)}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            <TabsContent value="brand" className="mt-0 h-full overflow-y-auto">
+              <div>
+                <h4 className="font-semibold mb-3 text-base">Top Brands</h4>
+                <div className="space-y-2">
+                  {brandLeaderboard.length === 0 ? (
+                    <div className="text-sm text-gray-500 p-3 text-center">No brand data.</div>
+                  ) : (
+                    brandLeaderboard.map((b) => {
+                      const normalized = Number(b.average_normalized_score ?? 1.5);
+                      const rankColor = rankColorFromNormalized(normalized);
+                      const label = b.brand_label ?? b.brand_name ?? 'Unknown';
+                      return (
+                        <div
+                          key={b.brand_id ?? b.brand_name}
+                          className="p-3 cursor-pointer hover:bg-gray-50 active:bg-gray-100 rounded-lg flex justify-between items-center transition-colors"
+                          onClick={() =>
+                            setSelectedEntry({
+                              type: 'brand',
+                              id: String(b.brand_id ?? b.brand_name),
+                              label,
+                            })
+                          }
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium truncate">{label}</div>
+                            <div className="text-xs text-gray-500">Submissions: {b.submission_count ?? '-'}</div>
+                          </div>
+                          <div
+                            className={`w-14 h-7 rounded-full text-white flex items-center justify-center text-sm font-semibold ${rankColor.bgClass}`}
+                          >
+                            {normalized.toFixed(1)}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </TabsContent>
           </div>
-        </TabsContent>
-      </Tabs>
+        </Tabs>
+      </div>
     );
   };
 
-  // Panel header values (handle snake/camel)
+  // Panel header values
   const locTitle = selectedPoint?.locationName ?? (selectedPoint as any)?.location_name ?? safeStr((selectedPoint as any)?.place_label ?? '');
   const street = selectedPoint?.streetAddress ?? (selectedPoint as any)?.street_address ?? '';
   const city = selectedPoint?.city ?? (selectedPoint as any)?.city ?? '';
@@ -510,31 +646,15 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   return (
     <div className="relative w-full h-full flex flex-row">
       <div ref={mapContainer} className="absolute inset-0 rounded-md shadow-md" />
-      <Card className="absolute inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl z-50 flex flex-col h-full">
-        <CardHeader className="p-4 flex-shrink-0 flex flex-row items-start justify-between">
-          <div className="min-w-0">
-            {selectedPoint ? (
-              <>
-                <CardTitle className="text-lg font-semibold truncate">{locTitle}</CardTitle>
-                <p className="text-sm text-gray-500 mt-1 truncate">
-                  {street ? `${street}, ` : ''}{city}{city && state ? `, ${state}` : state ? `, ${state}` : ''}
-                </p>
-              </>
-            ) : (
-              <CardTitle className="text-lg font-semibold">Location details</CardTitle>
-            )}
-          </div>
-          {selectedPoint && (
-            <Button onClick={() => setSelectedPoint(null)} variant="ghost" size="icon" className="p-1">
-              <X size={20} />
-            </Button>
-          )}
-        </CardHeader>
-
-        <CardContent className="p-4 pt-0 flex-1 overflow-y-auto">
-          {renderLeaderboard()}
-        </CardContent>
-      </Card>
+      
+      <BottomSheet
+        isOpen={selectedPoint !== null}
+        onClose={() => setSelectedPoint(null)}
+        title={selectedPoint ? locTitle : "Location details"}
+        subtitle={selectedPoint ? `${street ? `${street}, ` : ''}${city}${city && state ? `, ${state}` : state ? `, ${state}` : ''}` : undefined}
+      >
+        {renderLeaderboard()}
+      </BottomSheet>
     </div>
   );
 };
