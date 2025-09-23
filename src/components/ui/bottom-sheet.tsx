@@ -1,3 +1,5 @@
+// src/components/ui/bottom-sheet.tsx
+
 "use client"
 
 import * as React from "react"
@@ -11,6 +13,10 @@ type BottomSheetProps = {
   children: React.ReactNode
   className?: string
   title?: string
+  // New prop to expose the sheet's height
+  onHeightChange?: (height: number) => void
+  // New prop to specify snap points (e.g., ['25%', '50%', '85%'])
+  snapPoints?: (number | string)[]
 }
 
 export function BottomSheet({
@@ -19,14 +25,42 @@ export function BottomSheet({
   children,
   className,
   title,
+  onHeightChange,
+  // Default to the recommended snap points
+  snapPoints = ['25%', '50%', '85%'],
 }: BottomSheetProps) {
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!onHeightChange || !contentRef.current) return;
+
+    // Use a ResizeObserver to get the sheet's height dynamically
+    const observer = new ResizeObserver((entries) => {
+      const contentEntry = entries[0];
+      if (contentEntry) {
+        onHeightChange(contentEntry.contentRect.height);
+      }
+    });
+
+    observer.observe(contentRef.current);
+
+    return () => observer.disconnect();
+  }, [onHeightChange]);
+
   return (
-    <Sheet.Root open={open} onOpenChange={onOpenChange} modal={false}>
+    <Sheet.Root
+      open={open}
+      onOpenChange={onOpenChange}
+      modal={false}
+      snapPoints={snapPoints}
+    >
       <Sheet.Portal>
         <Sheet.Content
+          ref={contentRef}
           className={cn(
-            "fixed bottom-0 left-0 right-0 z-50 flex flex-col rounded-t-2xl bg-white shadow-lg animate-in slide-in-from-bottom duration-300",
-            "h-[85vh] sm:max-w-md sm:mx-auto",
+            // Use 'inset-x-0' instead of 'left-0 right-0' for cleaner code
+            "fixed bottom-0 inset-x-0 z-50 flex flex-col rounded-t-2xl bg-white shadow-lg",
+            "sm:max-w-md sm:mx-auto",
             className
           )}
         >
