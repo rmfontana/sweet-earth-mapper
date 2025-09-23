@@ -37,13 +37,11 @@ export function getBrixColor(
   
   // Early return for invalid values
   if (value === null || value === undefined || isNaN(value)) {
-    console.log('🔍 getBrixColor: Invalid value, returning fallback', { value });
     return colors.fallback;
   }
   
   // Enhanced validation for thresholds
   if (!thresholds) {
-    console.log('🔍 getBrixColor: No thresholds provided, returning fallback', { value, thresholds });
     return colors.fallback;
   }
   
@@ -57,11 +55,6 @@ export function getBrixColor(
   );
   
   if (missingKeys.length > 0) {
-    console.log('🔍 getBrixColor: Invalid thresholds, missing or invalid keys:', { 
-      missingKeys, 
-      thresholds,
-      value 
-    });
     return colors.fallback;
   }
   
@@ -70,13 +63,6 @@ export function getBrixColor(
   // Determine if the scale is ascending (higher value is better, e.g., Brix)
   // or descending (lower value is better, e.g., Rank)
   const isAscending = excellent > poor;
-  
-  console.log('🔍 getBrixColor: Processing', { 
-    value, 
-    thresholds, 
-    isAscending, 
-    mode 
-  });
   
   let selectedColor: string;
   
@@ -103,14 +89,6 @@ export function getBrixColor(
       selectedColor = colors.poor;
     }
   }
-  
-  console.log('🔍 getBrixColor: Selected color', { 
-    value, 
-    selectedColor,
-    colorCategory: isAscending ? 
-      (value >= excellent ? 'excellent' : value >= good ? 'good' : value >= average ? 'average' : 'poor') :
-      (value <= excellent ? 'excellent' : value <= good ? 'good' : value <= average ? 'average' : 'poor')
-  });
   
   return selectedColor;
 }
