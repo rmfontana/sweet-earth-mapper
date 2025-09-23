@@ -529,23 +529,35 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       {/* Map container must be non-zero height for Mapbox to render correctly */}
       <div ref={mapContainer} className="flex-1 relative" />
 
-      {/* Desktop Right Panel (persistent) */}
-      <Card className="hidden md:flex absolute inset-y-0 right-0 w-80 bg-white rounded-l-lg shadow-2xl z-50 flex-col h-full">
-        <CardHeader className="p-4 flex-shrink-0 flex flex-row items-start justify-between">
+     {/* Desktop Right Panel (persistent, integrated into layout) */}
+      <div className="hidden md:flex md:w-96 flex-col border-l border-gray-200 bg-white shadow-inner">
+        <div className="p-4 flex-shrink-0 flex flex-row items-start justify-between border-b">
           <div className="min-w-0">
-            <CardTitle className="text-lg font-semibold truncate">{locTitle || 'Location details'}</CardTitle>
-            {selectedPoint && <p className="text-sm text-gray-500 mt-1 truncate">{`${street ? `${street}, ` : ''}${city}${city && state ? `, ${state}` : state ? `, ${state}` : ''}`}</p>}
+            <h2 className="text-lg font-semibold truncate">
+              {locTitle || "Location details"}
+            </h2>
+            {selectedPoint && (
+              <p className="text-sm text-gray-500 mt-1 truncate">
+                {`${street ? `${street}, ` : ""}${city}${
+                  city && state ? `, ${state}` : state ? `, ${state}` : ""
+                }`}
+              </p>
+            )}
           </div>
           {selectedPoint && (
-            <Button onClick={() => { setSelectedPoint(null); }} variant="ghost" size="icon" className="p-1">
+            <Button
+              onClick={() => setSelectedPoint(null)}
+              variant="ghost"
+              size="icon"
+            >
               <X size={20} />
             </Button>
           )}
-        </CardHeader>
-        <CardContent className="p-4 pt-0 flex-1 overflow-y-auto">{renderLeaderboard()}</CardContent>
-      </Card>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">{renderLeaderboard()}</div>
+      </div>
 
-      {/* Mobile BottomSheet — uses your reusable bottom-sheet component */}
+      {/* Mobile BottomSheet — uses reusable bottom-sheet component */}
       <div className="md:hidden">
         <BottomSheet
           open={mobileSheetOpen}
@@ -553,45 +565,20 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
           title={locTitle || "Location details"}
           className="pointer-events-auto"
         >
-          {/* Header area inside sheet */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="min-w-0">
-              <h3 className="text-lg font-semibold truncate">
-                {locTitle || "Location details"}
-              </h3>
-              {selectedPoint && (
-                <p className="text-sm text-gray-500 truncate mt-1">
-                  {`${street ? `${street}, ` : ""}${city}${
-                    city && state ? `, ${state}` : state ? `, ${state}` : ""
-                  }`}
-                </p>
-              )}
-            </div>
-
-            {selectedPoint && (
-              <Button
-                onClick={() => setSelectedPoint(null)}
-                variant="ghost"
-                size="icon"
-              >
-                <X size={20} />
-              </Button>
-            )}
-          </div>
-
           {/* Content */}
           <div className="mb-4">{renderLeaderboard()}</div>
         </BottomSheet>
 
-        {/* If user closed sheet, show small floating reopen button */}
+        {/* Floating reopen button */}
         {!mobileSheetOpen && (
           <div className="fixed bottom-4 right-4 z-50 md:hidden">
             <Button
               onClick={() => setMobileSheetOpen(true)}
-              variant="outline"
+              variant="default"
               size="sm"
+              className="shadow-lg bg-blue-600 text-white hover:bg-blue-700"
             >
-              Show details
+              Explore BRIX Data
             </Button>
           </div>
         )}

@@ -1,9 +1,9 @@
-// src/components/ui/bottom-sheet.tsx
 "use client"
 
 import * as React from "react"
 import * as Sheet from "vaul"
 import { cn } from "@/lib/utils"
+import { X } from "lucide-react"
 
 type BottomSheetProps = {
   open: boolean
@@ -21,25 +21,29 @@ export function BottomSheet({
   title,
 }: BottomSheetProps) {
   return (
-    <Sheet.Root open={open} onOpenChange={onOpenChange} modal={true}>
+    <Sheet.Root open={open} onOpenChange={onOpenChange} modal>
       <Sheet.Portal>
-        <Sheet.Overlay className="fixed inset-0 bg-black/40" />
+        <Sheet.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
         <Sheet.Content
           className={cn(
-            "fixed bottom-0 left-0 right-0 z-50 flex flex-col rounded-t-2xl bg-white shadow-lg",
+            "fixed bottom-0 left-0 right-0 z-50 flex flex-col rounded-t-2xl bg-white shadow-lg animate-in slide-in-from-bottom duration-300",
             "h-[85vh] sm:max-w-md sm:mx-auto",
             className
           )}
         >
-          {/* Handle bar */}
+          {/* Drag handle */}
           <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-gray-300" />
 
-          {/* Title (optional) */}
-          {title && (
-            <div className="text-center font-medium py-2 border-b">
-              {title}
-            </div>
-          )}
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-2 border-b">
+            {title && <div className="font-medium text-lg truncate">{title}</div>}
+            <button
+              className="p-2 rounded-full hover:bg-gray-100"
+              onClick={() => onOpenChange(false)}
+            >
+              <X size={20} />
+            </button>
+          </div>
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-4">{children}</div>
