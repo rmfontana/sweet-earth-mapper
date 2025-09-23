@@ -1,14 +1,12 @@
 // src/components/Map/InteractiveMap.tsx
-
-"use client"
-
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { BrixDataPoint } from '../../types';
 import { fetchFormattedSubmissions } from '../../lib/fetchSubmissions';
 import { useFilters } from '../../contexts/FilterContext';
 import { applyFilters } from '../../lib/filterUtils';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { MapPin, X, ArrowLeft } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
@@ -17,7 +15,6 @@ import { useCropThresholds } from '../../contexts/CropThresholdContext';
 import { getBrixColor, computeNormalizedScore, rankColorFromNormalized } from '../../lib/getBrixColor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
-import { cn } from "@/lib/utils";
 
 // Leaderboard API imports
 import {
@@ -43,24 +40,6 @@ type SelectedView =
   | null;
 
 const safeStr = (v?: any) => (v === null || v === undefined ? '' : String(v));
-
-// A simple utility hook to check if the device is mobile
-function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== "undefined" ? window.innerWidth < breakpoint : false
-  );
-
-  useEffect(() => {
-    function handleResize() {
-      setIsMobile(window.innerWidth < breakpoint);
-    }
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [breakpoint]);
-
-  return isMobile;
-}
-
 
 const InteractiveMap: React.FC<InteractiveMapProps> = ({
   userLocation,
@@ -94,23 +73,24 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   // mobile sheet visibility (start open by default)
   const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(true);
-  
-  // New state to track the bottom sheet's height
-  const [sheetHeight, setSheetHeight] = useState(0);
-
-  // Check for mobile device
   const isMobile = useIsMobile();
+
+  // determine if mobile device
+  function useIsMobile(breakpoint = 768) {
+    const [isMobile, setIsMobile] = useState(
+      typeof window !== "undefined" ? window.innerWidth < breakpoint : false
+    );
   
-  // Use a memoized style object to dynamically adjust the map container's height
-  const mapContainerStyle = useMemo(() => {
-    if (isMobile && mobileSheetOpen) {
-      // The `calc(100vh - 4rem)` accounts for a fixed header/navbar height.
-      // We subtract the dynamic sheet height to prevent the map and sheet from overlapping.
-      return { height: `calc(100vh - 4rem - ${sheetHeight}px)` };
-    }
-    // No style needed for desktop; the flexbox layout handles it.
-    return {};
-  }, [isMobile, mobileSheetOpen, sheetHeight]);
+    useEffect(() => {
+      function handleResize() {
+        setIsMobile(window.innerWidth < breakpoint);
+      }
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }, [breakpoint]);
+  
+    return isMobile;
+  }
 
   // Fetch submissions once
   useEffect(() => {
@@ -565,18 +545,9 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-4rem)] w-full">
       {/* Map container must be non-zero height for Mapbox to render correctly */}
-      <div
-        ref={mapContainer}
-        className={cn(
-          "flex-1 relative",
-          {
-            "h-full": !isMobile // For desktop, the map fills the container
-          }
-        )}
-        style={mapContainerStyle}
-      />
+      <div ref={mapContainer} className="flex-1 relative" />
 
-      {/* Desktop Right Panel (persistent, integrated into layout) */}
+     {/* Desktop Right Panel (persistent, integrated into layout) */}
       <div className="hidden md:flex md:w-96 flex-col border-l border-gray-200 bg-white shadow-inner">
         <div className="p-4 flex-shrink-0 flex flex-row items-start justify-between border-b">
           <div className="min-w-0">
@@ -605,35 +576,31 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       </div>
 
       {/* Mobile BottomSheet — only render when actually mobile */}
-      {isMobile && (
-        <>
-          <BottomSheet
-            open={mobileSheetOpen}
-            onOpenChange={setMobileSheetOpen}
-            title={locTitle || "Location details"}
-            className="pointer-events-auto"
-            // Pass the height change callback to dynamically resize the map
-            onHeightChange={setSheetHeight}
-            // Use the recommended snap points
-            snapPoints={['25%', '50%', '85%']}
-          >
-            <div className="mb-4">{renderLeaderboard()}</div>
-          </BottomSheet>
+        {isMobile && (
+          <>
+            <BottomSheet
+              open={mobileSheetOpen}
+              onOpenChange={setMobileSheetOpen}
+              title={locTitle || "Location details"}
+              className="pointer-events-auto"
+            >
+              <div className="mb-4">{renderLeaderboard()}</div>
+            </BottomSheet>
 
-          {!mobileSheetOpen && (
-            <div className="fixed bottom-4 right-4 z-50">
-              <Button
-                onClick={() => setMobileSheetOpen(true)}
-                variant="default"
-                size="sm"
-                className="shadow-lg bg-blue-600 text-white hover:bg-blue-700"
-              >
-                Explore BRIX Data
-              </Button>
-            </div>
-          )}
-        </>
-      )}
+            {!mobileSheetOpen && (
+              <div className="fixed bottom-4 right-4 z-50">
+                <Button
+                  onClick={() => setMobileSheetOpen(true)}
+                  variant="default"
+                  size="sm"
+                  className="shadow-lg bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  Explore BRIX Data
+                </Button>
+              </div>
+            )}
+          </>
+        )}
     </div>
   );
 };
