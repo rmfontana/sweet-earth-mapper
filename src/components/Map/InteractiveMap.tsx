@@ -91,16 +91,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [brandLeaderboard, setBrandLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   const { cache, loading: thresholdsLoading } = useCropThresholds();
-  
-  // FIX: This line was missing, causing the bottom sheet not to open on marker click.
-  // It ensures the bottom sheet state syncs with the selectedPoint state.
-  useEffect(() => {
-    if (selectedPoint) {
-      setMobileSheetOpen(true);
-    }
-  }, [selectedPoint]);
 
-  // FIX: mobile sheet visibility. The default is now true for a "peek" mode on mobile.
+  // mobile sheet visibility (start open by default)
   const [mobileSheetOpen, setMobileSheetOpen] = useState<boolean>(true);
   
   // New state to track the bottom sheet's height
@@ -111,7 +103,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   
   // Use a memoized style object to dynamically adjust the map container's height
   const mapContainerStyle = useMemo(() => {
-    if (isMobile) {
+    if (isMobile && mobileSheetOpen) {
       // The `calc(100vh - 4rem)` accounts for a fixed header/navbar height.
       // We subtract the dynamic sheet height to prevent the map and sheet from overlapping.
       return { height: `calc(100vh - 4rem - ${sheetHeight}px)` };
@@ -135,6 +127,8 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
     if (selectedPoint) {
       setGroupBy('crop');
       setSelectedEntry(null);
+      // open mobile sheet when user selects a marker
+      setMobileSheetOpen(true);
     }
   }, [selectedPoint]);
 
@@ -507,7 +501,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                           <div
                             className={`w-14 h-7 rounded-full text-white flex items-center justify-center text-sm font-semibold ${rankColor.bgClass}`}
                           >
-                            Normalized: {normalized.toFixed(1)}
+                            {normalized.toFixed(1)}
                           </div>
                         </div>
                       );
@@ -547,7 +541,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                           <div
                             className={`w-14 h-7 rounded-full text-white flex items-center justify-center text-sm font-semibold ${rankColor.bgClass}`}
                           >
-                            Normalized: {normalized.toFixed(1)}
+                            {normalized.toFixed(1)}
                           </div>
                         </div>
                       );
@@ -570,10 +564,15 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-4rem)] w-full">
-      {/* FIX: Simplified and corrected class name for desktop layout */}
+      {/* Map container must be non-zero height for Mapbox to render correctly */}
       <div
         ref={mapContainer}
-        className="flex-1 relative" 
+        className={cn(
+          "flex-1 relative",
+          {
+            "h-full": !isMobile // For desktop, the map fills the container
+          }
+        )}
         style={mapContainerStyle}
       />
 
