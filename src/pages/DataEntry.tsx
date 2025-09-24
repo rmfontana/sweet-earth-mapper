@@ -19,12 +19,14 @@ import {
   Camera,
   Clock,
   FileText,
+  Info,
+  Building2
 } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 import { supabase } from '../integrations/supabase/client';
 import { getSupabaseUrl, getPublishableKey } from '@/lib/utils';
 import ComboBoxAddable from '../components/ui/combo-box-addable';
-import Combobox from '../components/ui/combo-box'; // Import the regular combo box
+import Combobox from '../components/ui/combo-box'; 
 import LocationSearch from '../components/common/LocationSearch';
 import { useStaticData } from '../hooks/useStaticData';
 import { Slider } from '../components/ui/slider';
@@ -42,12 +44,24 @@ interface DetailedLocationInfo {
   business_name?: string;
 }
 
+// Human-readable labels for validation/labels
+const FIELD_LABELS: Record<string, string> = {
+  cropType: 'Crop Type',
+  brand: 'Farm/Brand Name',
+  store: 'Point of Purchase',
+  location: 'Sample Location',
+  purchaseDate: 'Purchase Date',
+  measurementDate: 'Assessment Date',
+  brixLevel: 'BRIX Level',
+  outlierNotes: 'Notes/Observations',
+  images: 'Images',
+};
+
 const DataEntry = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Assuming useStaticData provides a refresh function to re-fetch data
   const { crops, brands, locations, isLoading: staticDataLoading, error: staticDataError, refreshData } = useStaticData();
 
   const [formData, setFormData] = useState({
@@ -198,9 +212,25 @@ const DataEntry = () => {
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const validFiles = files.filter(validateFile);
+    const validFiles: File[] = [];
+    let hasErrors = false;
+    files.forEach((file) => {
+      if (validateFile(file)) {
+        validFiles.push(file);
+      } else {
+        hasErrors = true;
+      }
+    });
     if (validFiles.length + formData.images.length > 3) {
       setErrors(prev => ({ ...prev, images: 'Maximum 3 images allowed' }));
+      return;
+    }
+    if (hasErrors) {
+      toast({
+        title: "File upload error",
+        description: "Some files were too large or not supported. Please fix before submitting.",
+        variant: "destructive",
+      });
       return;
     }
     handleInputChange('images', [...formData.images, ...validFiles]);
@@ -233,12 +263,12 @@ const DataEntry = () => {
     requiredFields.forEach(field => {
       const value = formData[field];
       if (typeof value === 'string' && !value.trim()) {
-        newErrors[field] = `${field.charAt(0).toUpperCase() + field.slice(1)} is required.`;
+        newErrors[field] = `Please select ${FIELD_LABELS[field] || field}`;
       }
     });
 
     if (typeof formData.brixLevel !== 'number' || isNaN(formData.brixLevel)) {
-      newErrors.brixLevel = 'BRIX must be a valid number';
+      newErrors.brixLevel = 'Please enter a valid BRIX value';
     } else if (formData.brixLevel < 0 || formData.brixLevel > 100) {
       newErrors.brixLevel = 'BRIX must be between 0–100';
     }
@@ -263,7 +293,19 @@ const DataEntry = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) {
-      toast({ title: 'Please fix the errors in the form', variant: 'destructive' });
+      toast({
+        title: "Submission blocked",
+        description: "Please correct the highlighted errors before submitting.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (errors.images) {
+      toast({
+        title: "File issues detected",
+        description: "Please fix the file upload errors before submitting.",
+        variant: "destructive",
+      });
       return;
     }
     
@@ -296,11 +338,10 @@ const DataEntry = () => {
         street_address: formData.street_address || null,
         city: formData.city || null,
         state: formData.state || null,
-        country: formData.country || null, // This should now be properly included
+        country: formData.country || null,
         poi_name: formData.poi_name || null,
         business_name: formData.business_name || null,
         normalized_address: formData.normalized_address || null,
-        // Store name for potential location matching
         store_name: formData.store
       };
 
@@ -366,9 +407,17 @@ const DataEntry = () => {
       }
       
       if (verified) {
-        toast({ title: 'BRIX measurement automatically verified!', description: 'Thank you for your contribution!' });
+        toast({ 
+          title: 'Submission successful', 
+          description: 'Your BRIX reading was auto-verified. Thank you for contributing!', 
+          variant: 'default'
+        });
       } else {
-        toast({ title: 'BRIX measurement submitted for review.', description: 'An admin will review your entry shortly.' });
+        toast({ 
+          title: 'Submission received',
+          description: 'Your BRIX reading will be reviewed by an admin shortly.', 
+          variant: 'default' 
+        });
       }
       
       navigate('/your-data');
@@ -455,9 +504,9 @@ const DataEntry = () => {
                   {/* Brand/Farm Name */}
                   <div className="relative">
                     <Label htmlFor="brand" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
-                      <Store className="inline w-4 h-4 mr-2" />
-                      Farm/Brand Name <span className="ml-1 text-red-600">*</span>
-                    </Label>
+                       <Building2 className="inline w-4 h-4 mr-2" />
+                       Farm/Brand Name <span className="ml-1 text-red-600">*</span>
+                     </Label>
                     <ComboBoxAddable
                       items={allBrands}
                       value={formData.brand}
@@ -465,6 +514,11 @@ const DataEntry = () => {
                       onAddNew={handleAddBrand}
                       placeholder="Select or enter farm/brand"
                     />
+                    <p className="text-xs text-gray-500 flex items-center mt-1">
+                       <Info className="w-3 h-3 mr-1" />
+                       This is the name of the farm or brand that grew or supplied the produce. 
+                       Press <b>Enter</b> to select, <b>Ctrl+Enter/Shift+Enter</b> to add new (tap <b>+</b> on mobile).
+                    </p>
                     {errors.brand && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.brand}</p>}
                   </div>
                 </div>
@@ -473,8 +527,8 @@ const DataEntry = () => {
                   {/* Point of Purchase */}
                   <div className="relative">
                     <Label htmlFor="store" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
-                      <Store className="inline w-4 h-4 mr-2" />
-                      Point of Purchase <span className="ml-1 text-red-600">*</span>
+                       <Store className="inline w-4 h-4 mr-2 text-indigo-600" />
+                       Point of Purchase <span className="ml-1 text-red-600">*</span>
                     </Label>
                     <ComboBoxAddable
                       items={allStores}
@@ -483,6 +537,10 @@ const DataEntry = () => {
                       onAddNew={handleAddStore}
                       placeholder="Select or enter store"
                     />
+                    <p className="text-xs text-gray-500 flex items-center mt-1">
+                       <Info className="w-3 h-3 mr-1" />
+                       This is where you bought the item (e.g., grocery store, farmers market, co-op).
+                    </p>
                     {errors.store && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.store}</p>}
                   </div>
 

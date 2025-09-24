@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import { Button } from '../ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '../ui/command';
 import { ChevronsUpDown, Check, PlusCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,50 +22,64 @@ interface ComboBoxAddableProps {
   items: Item[];
   value: string;
   onSelect: (value: string) => void;
-  onAddNew: (newValue: string) => void; // New prop to handle adding a new item
+  onAddNew: (newValue: string) => void;
   placeholder: string;
 }
 
-const ComboBoxAddable: React.FC<ComboBoxAddableProps> = ({ items, value, onSelect, onAddNew, placeholder }) => {
+const ComboBoxAddable: React.FC<ComboBoxAddableProps> = ({
+  items,
+  value,
+  onSelect,
+  onAddNew,
+  placeholder,
+}) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
   const safeItems = Array.isArray(items) ? items : [];
   const selectedItem = safeItems.find((item) => item.name === value);
 
-  // Filter items based on the query
   const filteredItems = query
-    ? safeItems.filter(item => (item.label || item.name).toLowerCase().includes(query.toLowerCase()))
+    ? safeItems.filter((item) =>
+        (item.label || item.name).toLowerCase().includes(query.toLowerCase())
+      )
     : safeItems;
 
-  // Check if the user's query is a new entry
-  const isNewEntry = query.trim() !== '' && !safeItems.some(item => (item.label || item.name).toLowerCase() === query.trim().toLowerCase());
+  const isNewEntry =
+    query.trim() !== '' &&
+    !safeItems.some(
+      (item) =>
+        (item.label || item.name).toLowerCase() === query.trim().toLowerCase()
+    );
 
   const handleSelect = (currentValue: string) => {
     onSelect(currentValue);
     setOpen(false);
-    setQuery(''); // Clear the query after selection
+    setQuery('');
   };
 
   const handleAddNew = () => {
     if (isNewEntry) {
       onAddNew(query.trim());
       setOpen(false);
-      setQuery(''); // Clear the query
+      setQuery('');
     }
   };
 
-  // Handle keyboard events for Enter key
+  // Keyboard handling
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
-      
-      // If there's a filtered item and no exact match, select the first one
-      if (filteredItems.length > 0 && !isNewEntry) {
-        handleSelect(filteredItems[0].name);
-      } else if (isNewEntry) {
-        handleAddNew();
+
+      if (e.ctrlKey || e.shiftKey) {
+        // Ctrl+Enter or Shift+Enter → Add new
+        if (isNewEntry) handleAddNew();
+      } else {
+        // Plain Enter → select highlighted or first in list
+        if (filteredItems.length > 0) {
+          handleSelect(filteredItems[0].name);
+        }
       }
     }
   };
@@ -72,7 +93,9 @@ const ComboBoxAddable: React.FC<ComboBoxAddableProps> = ({ items, value, onSelec
           aria-expanded={open}
           className="w-full justify-between"
         >
-          {selectedItem ? (selectedItem.label || selectedItem.name) : placeholder}
+          {selectedItem
+            ? selectedItem.label || selectedItem.name
+            : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -85,46 +108,56 @@ const ComboBoxAddable: React.FC<ComboBoxAddableProps> = ({ items, value, onSelec
             onKeyDown={handleKeyDown}
           />
           <CommandList>
-            {/* Display a specific message when a new entry can be added */}
+            {filteredItems.length > 0 && (
+              <CommandGroup>
+                {filteredItems.map((item) => (
+                  <CommandItem
+                    key={item.id || item.name}
+                    onSelect={() => handleSelect(item.name)}
+                  >
+                    <Check
+                      className={cn(
+                        'mr-2 h-4 w-4',
+                        value === item.name ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                    {item.label || item.name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
             <CommandEmpty>
               {isNewEntry ? (
-                <div className="p-2 text-sm text-gray-600">
-                  Press <kbd className="px-1 py-0.5 text-xs bg-gray-100 border rounded">Enter</kbd> to add "{query}" or tap the + button below
+                <div className="flex items-center justify-between px-2 py-1 text-sm text-gray-600">
+                  <span>
+                    Press <kbd className="px-1 py-0.5 text-xs bg-gray-100">Ctrl</kbd>
+                    +<kbd className="px-1 py-0.5 text-xs bg-gray-100">Enter</kbd> or use{" "}
+                    <PlusCircle className="inline w-4 h-4 text-blue-600" /> below to
+                    add "{query.trim()}"
+                  </span>
                 </div>
               ) : (
-                "No item found."
+                <div className="p-2 text-sm text-gray-600">No results found</div>
               )}
             </CommandEmpty>
-            <CommandGroup>
-              {filteredItems.map((item) => (
-                <CommandItem
-                  key={item.id || item.name}
-                  value={item.name}
-                  onSelect={(currentValue) => handleSelect(currentValue)}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === item.name ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {item.label || item.name}
-                </CommandItem>
-              ))}
-              {/* Conditional rendering for the "Add New" item - always visible for mobile users */}
-              {isNewEntry && (
-                <CommandItem
-                  value={`add-new-${query}`}
-                  onSelect={handleAddNew}
-                  className="flex items-center text-blue-600 cursor-pointer border-t border-gray-100"
-                >
-                  <PlusCircle className="mr-2 h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">Add New: "{query}"</span>
-                </CommandItem>
-              )}
-            </CommandGroup>
           </CommandList>
         </Command>
+
+        {/* Mobile-friendly "+" button (always visible when new entry possible) */}
+        {isNewEntry && (
+          <div className="border-t px-2 py-2 flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={handleAddNew}
+              className="flex items-center space-x-2"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Add "{query.trim()}"</span>
+            </Button>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
