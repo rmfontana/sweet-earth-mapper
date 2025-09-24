@@ -116,7 +116,7 @@ const DataEntry = () => {
     try {
       const { data, error } = await supabase
         .from('brands')
-        .insert([{ name: newBrandName, is_user_added: true }])
+        .insert([{ name: newBrandName }])
         .select();
 
       if (error) {
@@ -142,7 +142,7 @@ const DataEntry = () => {
     try {
       const { data, error } = await supabase
         .from('locations')
-        .insert([{ name: newStoreName, is_user_added: true }])
+        .insert([{ name: newStoreName }])
         .select();
 
       if (error) {
