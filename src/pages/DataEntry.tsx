@@ -31,6 +31,7 @@ import LocationSearch from '../components/common/LocationSearch';
 import { useStaticData } from '../hooks/useStaticData';
 import { Slider } from '../components/ui/slider';
 
+// unnecessary comment
 interface DetailedLocationInfo {
   name: string;
   latitude: number;
