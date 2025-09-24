@@ -1,32 +1,40 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchCropTypes } from '../lib/fetchCropTypes';
 import { fetchBrands } from '../lib/fetchBrands';
-import { fetchLocations } from '../lib/fetchLocations'; // Updated import
+import { fetchLocations } from '../lib/fetchLocations';
 
+// Interface for a generic database item.
 interface DatabaseItem {
   id: string;
   name: string;
   label?: string;
 }
 
+// Interface for the static data returned by the hook.
+// This now includes a 'refreshData' function.
 interface StaticData {
   crops: DatabaseItem[];
   brands: DatabaseItem[];
-  locations: DatabaseItem[]; // Renamed from 'stores' to 'locations'
+  locations: DatabaseItem[];
   isLoading: boolean;
   error: string | null;
+  refreshData: () => void; // Added the refreshData function to the interface
 }
 
 const initialData = {
   crops: [],
   brands: [],
-  locations: [], // Renamed from 'stores' to 'locations'
+  locations: [],
   isLoading: true,
   error: null,
 };
 
-// Global cache to prevent re-fetching on every component mount
-let staticDataCache: StaticData = { ...initialData };
+// Global cache to prevent re-fetching on every component mount.
+let staticDataCache: StaticData = {
+  ...initialData,
+  // The initial state of the cache needs a no-op refresh function.
+  refreshData: () => { },
+};
 let isFetching = false;
 const subscribers: React.Dispatch<React.SetStateAction<StaticData>>[] = [];
 
@@ -47,7 +55,7 @@ const normalizeToItems = (data: any[], type: string): DatabaseItem[] => {
       return {
         id: String(item.id),
         name: item.name,
-        label: item.label || item.name, // Use label if available, fallback to name
+        label: item.label || item.name,
       };
     }
 
@@ -83,95 +91,94 @@ const normalizeToItems = (data: any[], type: string): DatabaseItem[] => {
 export const useStaticData = (): StaticData => {
   const [data, setData] = useState<StaticData>(staticDataCache);
 
+  // This useCallback function encapsulates the data fetching logic.
+  const fetchData = useCallback(async () => {
+    // This check ensures only one fetch operation runs at a time.
+    if (isFetching) return;
+    isFetching = true;
+
+    try {
+      console.log('Fetching static data...');
+
+      const [cropsResult, brandsResult, locationsResult] = await Promise.all([
+        fetchCropTypes().catch(e => {
+          console.error('Error fetching crops:', e);
+          return [];
+        }),
+        fetchBrands().catch(e => {
+          console.error('Error fetching brands:', e);
+          return [];
+        }),
+        fetchLocations().catch(e => {
+          console.error('Error fetching locations:', e);
+          return [];
+        }),
+      ]);
+
+      console.log('Raw fetched results:', {
+        cropsResult: cropsResult?.slice(0, 3),
+        brandsResult: brandsResult?.slice(0, 3),
+        locationsResult: locationsResult?.slice(0, 3),
+      });
+
+      const formattedCrops = normalizeToItems(cropsResult, 'crop');
+      const formattedBrands = normalizeToItems(brandsResult, 'brand');
+      const formattedLocations = normalizeToItems(locationsResult, 'location');
+
+      console.log('Formatted data:', {
+        formattedCrops: formattedCrops.slice(0, 3),
+        formattedBrands: formattedBrands.slice(0, 3),
+        formattedLocations: formattedLocations.slice(0, 3),
+      });
+
+      // Update the global cache with the new data.
+      staticDataCache = {
+        crops: formattedCrops,
+        brands: formattedBrands,
+        locations: formattedLocations,
+        isLoading: false,
+        error: null,
+        refreshData: fetchData, // Pass the fetchData function to the cache.
+      };
+
+      updateSubscribers(staticDataCache);
+      console.log('Static data cache updated successfully');
+    } catch (e) {
+      console.error('Failed to fetch static data:', e);
+      staticDataCache = {
+        ...staticDataCache,
+        isLoading: false,
+        error: `Failed to load static data: ${e instanceof Error ? e.message : 'Unknown error'}`,
+        refreshData: fetchData, // Pass the fetchData function even on error.
+      };
+      updateSubscribers(staticDataCache);
+    } finally {
+      isFetching = false;
+    }
+  }, []); // Empty dependency array ensures this function is created only once.
+
   useEffect(() => {
-    // Add the current component's state setter to the subscribers list
+    // On mount, subscribe the component to updates.
     subscribers.push(setData);
 
-    // If data is already loaded, update state immediately and return
-    if (!staticDataCache.isLoading) {
+    // If the data is not yet loaded, start the fetch process.
+    if (staticDataCache.isLoading) {
+      fetchData();
+    } else {
+      // If data is already in the cache, update state immediately.
       setData(staticDataCache);
-      return () => {
-        // Cleanup: remove the setter when the component unmounts
-        const index = subscribers.indexOf(setData);
-        if (index > -1) {
-          subscribers.splice(index, 1);
-        }
-      };
     }
 
-    // Only one instance should fetch the data
-    const fetchData = async () => {
-      if (isFetching) return;
-      isFetching = true;
-
-      try {
-        console.log('Fetching static data...');
-
-        const [cropsResult, brandsResult, locationsResult] = await Promise.all([
-          fetchCropTypes().catch(e => {
-            console.error('Error fetching crops:', e);
-            return [];
-          }),
-          fetchBrands().catch(e => {
-            console.error('Error fetching brands:', e);
-            return [];
-          }),
-          fetchLocations().catch(e => {
-            console.error('Error fetching locations:', e); // Updated log message
-            return [];
-          }),
-        ]);
-
-        console.log('Raw fetched results:', {
-          cropsResult: cropsResult?.slice(0, 3), // Log first 3 items for debugging
-          brandsResult: brandsResult?.slice(0, 3),
-          locationsResult: locationsResult?.slice(0, 3), // Updated log name
-        });
-
-        // Normalize all data to consistent format
-        const formattedCrops = normalizeToItems(cropsResult, 'crop');
-        const formattedBrands = normalizeToItems(brandsResult, 'brand');
-        const formattedLocations = normalizeToItems(locationsResult, 'location'); // Corrected type and variable
-
-        console.log('Formatted data:', {
-          formattedCrops: formattedCrops.slice(0, 3),
-          formattedBrands: formattedBrands.slice(0, 3),
-          formattedLocations: formattedLocations.slice(0, 3), // Updated log name
-        });
-
-        staticDataCache = {
-          crops: formattedCrops,
-          brands: formattedBrands,
-          locations: formattedLocations, // Updated key to 'locations'
-          isLoading: false,
-          error: null,
-        };
-
-        updateSubscribers(staticDataCache);
-        console.log('Static data cache updated successfully');
-      } catch (e) {
-        console.error('Failed to fetch static data:', e);
-        staticDataCache = {
-          ...staticDataCache,
-          isLoading: false,
-          error: `Failed to load static data: ${e instanceof Error ? e.message : 'Unknown error'}`,
-        };
-        updateSubscribers(staticDataCache);
-      } finally {
-        isFetching = false;
-      }
-    };
-
-    fetchData();
-
+    // Cleanup: remove the setter when the component unmounts.
     return () => {
-      // Cleanup: remove the setter when the component unmounts
       const index = subscribers.indexOf(setData);
       if (index > -1) {
         subscribers.splice(index, 1);
       }
     };
-  }, []);
+  }, [fetchData]); // Dependency on fetchData ensures the effect has access to the latest function.
 
-  return data;
+  // Return the data object with the fetchData function.
+  // This allows components to trigger a refresh manually.
+  return { ...data, refreshData: fetchData };
 };

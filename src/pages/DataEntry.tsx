@@ -23,7 +23,7 @@ import {
 import { useToast } from '../hooks/use-toast';
 import { supabase } from '../integrations/supabase/client';
 import { getSupabaseUrl, getPublishableKey } from '@/lib/utils';
-import Combobox from '../components/ui/combo-box';
+import ComboBoxAddable from '../components/ui/combo-box-addable';
 import LocationSearch from '../components/common/LocationSearch';
 import { useStaticData } from '../hooks/useStaticData';
 import { Slider } from '../components/ui/slider';
@@ -46,7 +46,8 @@ const DataEntry = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const { crops, brands, locations, isLoading: staticDataLoading, error: staticDataError } = useStaticData();
+  // Assuming useStaticData provides a refresh function to re-fetch data
+  const { crops, brands, locations, isLoading: staticDataLoading, error: staticDataError, refreshData } = useStaticData();
 
   const [formData, setFormData] = useState({
     cropType: '',
@@ -107,6 +108,58 @@ const DataEntry = () => {
     
     if (errors.brixLevel) {
       setErrors(prev => ({ ...prev, brixLevel: '' }));
+    }
+  };
+
+  const handleAddBrand = async (newBrandName: string) => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('brands')
+        .insert([{ name: newBrandName, is_user_added: true }])
+        .select();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data && data.length > 0) {
+        const newBrand = data[0];
+        toast({ title: `Brand "${newBrand.name}" added successfully.` });
+        handleInputChange('brand', newBrand.name);
+        await refreshData();
+      }
+    } catch (err: any) {
+      console.error('Error adding new brand:', err);
+      toast({ title: 'Failed to add new brand.', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddStore = async (newStoreName: string) => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('locations')
+        .insert([{ name: newStoreName, is_user_added: true }])
+        .select();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      if (data && data.length > 0) {
+        const newLocation = data[0];
+        toast({ title: `Store "${newLocation.name}" added successfully.` });
+        handleInputChange('store', newLocation.name);
+        await refreshData();
+      }
+    } catch (err: any) {
+      console.error('Error adding new store:', err);
+      toast({ title: 'Failed to add new store.', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -353,10 +406,11 @@ const DataEntry = () => {
                       <Package className="inline w-4 h-4 mr-2" />
                       Crop Type <span className="ml-1 text-red-600">*</span>
                     </Label>
-                    <Combobox
+                    <ComboBoxAddable
                       items={crops}
                       value={formData.cropType}
                       onSelect={(value) => handleInputChange('cropType', value)}
+                      onAddNew={() => {}} // A crop cannot be added for now
                       placeholder="Select or enter crop type"
                     />
                     {errors.cropType && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.cropType}</p>}
@@ -368,10 +422,11 @@ const DataEntry = () => {
                       <Store className="inline w-4 h-4 mr-2" />
                       Farm/Brand Name <span className="ml-1 text-red-600">*</span>
                     </Label>
-                    <Combobox
+                    <ComboBoxAddable
                       items={brands}
                       value={formData.brand}
                       onSelect={(value) => handleInputChange('brand', value)}
+                      onAddNew={handleAddBrand}
                       placeholder="Select or enter farm/brand"
                     />
                     {errors.brand && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.brand}</p>}
@@ -385,10 +440,11 @@ const DataEntry = () => {
                       <Store className="inline w-4 h-4 mr-2" />
                       Point of Purchase <span className="ml-1 text-red-600">*</span>
                     </Label>
-                    <Combobox
+                    <ComboBoxAddable
                       items={locations}
                       value={formData.store}
                       onSelect={(value) => handleInputChange('store', value)}
+                      onAddNew={handleAddStore}
                       placeholder="Select or enter store"
                     />
                     {errors.store && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.store}</p>}
