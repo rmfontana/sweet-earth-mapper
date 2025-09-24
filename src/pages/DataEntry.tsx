@@ -24,6 +24,7 @@ import { useToast } from '../hooks/use-toast';
 import { supabase } from '../integrations/supabase/client';
 import { getSupabaseUrl, getPublishableKey } from '@/lib/utils';
 import ComboBoxAddable from '../components/ui/combo-box-addable';
+import Combobox from '../components/ui/combo-box'; // Import the regular combo box
 import LocationSearch from '../components/common/LocationSearch';
 import { useStaticData } from '../hooks/useStaticData';
 import { Slider } from '../components/ui/slider';
@@ -74,6 +75,10 @@ const DataEntry = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Track pending additions to prevent database additions before form submission
+  const [pendingBrands, setPendingBrands] = useState<string[]>([]);
+  const [pendingStores, setPendingStores] = useState<string[]>([]);
+
   useEffect(() => {
     if (!user || (user.role !== 'contributor' && user.role !== 'admin')) {
       navigate('/');
@@ -111,56 +116,70 @@ const DataEntry = () => {
     }
   };
 
-  const handleAddBrand = async (newBrandName: string) => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('brands')
-        .insert([{ name: newBrandName }])
-        .select();
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      if (data && data.length > 0) {
-        const newBrand = data[0];
-        toast({ title: `Brand "${newBrand.name}" added successfully.` });
-        handleInputChange('brand', newBrand.name);
-        await refreshData();
-      }
-    } catch (err: any) {
-      console.error('Error adding new brand:', err);
-      toast({ title: 'Failed to add new brand.', description: err.message, variant: 'destructive' });
-    } finally {
-      setIsLoading(false);
+  // Modified brand handler - only adds to pending list
+  const handleAddBrand = (newBrandName: string) => {
+    if (!pendingBrands.includes(newBrandName)) {
+      setPendingBrands(prev => [...prev, newBrandName]);
     }
+    handleInputChange('brand', newBrandName);
   };
 
-  const handleAddStore = async (newStoreName: string) => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('locations')
-        .insert([{ name: newStoreName }])
-        .select();
-
-      if (error) {
-        throw new Error(error.message);
-      }
-      
-      if (data && data.length > 0) {
-        const newLocation = data[0];
-        toast({ title: `Store "${newLocation.name}" added successfully.` });
-        handleInputChange('store', newLocation.name);
-        await refreshData();
-      }
-    } catch (err: any) {
-      console.error('Error adding new store:', err);
-      toast({ title: 'Failed to add new store.', description: err.message, variant: 'destructive' });
-    } finally {
-      setIsLoading(false);
+  // Modified store handler - only adds to pending list
+  const handleAddStore = (newStoreName: string) => {
+    if (!pendingStores.includes(newStoreName)) {
+      setPendingStores(prev => [...prev, newStoreName]);
     }
+    handleInputChange('store', newStoreName);
+  };
+
+  // Helper function to actually create brands and stores in database
+  const createPendingEntries = async () => {
+    const createdBrands = [];
+    const createdStores = [];
+
+    // Create pending brands
+    for (const brandName of pendingBrands) {
+      try {
+        const { data, error } = await supabase
+          .from('brands')
+          .insert([{ name: brandName }])
+          .select();
+
+        if (error) {
+          console.error('Error creating brand:', error);
+          continue;
+        }
+
+        if (data && data.length > 0) {
+          createdBrands.push(data[0]);
+        }
+      } catch (err) {
+        console.error('Error creating brand:', err);
+      }
+    }
+
+    // Create pending stores
+    for (const storeName of pendingStores) {
+      try {
+        const { data, error } = await supabase
+          .from('locations')
+          .insert([{ name: storeName }])
+          .select();
+
+        if (error) {
+          console.error('Error creating store:', error);
+          continue;
+        }
+        
+        if (data && data.length > 0) {
+          createdStores.push(data[0]);
+        }
+      } catch (err) {
+        console.error('Error creating store:', err);
+      }
+    }
+
+    return { createdBrands, createdStores };
   };
 
   const validateFile = (file: File): boolean => {
@@ -251,6 +270,13 @@ const DataEntry = () => {
     setIsLoading(true);
 
     try {
+      // First, create any pending brands and stores in the database
+      await createPendingEntries();
+      
+      // Clear pending lists since we've now created them
+      setPendingBrands([]);
+      setPendingStores([]);
+
       // Prepare the enhanced payload with detailed location information
       const payload = {
         cropName: formData.cropType,
@@ -270,7 +296,7 @@ const DataEntry = () => {
         street_address: formData.street_address || null,
         city: formData.city || null,
         state: formData.state || null,
-        country: formData.country || null,
+        country: formData.country || null, // This should now be properly included
         poi_name: formData.poi_name || null,
         business_name: formData.business_name || null,
         normalized_address: formData.normalized_address || null,
@@ -367,6 +393,17 @@ const DataEntry = () => {
     );
   }
 
+  // Combine existing items with pending items for display
+  const allBrands = [
+    ...brands,
+    ...pendingBrands.map(name => ({ name, label: name }))
+  ];
+
+  const allStores = [
+    ...locations,
+    ...pendingStores.map(name => ({ name, label: name }))
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       <Header />
@@ -400,18 +437,17 @@ const DataEntry = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mb-6 sm:mb-8">
-                  {/* Crop Type */}
+                  {/* Crop Type - Using regular Combobox (no add new) */}
                   <div className="relative">
                     <Label htmlFor="cropType" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
                       <Package className="inline w-4 h-4 mr-2" />
                       Crop Type <span className="ml-1 text-red-600">*</span>
                     </Label>
-                    <ComboBoxAddable
+                    <Combobox
                       items={crops}
                       value={formData.cropType}
                       onSelect={(value) => handleInputChange('cropType', value)}
-                      onAddNew={() => {}} // A crop cannot be added for now
-                      placeholder="Select or enter crop type"
+                      placeholder="Select crop type"
                     />
                     {errors.cropType && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.cropType}</p>}
                   </div>
@@ -423,7 +459,7 @@ const DataEntry = () => {
                       Farm/Brand Name <span className="ml-1 text-red-600">*</span>
                     </Label>
                     <ComboBoxAddable
-                      items={brands}
+                      items={allBrands}
                       value={formData.brand}
                       onSelect={(value) => handleInputChange('brand', value)}
                       onAddNew={handleAddBrand}
@@ -441,7 +477,7 @@ const DataEntry = () => {
                       Point of Purchase <span className="ml-1 text-red-600">*</span>
                     </Label>
                     <ComboBoxAddable
-                      items={locations}
+                      items={allStores}
                       value={formData.store}
                       onSelect={(value) => handleInputChange('store', value)}
                       onAddNew={handleAddStore}

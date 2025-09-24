@@ -39,12 +39,27 @@ const ComboBoxAddable: React.FC<ComboBoxAddableProps> = ({ items, value, onSelec
     setOpen(false);
     setQuery(''); // Clear the query after selection
   };
-  
+
   const handleAddNew = () => {
     if (isNewEntry) {
       onAddNew(query.trim());
       setOpen(false);
       setQuery(''); // Clear the query
+    }
+  };
+
+  // Handle keyboard events for Enter key
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // If there's a filtered item and no exact match, select the first one
+      if (filteredItems.length > 0 && !isNewEntry) {
+        handleSelect(filteredItems[0].name);
+      } else if (isNewEntry) {
+        handleAddNew();
+      }
     }
   };
 
@@ -63,15 +78,22 @@ const ComboBoxAddable: React.FC<ComboBoxAddableProps> = ({ items, value, onSelec
       </PopoverTrigger>
       <PopoverContent className="z-50 w-[300px] p-0 bg-popover">
         <Command>
-          <CommandInput 
-            placeholder={placeholder} 
+          <CommandInput
+            placeholder={placeholder}
             value={query}
             onValueChange={setQuery}
+            onKeyDown={handleKeyDown}
           />
           <CommandList>
             {/* Display a specific message when a new entry can be added */}
             <CommandEmpty>
-              {isNewEntry ? `Type a new entry and press "Enter"` : "No item found."}
+              {isNewEntry ? (
+                <div className="p-2 text-sm text-gray-600">
+                  Press <kbd className="px-1 py-0.5 text-xs bg-gray-100 border rounded">Enter</kbd> to add "{query}" or tap the + button below
+                </div>
+              ) : (
+                "No item found."
+              )}
             </CommandEmpty>
             <CommandGroup>
               {filteredItems.map((item) => (
@@ -89,15 +111,15 @@ const ComboBoxAddable: React.FC<ComboBoxAddableProps> = ({ items, value, onSelec
                   {item.label || item.name}
                 </CommandItem>
               ))}
-              {/* Conditional rendering for the "Add New" item */}
+              {/* Conditional rendering for the "Add New" item - always visible for mobile users */}
               {isNewEntry && (
-                <CommandItem 
-                  value={`add-new-${query}`} 
+                <CommandItem
+                  value={`add-new-${query}`}
                   onSelect={handleAddNew}
-                  className="flex items-center text-blue-600 cursor-pointer"
+                  className="flex items-center text-blue-600 cursor-pointer border-t border-gray-100"
                 >
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add New: "{query}"
+                  <PlusCircle className="mr-2 h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">Add New: "{query}"</span>
                 </CommandItem>
               )}
             </CommandGroup>
