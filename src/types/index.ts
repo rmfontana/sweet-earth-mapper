@@ -118,4 +118,7 @@ export interface MapFilter {
   hasImage: boolean;
   category: string;
   location: string; // Store/location name
+  city?: string; // Geographic city filter
+  state?: string; // Geographic state filter
+  country?: string; // Geographic country filter
 }

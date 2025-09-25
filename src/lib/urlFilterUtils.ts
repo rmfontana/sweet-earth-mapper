@@ -34,14 +34,19 @@ export const parseURLSearchParams = (searchParams: URLSearchParams): Partial<Map
   const submittedBy = searchParams.get('submittedBy');
   if (submittedBy) filters.submittedBy = submittedBy;
 
-  // Parse location (city, state, country into location field)
+  // Parse individual location components
   const city = searchParams.get('city');
+  if (city) filters.city = city;
+
   const state = searchParams.get('state');
+  if (state) filters.state = state;
+
   const country = searchParams.get('country');
-  if (city || state || country) {
-    const locationParts = [city, state, country].filter(Boolean);
-    filters.location = locationParts.join(', ');
-  }
+  if (country) filters.country = country;
+
+  // Parse generic location (for store/location names)
+  const location = searchParams.get('location');
+  if (location) filters.location = location;
 
   // Parse brix range
   const brixMin = searchParams.get('brixMin');
@@ -54,6 +59,7 @@ export const parseURLSearchParams = (searchParams: URLSearchParams): Partial<Map
     }
   }
 
+  console.log('Parsed URL filters:', filters);
   return filters;
 };
 
@@ -73,5 +79,9 @@ export const mergeFiltersWithDefaults = (urlFilters: Partial<MapFilter>): MapFil
   return {
     ...DEFAULT_MAP_FILTERS,
     ...urlFilters,
+    // Ensure geographic filters are properly handled
+    city: urlFilters.city || DEFAULT_MAP_FILTERS.city || '',
+    state: urlFilters.state || DEFAULT_MAP_FILTERS.state || '',
+    country: urlFilters.country || DEFAULT_MAP_FILTERS.country || '',
   };
 };

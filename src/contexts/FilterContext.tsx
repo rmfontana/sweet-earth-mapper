@@ -13,6 +13,9 @@ export const DEFAULT_MAP_FILTERS: MapFilter = {
   hasImage: false,
   category: '',
   location: '',
+  city: '',
+  state: '',
+  country: '',
 };
 
 interface FilterContextType {

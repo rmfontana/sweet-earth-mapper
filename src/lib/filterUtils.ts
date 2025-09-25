@@ -90,6 +90,22 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
       return false;
     }
 
+    // Geographic location filters
+    // City filter
+    if (filters.city && filters.city !== DEFAULT_MAP_FILTERS.city && point.city.toLowerCase() !== filters.city.toLowerCase()) {
+      return false;
+    }
+
+    // State filter
+    if (filters.state && filters.state !== DEFAULT_MAP_FILTERS.state && point.state.toLowerCase() !== filters.state.toLowerCase()) {
+      return false;
+    }
+
+    // Country filter
+    if (filters.country && filters.country !== DEFAULT_MAP_FILTERS.country && point.country.toLowerCase() !== filters.country.toLowerCase()) {
+      return false;
+    }
+
     return true;
   });
 
@@ -152,6 +168,21 @@ export function getFilterSummary(filters: MapFilter, isAdmin: boolean): string {
   
   if (filters.submittedBy && filters.submittedBy !== DEFAULT_MAP_FILTERS.submittedBy) {
     activeFilters.push(`by: ${filters.submittedBy}`);
+  }
+
+  // Geographic location filters
+  const locationParts: string[] = [];
+  if (filters.city && filters.city !== DEFAULT_MAP_FILTERS.city) {
+    locationParts.push(filters.city);
+  }
+  if (filters.state && filters.state !== DEFAULT_MAP_FILTERS.state) {
+    locationParts.push(filters.state);
+  }
+  if (filters.country && filters.country !== DEFAULT_MAP_FILTERS.country) {
+    locationParts.push(filters.country);
+  }
+  if (locationParts.length > 0) {
+    activeFilters.push(`location: ${locationParts.join(', ')}`);
   }
 
   return activeFilters.length > 0 ? activeFilters.join(', ') : 'No active filters';
