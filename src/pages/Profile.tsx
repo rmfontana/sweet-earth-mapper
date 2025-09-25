@@ -6,9 +6,10 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Award } from 'lucide-react';
+import { Award, ArrowLeft } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 import LocationSelector from '../components/common/LocationSelector';
+import Header from '../components/Layout/Header';
 
 interface LocationData {
   country: string;
@@ -90,10 +91,24 @@ const Profile = () => {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="text-center">
+    <div className="min-h-screen bg-background">
+      <Header />
+      <div className="py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-3xl mx-auto space-y-8">
+          {/* Back Button */}
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-2 hover:bg-accent"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+          </div>
+          
+          {/* Header */}
+          <div className="text-center">
           <div className="flex justify-center mb-4">
             <div className="h-20 w-20 rounded-full bg-green-200 flex items-center justify-center text-3xl font-bold">
               {displayName?.[0]?.toUpperCase() || 'U'}
@@ -226,6 +241,7 @@ const Profile = () => {
             </Button>
           </CardContent>
         </Card>
+        </div>
       </div>
     </div>
   );

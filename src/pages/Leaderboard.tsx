@@ -154,6 +154,7 @@ const LeaderboardPage: React.FC = () => {
 
         // Always fetch users globally (ignore location filters)
         let users = await fetchUserLeaderboard({ crop: filters.crop || undefined });
+        console.log('User leaderboard data:', users, 'with filters:', { crop: filters.crop || undefined });
 
         // fallback: broaden scope if locations and brands have nothing found
         if (
