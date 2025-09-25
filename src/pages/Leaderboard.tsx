@@ -152,21 +152,33 @@ const LeaderboardPage: React.FC = () => {
           fetchUserLeaderboard(filters),
         ]);
 
-        // fallback: broaden scope if nothing found
+        // For users, try global data first if regional data is sparse
+        if (mounted && !users.length && (filters.city || filters.state || filters.country)) {
+          const globalUsers = await fetchUserLeaderboard({ crop: filters.crop });
+          if (globalUsers.length) {
+            users = globalUsers;
+          }
+        }
+
+        // fallback: broaden scope if locations and brands have nothing found
         if (
           mounted &&
           !loc.length &&
           !brand.length &&
-          !users.length &&
           filters.city
         ) {
           filters = { ...filters, city: undefined };
-          [loc, brand, users] = await Promise.all([
+          const [newLoc, newBrand] = await Promise.all([
             fetchLocationLeaderboard(filters),
             fetchBrandLeaderboard(filters),
-            fetchUserLeaderboard(filters),
           ]);
-          if (loc.length || brand.length || users.length) {
+          loc = newLoc;
+          brand = newBrand;
+          // Keep global users if we already have them
+          if (!users.length) {
+            users = await fetchUserLeaderboard(filters);
+          }
+          if (loc.length || brand.length) {
             setDataScopeMessage(
               `Showing state-level data for ${filters.state}, ${filters.country} (no data for ${location.city})`
             );
@@ -177,30 +189,39 @@ const LeaderboardPage: React.FC = () => {
           mounted &&
           !loc.length &&
           !brand.length &&
-          !users.length &&
           filters.state
         ) {
           filters = { ...filters, state: undefined };
-          [loc, brand, users] = await Promise.all([
+          const [newLoc, newBrand] = await Promise.all([
             fetchLocationLeaderboard(filters),
             fetchBrandLeaderboard(filters),
-            fetchUserLeaderboard(filters),
           ]);
-          if (loc.length || brand.length || users.length) {
+          loc = newLoc;
+          brand = newBrand;
+          // Keep global users if we already have them
+          if (!users.length) {
+            users = await fetchUserLeaderboard(filters);
+          }
+          if (loc.length || brand.length) {
             setDataScopeMessage(
               `Showing country-level data for ${filters.country} (no data for ${location.state})`
             );
           }
         }
 
-        if (mounted && !loc.length && !brand.length && !users.length) {
+        if (mounted && !loc.length && !brand.length) {
           filters = { country: undefined, state: undefined, city: undefined, crop };
-          [loc, brand, users] = await Promise.all([
+          const [newLoc, newBrand] = await Promise.all([
             fetchLocationLeaderboard(filters),
             fetchBrandLeaderboard(filters),
-            fetchUserLeaderboard(filters),
           ]);
-          if (loc.length || brand.length || users.length) {
+          loc = newLoc;
+          brand = newBrand;
+          // Keep global users if we already have them
+          if (!users.length) {
+            users = await fetchUserLeaderboard(filters);
+          }
+          if (loc.length || brand.length) {
             setDataScopeMessage("Showing global data (no regional data found)");
           }
         }
@@ -279,7 +300,9 @@ const LeaderboardPage: React.FC = () => {
                 <span className="text-left">
                   {labelKey === "location" ? "Store" : "Name"}
                 </span>
-                <span className="text-center">Score</span>
+                <span className="text-center">
+                  {labelKey === "user" ? "Submissions" : "Score"}
+                </span>
                 <span className="text-center">Rank</span>
               </div>
 
@@ -341,9 +364,12 @@ const LeaderboardPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Middle: Neutral Score */}
+                      {/* Middle: Score or Submissions */}
                       <div className="text-center text-gray-800 text-sm">
-                        {Number(normalizedScore ?? 0).toFixed(2)}
+                        {labelKey === "user" 
+                          ? entry.submission_count ?? 0 
+                          : Number(normalizedScore ?? 0).toFixed(2)
+                        }
                       </div>
 
                       {/* Right: Rank */}
@@ -453,7 +479,7 @@ const LeaderboardPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {renderLeaderboardCard("Top Locations", locationData, "location")}
               {renderLeaderboardCard("Top Brands", brandData, "brand")}
-              {renderLeaderboardCard("Top Users", userData, "user")}
+              {renderLeaderboardCard("Most Submissions", userData, "user")}
             </div>
           </section>
         </div>
