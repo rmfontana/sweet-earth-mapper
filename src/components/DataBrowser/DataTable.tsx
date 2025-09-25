@@ -1,7 +1,7 @@
 // src/components/DataBrowser/DataTable.tsx
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { BrixDataPoint, MapFilter } from '../../types';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
@@ -114,6 +114,7 @@ const DataTable: React.FC = () => {
   const { filters, setFilters, isAdmin, setFilteredCount } = useFilters();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [urlFiltersApplied, setUrlFiltersApplied] = useState(false);
 
   // Corrected destructuring: useStaticData hook returns 'locations' not 'stores'.
@@ -358,7 +359,7 @@ const DataTable: React.FC = () => {
               size="sm" 
               onClick={() => {
                 setFromLeaderboard(false);
-                window.history.back();
+                navigate('/leaderboard');
               }}
               className="text-blue-600 hover:text-blue-800"
             >

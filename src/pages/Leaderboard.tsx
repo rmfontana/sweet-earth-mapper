@@ -50,6 +50,7 @@ const LeaderboardPage: React.FC = () => {
   const [locationData, setLocationData] = useState<LeaderboardEntry[]>([]);
   const [brandData, setBrandData] = useState<LeaderboardEntry[]>([]);
   const [userData, setUserData] = useState<LeaderboardEntry[]>([]);
+  const [brandScope, setBrandScope] = useState<'city' | 'state' | 'country' | 'global'>('city');
   const [loading, setLoading] = useState<boolean>(false);
 
   // Computed loading state for full page
@@ -145,6 +146,7 @@ const LeaderboardPage: React.FC = () => {
           city: location.city || undefined,
           crop,
         };
+        let scope: 'city' | 'state' | 'country' | 'global' = 'city';
 
         // Fetch location and brand data with regional filters
         let [loc, brand] = await Promise.all([
@@ -163,6 +165,7 @@ const LeaderboardPage: React.FC = () => {
           filters.city
         ) {
           filters = { ...filters, city: undefined };
+          scope = 'state';
           const [newLoc, newBrand] = await Promise.all([
             fetchLocationLeaderboard(filters),
             fetchBrandLeaderboard(filters),
@@ -184,6 +187,7 @@ const LeaderboardPage: React.FC = () => {
           filters.state
         ) {
           filters = { ...filters, state: undefined };
+          scope = 'country';
           const [newLoc, newBrand] = await Promise.all([
             fetchLocationLeaderboard(filters),
             fetchBrandLeaderboard(filters),
@@ -200,6 +204,7 @@ const LeaderboardPage: React.FC = () => {
 
         if (mounted && !loc.length && !brand.length) {
           filters = { country: undefined, state: undefined, city: undefined, crop };
+          scope = 'global';
           const [newLoc, newBrand] = await Promise.all([
             fetchLocationLeaderboard(filters),
             fetchBrandLeaderboard(filters),
@@ -216,6 +221,7 @@ const LeaderboardPage: React.FC = () => {
           setLocationData(loc || []);
           setBrandData(brand || []);
           setUserData(users || []);
+          setBrandScope(scope);
         }
       } catch (err) {
         console.error("Error loading leaderboards:", err);
@@ -256,10 +262,25 @@ const LeaderboardPage: React.FC = () => {
       if (brandName) filters.brand = brandName;
       if (crop) filters.crop = crop;
       
-      // Include current location context to show brand only in this area
-      if (location?.country) filters.country = location.country;
-      if (location?.state) filters.state = location.state;
-      if (location?.city) filters.city = location.city;
+      // Scope-aware geographic filters based on the breadth we fetched
+      switch (brandScope) {
+        case 'city':
+          if (location?.country) filters.country = location.country;
+          if (location?.state) filters.state = location.state;
+          if (location?.city) filters.city = location.city;
+          break;
+        case 'state':
+          if (location?.country) filters.country = location.country;
+          if (location?.state) filters.state = location.state;
+          break;
+        case 'country':
+          if (location?.country) filters.country = location.country;
+          break;
+        case 'global':
+        default:
+          // No geo filters
+          break;
+      }
     }
     
     console.log('🎯 Navigation filters being set:', filters);
