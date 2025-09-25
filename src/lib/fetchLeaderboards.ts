@@ -38,11 +38,19 @@ async function fetchLeaderboard<R extends LeaderboardEntry>(
   const { city, state, country, crop } = filters;
   console.log(`🔍 Fetching ${rpcName} with filters:`, { city, state, country, crop });
 
+  // Sanitize filters - treat "All countries" and similar values as null
+  const sanitizeFilter = (value?: string) => {
+    if (!value || value === "All countries" || value === "All states" || value === "All cities") {
+      return null;
+    }
+    return value;
+  };
+
   const params = {
-    country_filter: country || null,
-    state_filter: state || null,
-    city_filter: city || null,
-    crop_filter: crop || null,
+    country_filter: sanitizeFilter(country),
+    state_filter: sanitizeFilter(state),
+    city_filter: sanitizeFilter(city),
+    crop_filter: sanitizeFilter(crop),
   };
 
   try {

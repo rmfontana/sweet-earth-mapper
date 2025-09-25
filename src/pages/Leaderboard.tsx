@@ -308,27 +308,34 @@ const LeaderboardPage: React.FC = () => {
 
               {/* Rows */}
               <div>
-                {data.map((entry, idx) => {
-                  const label =
-                    (entry as any)[`${labelKey}_label`] ||
-                    (entry as any)[`${labelKey}_name`] ||
-                    (entry as any).user_name ||
-                    "Unknown";
+                {(() => {
+                  // Create a map of ranks to count how many entries have that rank
+                  const rankCounts = data.reduce((acc, entry) => {
+                    const rank = entry.rank ?? 0;
+                    acc[rank] = (acc[rank] || 0) + 1;
+                    return acc;
+                  }, {} as Record<number, number>);
 
-                  const score = entry.average_normalized_score ?? null;
-                  const normalizedScore =
-                    typeof score === "number"
-                      ? score
-                      : (() => {
-                          const avgBrix = entry.average_brix;
-                          return typeof avgBrix === "number"
-                            ? computeNormalizedScore(avgBrix)
-                            : 1.5;
-                        })();
+                  return data.map((entry, idx) => {
+                    const label =
+                      (entry as any)[`${labelKey}_label`] ||
+                      (entry as any)[`${labelKey}_name`] ||
+                      (entry as any).user_name ||
+                      "Unknown";
 
-                  const rank = entry.rank ?? idx + 1;
-                  const prevRank = idx > 0 ? data[idx - 1].rank ?? idx : null;
-                  const isTie = prevRank !== null && prevRank === rank;
+                    const score = entry.average_normalized_score ?? null;
+                    const normalizedScore =
+                      typeof score === "number"
+                        ? score
+                        : (() => {
+                            const avgBrix = entry.average_brix;
+                            return typeof avgBrix === "number"
+                              ? computeNormalizedScore(avgBrix)
+                              : 1.5;
+                          })();
+
+                    const rank = entry.rank ?? idx + 1;
+                    const isTie = rankCounts[rank] > 1;
 
                   const { bgClass } = rankColorFromNormalized(normalizedScore);
 
@@ -377,7 +384,7 @@ const LeaderboardPage: React.FC = () => {
                         <span
                           className={`px-3 py-1 text-sm font-semibold rounded-full text-white ${bgClass}`}
                         >
-                          {rank}
+                          {rank}{isTie ? ' (tie)' : ''}
                         </span>
                         {isTie && (
                           <span className="text-xs text-gray-500 mt-1">
@@ -386,8 +393,9 @@ const LeaderboardPage: React.FC = () => {
                         )}
                       </div>
                     </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}
