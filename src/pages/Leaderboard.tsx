@@ -224,15 +224,17 @@ const LeaderboardPage: React.FC = () => {
     const filters: Record<string, string> = {};
     
     if (leaderboardType === 'location') {
-      // For location leaderboard, use place name and location context
-      if (entry.place_name) filters.place = entry.place_name;
+      // For location leaderboard, use location_label/location_name for store chain
+      const placeName = entry.location_label || entry.location_name || entry.place_label || entry.place_name;
+      if (placeName) filters.place = placeName;
       if (entry.city) filters.city = entry.city;
       if (entry.state) filters.state = entry.state;
       if (entry.country) filters.country = entry.country;
       if (crop) filters.crop = crop;
     } else if (leaderboardType === 'brand') {
-      // For brand leaderboard, use brand name and location context
-      if (entry.brand_name) filters.brand = entry.brand_name;
+      // For brand leaderboard, use brand_label/brand_name
+      const brandName = entry.brand_label || entry.brand_name;
+      if (brandName) filters.brand = brandName;
       if (crop) filters.crop = crop;
       if (location?.country) filters.country = location.country;
       if (location?.state) filters.state = location.state;

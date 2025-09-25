@@ -289,13 +289,13 @@ const DataTable: React.FC = () => {
 
   const filteredBrands = useMemo(() =>
     brands.filter(brand =>
-      brand.name.toLowerCase().includes(brandQuery.toLowerCase())
+      (brand.label || brand.name).toLowerCase().includes(brandQuery.toLowerCase())
     ), [brands, brandQuery]);
 
   // Refactored memoized filter from `filteredStores` to `filteredLocations`
   const filteredLocations = useMemo(() =>
     locations.filter(location =>
-      location.name.toLowerCase().includes(locationQuery.toLowerCase())
+      (location.label || location.name).toLowerCase().includes(locationQuery.toLowerCase())
     ), [locations, locationQuery]);
 
   const filteredCrops = useMemo(() =>
@@ -532,16 +532,17 @@ const DataTable: React.FC = () => {
                       {filteredBrands.map((brand) => (
                         <CommandItem
                           key={brand.id}
-                          onSelect={() => {
-                            handleFilterChange('brand', brand.name === filters.brand ? '' : brand.name);
-                            setBrandQuery('');
-                          }}
+                           onSelect={() => {
+                             const brandValue = brand.label || brand.name;
+                             handleFilterChange('brand', brandValue === filters.brand ? '' : brandValue);
+                             setBrandQuery('');
+                           }}
                           aria-selected={filters.brand === brand.name}
                           role="option"
                           className="flex justify-between items-center"
                         >
-                          <span>{brand.name}</span>
-                          {filters.brand === brand.name && <Check className="h-4 w-4" />}
+                           <span>{brand.label || brand.name}</span>
+                           {filters.brand === (brand.label || brand.name) && <Check className="h-4 w-4" />}
                         </CommandItem>
                       ))}
                     </CommandList>
@@ -577,16 +578,17 @@ const DataTable: React.FC = () => {
                       {filteredLocations.map((location) => (
                         <CommandItem
                           key={location.id}
-                          onSelect={() => {
-                            handleFilterChange('place', location.name === filters.place ? '' : location.name);
-                            setLocationQuery('');
-                          }}
+                           onSelect={() => {
+                             const locationValue = location.label || location.name;
+                             handleFilterChange('place', locationValue === filters.place ? '' : locationValue);
+                             setLocationQuery('');
+                           }}
                           aria-selected={filters.place === location.name}
                           role="option"
                           className="flex justify-between items-center"
                         >
-                          <span>{location.name}</span>
-                          {filters.place === location.name && <Check className="h-4 w-4" />}
+                           <span>{location.label || location.name}</span>
+                           {filters.place === (location.label || location.name) && <Check className="h-4 w-4" />}
                         </CommandItem>
                       ))}
                     </CommandList>

@@ -47,6 +47,9 @@ export const parseURLSearchParams = (searchParams: URLSearchParams): Partial<Map
   // Parse generic location (for store/location names)
   const location = searchParams.get('location');
   if (location) filters.location = location;
+  
+  // If location is set but place is not, use location as place (backward compatibility)
+  if (location && !place) filters.place = location;
 
   // Parse brix range
   const brixMin = searchParams.get('brixMin');

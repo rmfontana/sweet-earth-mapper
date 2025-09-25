@@ -35,20 +35,20 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
       return false;
     }
 
-    // Brand filter - map filters.brand to point.brandName
-    // Check if a brand is set AND it's different from the default (empty string)
+    // Brand filter - case-insensitive comparison with point.brandName
     if (filters.brand && filters.brand !== DEFAULT_MAP_FILTERS.brand) {
       console.log('Filtering by brand:', filters.brand, 'vs point.brandName:', point.brandName);
-      if (point.brandName !== filters.brand) {
+      if (!point.brandName || point.brandName.toLowerCase() !== filters.brand.toLowerCase()) {
         return false;
       }
     }
 
-    // Place filter - map filters.place to point.placeName
-    // Check if a place is set AND it's different from the default (empty string)
+    // Place filter - match against locationName (store chain) or placeName (specific location)
     if (filters.place && filters.place !== DEFAULT_MAP_FILTERS.place) {
-      console.log('Filtering by place:', filters.place, 'vs point.placeName:', point.placeName);
-      if (point.placeName !== filters.place) {
+      console.log('Filtering by place:', filters.place, 'vs point.locationName:', point.locationName, 'point.placeName:', point.placeName);
+      const placeMatches = (point.locationName && point.locationName.toLowerCase() === filters.place.toLowerCase()) ||
+                          (point.placeName && point.placeName.toLowerCase() === filters.place.toLowerCase());
+      if (!placeMatches) {
         return false;
       }
     }
