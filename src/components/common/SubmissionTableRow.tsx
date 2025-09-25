@@ -76,16 +76,35 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
             <MapPin className="w-4 h-4 text-gray-500 flex-shrink-0" />
             <span className="font-medium">{submission.locationName}</span>
           </div>
-          {(submission.city || submission.state || submission.country) && (
-            <div className="text-xs text-gray-600 ml-5">
-              {[submission.city, submission.state, submission.country].filter(Boolean).join(', ')}
-            </div>
-          )}
-          {submission.streetAddress && (
-            <div className="text-xs text-gray-500 ml-5 truncate" title={submission.streetAddress}>
-              {submission.streetAddress}
-            </div>
-          )}
+          {/* Smart address display logic */}
+          {(() => {
+            const { streetAddress, city, state, country } = submission;
+            
+            // If street address exists and already contains city/state info, use it as-is
+            if (streetAddress && (
+              (city && streetAddress.toLowerCase().includes(city.toLowerCase())) ||
+              (state && streetAddress.toLowerCase().includes(state.toLowerCase()))
+            )) {
+              return (
+                <div className="text-xs text-gray-600 ml-5 truncate" title={streetAddress}>
+                  {streetAddress}
+                </div>
+              );
+            }
+            
+            // Otherwise, build address from components
+            const addressParts = [streetAddress, city, state, country].filter(Boolean);
+            if (addressParts.length > 0) {
+              const fullAddress = addressParts.join(', ');
+              return (
+                <div className="text-xs text-gray-600 ml-5 truncate" title={fullAddress}>
+                  {fullAddress}
+                </div>
+              );
+            }
+            
+            return null;
+          })()}
         </div>
         {submission.outlier_notes && (
           <div className="flex items-center space-x-1 text-xs text-gray-500 mt-2 line-clamp-2">

@@ -35,10 +35,10 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
       return false;
     }
 
-    // Brand filter - case-insensitive comparison with point.brandName
+    // Brand filter - case-insensitive comparison with point.brandName - use includes for partial matching
     if (filters.brand && filters.brand !== DEFAULT_MAP_FILTERS.brand) {
       console.log('Filtering by brand:', filters.brand, 'vs point.brandName:', point.brandName);
-      if (!point.brandName || point.brandName.toLowerCase() !== filters.brand.toLowerCase()) {
+      if (!point.brandName || !point.brandName.toLowerCase().includes(filters.brand.toLowerCase())) {
         return false;
       }
     }
@@ -46,9 +46,19 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
     // Place filter - match against locationName (store chain) or placeName (specific location)
     if (filters.place && filters.place !== DEFAULT_MAP_FILTERS.place) {
       console.log('Filtering by place:', filters.place, 'vs point.locationName:', point.locationName, 'point.placeName:', point.placeName);
-      const placeMatches = (point.locationName && point.locationName.toLowerCase() === filters.place.toLowerCase()) ||
-                          (point.placeName && point.placeName.toLowerCase() === filters.place.toLowerCase());
+      const placeMatches = (point.locationName && point.locationName.toLowerCase().includes(filters.place.toLowerCase())) ||
+                          (point.placeName && point.placeName.toLowerCase().includes(filters.place.toLowerCase()));
       if (!placeMatches) {
+        return false;
+      }
+    }
+
+    // Location filter - for backward compatibility, same as place filter
+    if (filters.location && filters.location !== DEFAULT_MAP_FILTERS.location) {
+      console.log('Filtering by location:', filters.location, 'vs point.locationName:', point.locationName, 'point.placeName:', point.placeName);
+      const locationMatches = (point.locationName && point.locationName.toLowerCase().includes(filters.location.toLowerCase())) ||
+                             (point.placeName && point.placeName.toLowerCase().includes(filters.location.toLowerCase()));
+      if (!locationMatches) {
         return false;
       }
     }
