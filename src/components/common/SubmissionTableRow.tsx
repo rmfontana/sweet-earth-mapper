@@ -71,12 +71,24 @@ const SubmissionTableRow: React.FC<SubmissionTableRowProps> = ({ submission, onD
 
       {/* Location / Notes Cell */}
       <TableCell className="py-3 px-4 break-words">
-        <div className="flex items-center space-x-1 text-sm text-gray-700">
-          <MapPin className="w-4 h-4 text-gray-500" />
-          <span>{submission.locationName}</span>
+        <div className="space-y-1">
+          <div className="flex items-center space-x-1 text-sm text-gray-700">
+            <MapPin className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            <span className="font-medium">{submission.locationName}</span>
+          </div>
+          {(submission.city || submission.state || submission.country) && (
+            <div className="text-xs text-gray-600 ml-5">
+              {[submission.city, submission.state, submission.country].filter(Boolean).join(', ')}
+            </div>
+          )}
+          {submission.streetAddress && (
+            <div className="text-xs text-gray-500 ml-5 truncate" title={submission.streetAddress}>
+              {submission.streetAddress}
+            </div>
+          )}
         </div>
         {submission.outlier_notes && (
-          <div className="flex items-center space-x-1 text-xs text-gray-500 mt-1 line-clamp-2">
+          <div className="flex items-center space-x-1 text-xs text-gray-500 mt-2 line-clamp-2">
             <MessageSquare className="w-3 h-3 flex-shrink-0 text-gray-400" />
             <span className="truncate">{submission.outlier_notes}</span>
           </div>

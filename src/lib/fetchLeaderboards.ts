@@ -95,7 +95,7 @@ export async function fetchLocationLeaderboard(filters: Filter = {}) {
 }
 
 export async function fetchUserLeaderboard(filters: Filter = {}) {
-  return await fetchLeaderboard('get_user_leaderboard', filters);
+  return await fetchLeaderboard('get_user_leaderboard_safe', filters);
 }
 
 // Utility function for debugging in browser console

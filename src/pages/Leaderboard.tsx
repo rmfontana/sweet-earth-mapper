@@ -154,7 +154,6 @@ const LeaderboardPage: React.FC = () => {
 
         // Always fetch users globally (ignore location filters)
         let users = await fetchUserLeaderboard({ crop: filters.crop || undefined });
-        console.log('User leaderboard data:', users, 'with filters:', { crop: filters.crop || undefined });
 
         // fallback: broaden scope if locations and brands have nothing found
         if (
@@ -240,18 +239,19 @@ const LeaderboardPage: React.FC = () => {
     const filters: Record<string, string> = {};
     
     if (leaderboardType === 'location') {
-      // For location leaderboard, use location_label/location_name for store chain
-      const placeName = entry.location_label || entry.location_name || entry.place_label || entry.place_name;
-      if (placeName) filters.place = placeName;
+      // For location leaderboard, use the location_id to filter by specific location
+      // Pass both the location and place info for precise filtering
+      if (entry.location_id) filters.location = entry.location_name || entry.location_label;
       if (entry.city) filters.city = entry.city;
       if (entry.state) filters.state = entry.state;
       if (entry.country) filters.country = entry.country;
       if (crop) filters.crop = crop;
     } else if (leaderboardType === 'brand') {
-      // For brand leaderboard, use brand_label/brand_name
+      // For brand leaderboard, use brand name and current geographic filters
       const brandName = entry.brand_label || entry.brand_name;
       if (brandName) filters.brand = brandName;
       if (crop) filters.crop = crop;
+      // Include current location context to show brand only in this area
       if (location?.country) filters.country = location.country;
       if (location?.state) filters.state = location.state;
       if (location?.city) filters.city = location.city;
