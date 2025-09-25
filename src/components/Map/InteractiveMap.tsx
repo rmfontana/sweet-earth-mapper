@@ -1,5 +1,5 @@
 // src/components/Map/InteractiveMap.tsx
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { BrixDataPoint } from '../../types';
@@ -111,6 +111,74 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
       setMobileSheetOpen(true);
     }
   }, [selectedPoint]);
+
+  // Base dataset for the selected place (uses filteredData for consistency with map)
+  const selectedPlaceId = useMemo(() => {
+    if (!selectedPoint) return null;
+    return (selectedPoint as any).placeId ?? (selectedPoint as any).place_id ?? null;
+  }, [selectedPoint]);
+
+  const placeSubmissions = useMemo(() => {
+    if (!selectedPlaceId) return [] as BrixDataPoint[];
+    return filteredData.filter((d) => ((d as any).placeId ?? (d as any).place_id) === selectedPlaceId);
+  }, [filteredData, selectedPlaceId]);
+
+  type LocalRankEntry = {
+    label: string;
+    submission_count: number;
+    average_normalized_score: number;
+  };
+
+  const placeCropRankings: LocalRankEntry[] = useMemo(() => {
+    const groups = new Map<string, { total: number; count: number }>();
+    for (const sub of placeSubmissions) {
+      const cropKey = (sub.cropLabel ?? sub.cropType ?? (sub as any).crop_name ?? 'Unknown').toString();
+      const thresholds = cache?.[cropKey] ?? null;
+      const brixVal = sub.brixLevel ?? (sub as any).brix_value;
+      if (typeof brixVal === 'number' && !isNaN(brixVal)) {
+        const norm = computeNormalizedScore(brixVal, thresholds, minBrix, maxBrix);
+        const g = groups.get(cropKey) || { total: 0, count: 0 };
+        g.total += norm;
+        g.count += 1;
+        groups.set(cropKey, g);
+      } else {
+        const g = groups.get(cropKey) || { total: 0, count: 0 };
+        groups.set(cropKey, g);
+      }
+    }
+    const out: LocalRankEntry[] = [];
+    for (const [label, g] of groups.entries()) {
+      out.push({ label, submission_count: g.count, average_normalized_score: g.count ? g.total / g.count : 1.5 });
+    }
+    out.sort((a, b) => b.average_normalized_score - a.average_normalized_score);
+    return out;
+  }, [placeSubmissions, cache, minBrix, maxBrix]);
+
+  const placeBrandRankings: LocalRankEntry[] = useMemo(() => {
+    const groups = new Map<string, { total: number; count: number }>();
+    for (const sub of placeSubmissions) {
+      const brandKey = (sub.brandLabel ?? sub.brandName ?? (sub as any).brand_name ?? 'Unknown').toString();
+      const cropKey = (sub.cropLabel ?? sub.cropType ?? (sub as any).crop_name ?? 'Unknown').toString();
+      const thresholds = cache?.[cropKey] ?? null;
+      const brixVal = sub.brixLevel ?? (sub as any).brix_value;
+      if (typeof brixVal === 'number' && !isNaN(brixVal)) {
+        const norm = computeNormalizedScore(brixVal, thresholds, minBrix, maxBrix);
+        const g = groups.get(brandKey) || { total: 0, count: 0 };
+        g.total += norm;
+        g.count += 1;
+        groups.set(brandKey, g);
+      } else {
+        const g = groups.get(brandKey) || { total: 0, count: 0 };
+        groups.set(brandKey, g);
+      }
+    }
+    const out: LocalRankEntry[] = [];
+    for (const [label, g] of groups.entries()) {
+      out.push({ label, submission_count: g.count, average_normalized_score: g.count ? g.total / g.count : 1.5 });
+    }
+    out.sort((a, b) => b.average_normalized_score - a.average_normalized_score);
+    return out;
+  }, [placeSubmissions, cache, minBrix, maxBrix]);
 
   // compute min/max Brix
   useEffect(() => {
@@ -379,13 +447,11 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const renderDetailedSubmissions = () => {
     if (!selectedEntry || !selectedPoint) return null;
 
-    const placeIdVal = (selectedPoint as any).placeId ?? (selectedPoint as any).place_id;
-    const filteredSubmissions = allData
-      .filter((d) => {
-        const pid = (d as any).placeId ?? (d as any).place_id;
-        return pid === placeIdVal;
-      })
-      .filter((d) => (selectedEntry.type === 'crop' ? (d.cropLabel ?? d.cropType) === selectedEntry.label : (d.brandLabel ?? d.brandName) === selectedEntry.label));
+    const filteredSubmissions = placeSubmissions.filter((d) =>
+      selectedEntry.type === 'crop'
+        ? (d.cropLabel ?? d.cropType) === selectedEntry.label
+        : (d.brandLabel ?? d.brandName) === selectedEntry.label
+    );
 
     return (
       <div className="flex flex-col h-full">
@@ -441,12 +507,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
             <TabsContent value="none" className="mt-0 h-full overflow-y-auto">
               <div>
                 <h4 className="font-semibold mb-3 text-base">
-                  All Submissions ({allData.filter((d) => ((d as any).placeId ?? (d as any).place_id) === ((selectedPoint as any).placeId ?? (selectedPoint as any).place_id)).length})
+                  All Submissions ({placeSubmissions.length})
                 </h4>
                 <div className="space-y-0">
-                  {allData
-                    .filter((d) => ((d as any).placeId ?? (d as any).place_id) === ((selectedPoint as any).placeId ?? (selectedPoint as any).place_id))
-                    .map((sub) => renderSubmissionItem(sub, sub.id))}
+                  {placeSubmissions.map((sub) => renderSubmissionItem(sub, sub.id))}
                 </div>
               </div>
             </TabsContent>
@@ -455,10 +519,41 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
               <div>
                 <h4 className="font-semibold mb-3 text-base">Top Crops</h4>
                 <div className="space-y-2">
-                  {cropLeaderboard.length === 0 ? (
+                  {placeCropRankings.length === 0 ? (
                     <div className="text-sm text-gray-500 p-3 text-center">No crop data.</div>
                   ) : (
-                    cropLeaderboard.map((c) => {
+                    placeCropRankings.map((c) => {
+                      const normalized = Number(c.average_normalized_score ?? 1.5);
+                      const rankColor = rankColorFromNormalized(normalized);
+                      const label = c.label ?? 'Unknown';
+                      return (
+                        <div
+                          key={label}
+                          className="p-3 cursor-pointer hover:bg-gray-50 active:bg-gray-100 rounded-lg flex justify-between items-center transition-colors"
+                          onClick={() =>
+                            setSelectedEntry({
+                              type: 'crop',
+                              id: label,
+                              label,
+                            })
+                          }
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium truncate">{label}</div>
+                            <div className="text-xs text-gray-500">Submissions: {c.submission_count ?? '-'}</div>
+                          </div>
+                          <div
+                            className={`w-14 h-7 rounded-full text-white flex items-center justify-center text-sm font-semibold ${rankColor.bgClass}`}
+                          >
+                            {normalized.toFixed(1)}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </TabsContent>
                       const normalized = Number(c.average_normalized_score ?? 1.5);
                       const rankColor = rankColorFromNormalized(normalized);
                       const label = c.crop_label ?? c.crop_name ?? 'Unknown';
