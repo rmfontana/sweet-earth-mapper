@@ -554,57 +554,26 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 </div>
               </div>
             </TabsContent>
-                      const normalized = Number(c.average_normalized_score ?? 1.5);
-                      const rankColor = rankColorFromNormalized(normalized);
-                      const label = c.crop_label ?? c.crop_name ?? 'Unknown';
-                      return (
-                        <div
-                          key={c.crop_id ?? c.crop_name}
-                          className="p-3 cursor-pointer hover:bg-gray-50 active:bg-gray-100 rounded-lg flex justify-between items-center transition-colors"
-                          onClick={() =>
-                            setSelectedEntry({
-                              type: 'crop',
-                              id: String(c.crop_id ?? c.crop_name),
-                              label,
-                            })
-                          }
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="font-medium truncate">{label}</div>
-                            <div className="text-xs text-gray-500">Submissions: {c.submission_count ?? '-'}</div>
-                          </div>
-                          <div
-                            className={`w-14 h-7 rounded-full text-white flex items-center justify-center text-sm font-semibold ${rankColor.bgClass}`}
-                          >
-                            {normalized.toFixed(1)}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </TabsContent>
 
             <TabsContent value="brand" className="mt-0 h-full overflow-y-auto">
               <div>
                 <h4 className="font-semibold mb-3 text-base">Top Brands</h4>
                 <div className="space-y-2">
-                  {brandLeaderboard.length === 0 ? (
+                  {placeBrandRankings.length === 0 ? (
                     <div className="text-sm text-gray-500 p-3 text-center">No brand data.</div>
                   ) : (
-                    brandLeaderboard.map((b) => {
+                    placeBrandRankings.map((b) => {
                       const normalized = Number(b.average_normalized_score ?? 1.5);
                       const rankColor = rankColorFromNormalized(normalized);
-                      const label = b.brand_label ?? b.brand_name ?? 'Unknown';
+                      const label = b.label ?? 'Unknown';
                       return (
                         <div
-                          key={b.brand_id ?? b.brand_name}
+                          key={label}
                           className="p-3 cursor-pointer hover:bg-gray-50 active:bg-gray-100 rounded-lg flex justify-between items-center transition-colors"
                           onClick={() =>
                             setSelectedEntry({
                               type: 'brand',
-                              id: String(b.brand_id ?? b.brand_name),
+                              id: label,
                               label,
                             })
                           }
