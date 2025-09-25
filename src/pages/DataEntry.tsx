@@ -291,19 +291,20 @@ const DataEntry = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!validateForm()) {
+      // scroll to first errored field
+      const firstErrorKey = Object.keys(errors)[0];
+      if (firstErrorKey) {
+        const el = document.getElementById(firstErrorKey);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.focus?.();
+        }
+      }
       toast({
         title: "Submission blocked",
         description: "Please correct the highlighted errors before submitting.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (errors.images) {
-      toast({
-        title: "File issues detected",
-        description: "Please fix the file upload errors before submitting.",
         variant: "destructive",
       });
       return;
@@ -476,7 +477,7 @@ const DataEntry = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6 md:p-8">
-            <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8" autoComplete="off">
+            <form className="space-y-6 sm:space-y-8" autoComplete="off">
               <div className="border-l-4 border-blue-500 pl-4 sm:pl-6">
                 <div className="flex items-center space-x-2 mb-6">
                   <h3 className="text-xl font-bold text-gray-900">Required Information</h3>
@@ -503,45 +504,63 @@ const DataEntry = () => {
 
                   {/* Brand/Farm Name */}
                   <div className="relative">
-                    <Label htmlFor="brand" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
-                       <Building2 className="inline w-4 h-4 mr-2" />
-                       Farm/Brand Name <span className="ml-1 text-red-600">*</span>
-                     </Label>
+                    <Label
+                      htmlFor="brand"
+                      className="flex items-center mb-2 text-sm font-semibold text-gray-700"
+                    >
+                      <Building2 className="inline w-4 h-4 mr-2 text-blue-600" />
+                      Farm / Brand Name <span className="ml-1 text-red-600">*</span>
+                    </Label>
                     <ComboBoxAddable
                       items={allBrands}
                       value={formData.brand}
                       onSelect={(value) => handleInputChange('brand', value)}
                       onAddNew={handleAddBrand}
-                      placeholder="Select or enter farm/brand"
+                      placeholder="Select or enter farm/brand name"
                     />
-                    <p className="text-xs text-gray-500 flex items-center mt-1">
-                       <Info className="w-3 h-3 mr-1" />
-                       This is the name of the farm or brand that grew or supplied the produce. 
-                       Press <b>Enter</b> to select, <b>Ctrl+Enter/Shift+Enter</b> to add new (tap <b>+</b> on mobile).
+                    <p className="text-xs text-gray-500 flex items-center mt-2 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
+                      <Info className="w-3 h-3 mr-1 text-blue-500" />
+                      The name of the <b>farm</b> or <b>brand</b> that grew the produce.  
+                      <span className="ml-1 hidden sm:inline">
+                        Press <kbd className="px-1 border rounded">Enter</kbd> to select,  
+                        <kbd className="px-1 border rounded">Shift+Enter</kbd> (or tap <b>+</b> on mobile) to add new.
+                      </span>
                     </p>
-                    {errors.brand && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.brand}</p>}
+                    {errors.brand && (
+                      <p className="text-red-600 text-sm mt-2 flex items-center">
+                        <X className="w-4 h-4 mr-1" />
+                        {errors.brand}
+                      </p>
+                    )}
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mb-6 sm:mb-8">
                   {/* Point of Purchase */}
                   <div className="relative">
-                    <Label htmlFor="store" className="flex items-center mb-2 text-sm font-semibold text-gray-700">
-                       <Store className="inline w-4 h-4 mr-2 text-indigo-600" />
-                       Point of Purchase <span className="ml-1 text-red-600">*</span>
+                    <Label
+                      htmlFor="store"
+                      className="flex items-center mb-2 text-sm font-semibold text-gray-700"
+                    >
+                      <Store className="inline w-4 h-4 mr-2 text-indigo-600" />
+                      Point of Purchase <span className="ml-1 text-red-600">*</span>
                     </Label>
                     <ComboBoxAddable
                       items={allStores}
                       value={formData.store}
                       onSelect={(value) => handleInputChange('store', value)}
                       onAddNew={handleAddStore}
-                      placeholder="Select or enter store"
+                      placeholder="Select or enter point of purchase"
                     />
-                    <p className="text-xs text-gray-500 flex items-center mt-1">
-                       <Info className="w-3 h-3 mr-1" />
-                       This is where you bought the item (e.g., grocery store, farmers market, co-op).
+                    <p className="text-xs text-gray-500 flex items-center mt-2 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100">
+                      <Info className="w-3 h-3 mr-1 text-indigo-500" />
+                      Where you <b>purchased</b> the item — e.g., grocery store,  
+                      co-op, farmers market, or CSA pickup.
                     </p>
-                    {errors.store && <p className="text-red-600 text-sm mt-2 flex items-center"><X className="w-4 h-4 mr-1" />{errors.store}</p>}
+                    {errors.store && (
+                      <p className="text-red-600 text-sm mt-2 flex items-center">
+                        <X className="w-4 h-4 mr-1" />
+                        {errors.store}
+                      </p>
+                    )}
                   </div>
 
                   {/* BRIX Level */}
@@ -709,29 +728,29 @@ const DataEntry = () => {
                 </div>
               </div>
 
-              {/* Submit Button */}
-              <div className="flex justify-end pt-8">
-                <Button type="submit" className="w-full sm:w-auto px-12 py-6 text-lg font-semibold" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    'Submit Measurement'
-                  )}
-                </Button>
-              </div>
-
-              {errors.general && (
-                <div className="p-4 bg-red-100 text-red-700 rounded-lg text-sm text-center">
-                  <p>{errors.general}</p>
-                </div>
-              )}
             </form>
           </CardContent>
         </Card>
       </main>
+      {/* Sticky footer submit button */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4">
+      <div className="max-w-5xl mx-auto flex justify-end">
+      <Button
+        onClick={() => handleSubmit()}
+        className="w-full sm:w-auto px-12 py-6 text-lg font-semibold"
+        disabled={isLoading}
+        >
+         {isLoading ? (
+          <>
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          Submitting...
+          </>
+          ) : (
+            'Submit Measurement'
+          )}
+        </Button>
+        </div>
+      </div>
     </div>
   );
 };
