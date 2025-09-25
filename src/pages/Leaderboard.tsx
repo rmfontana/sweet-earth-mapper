@@ -146,19 +146,14 @@ const LeaderboardPage: React.FC = () => {
           crop,
         };
 
-        let [loc, brand, users] = await Promise.all([
+        // Fetch location and brand data with regional filters
+        let [loc, brand] = await Promise.all([
           fetchLocationLeaderboard(filters),
           fetchBrandLeaderboard(filters),
-          fetchUserLeaderboard(filters),
         ]);
 
-        // For users, try global data first if regional data is sparse
-        if (mounted && !users.length && (filters.city || filters.state || filters.country)) {
-          const globalUsers = await fetchUserLeaderboard({ crop: filters.crop });
-          if (globalUsers.length) {
-            users = globalUsers;
-          }
-        }
+        // Always fetch users globally (ignore location filters)
+        let users = await fetchUserLeaderboard({ crop: filters.crop || undefined });
 
         // fallback: broaden scope if locations and brands have nothing found
         if (
@@ -174,10 +169,7 @@ const LeaderboardPage: React.FC = () => {
           ]);
           loc = newLoc;
           brand = newBrand;
-          // Keep global users if we already have them
-          if (!users.length) {
-            users = await fetchUserLeaderboard(filters);
-          }
+          // Keep global users (no need to refetch)
           if (loc.length || brand.length) {
             setDataScopeMessage(
               `Showing state-level data for ${filters.state}, ${filters.country} (no data for ${location.city})`
@@ -198,10 +190,7 @@ const LeaderboardPage: React.FC = () => {
           ]);
           loc = newLoc;
           brand = newBrand;
-          // Keep global users if we already have them
-          if (!users.length) {
-            users = await fetchUserLeaderboard(filters);
-          }
+          // Keep global users (no need to refetch)
           if (loc.length || brand.length) {
             setDataScopeMessage(
               `Showing country-level data for ${filters.country} (no data for ${location.state})`
@@ -217,10 +206,7 @@ const LeaderboardPage: React.FC = () => {
           ]);
           loc = newLoc;
           brand = newBrand;
-          // Keep global users if we already have them
-          if (!users.length) {
-            users = await fetchUserLeaderboard(filters);
-          }
+          // Keep global users (no need to refetch)
           if (loc.length || brand.length) {
             setDataScopeMessage("Showing global data (no regional data found)");
           }
@@ -287,6 +273,11 @@ const LeaderboardPage: React.FC = () => {
           <CardTitle className="text-lg font-semibold text-center">
             {title}
           </CardTitle>
+          {labelKey === "user" && (
+            <p className="text-sm text-muted-foreground text-center mt-1">
+              Global rankings • All users
+            </p>
+          )}
         </CardHeader>
         <CardContent className="px-0">
           {loading ? (
@@ -321,6 +312,8 @@ const LeaderboardPage: React.FC = () => {
                       (entry as any)[`${labelKey}_label`] ||
                       (entry as any)[`${labelKey}_name`] ||
                       (entry as any).user_name ||
+                      (entry as any).display_name ||
+                      (entry as any).entity_name ||
                       "Unknown";
 
                     const score = entry.average_normalized_score ?? null;
@@ -337,7 +330,10 @@ const LeaderboardPage: React.FC = () => {
                     const rank = entry.rank ?? idx + 1;
                     const isTie = rankCounts[rank] > 1;
 
-                  const { bgClass } = rankColorFromNormalized(normalizedScore);
+                    // Use neutral color for user rankings, normalized color for others
+                    const { bgClass } = labelKey === "user" 
+                      ? { bgClass: "bg-gray-700" }
+                      : rankColorFromNormalized(normalizedScore);
 
                   return (
                     <div
@@ -384,7 +380,7 @@ const LeaderboardPage: React.FC = () => {
                         <span
                           className={`px-3 py-1 text-sm font-semibold rounded-full text-white ${bgClass}`}
                         >
-                          {rank}{isTie ? ' (tie)' : ''}
+                          {rank}
                         </span>
                         {isTie && (
                           <span className="text-xs text-gray-500 mt-1">
