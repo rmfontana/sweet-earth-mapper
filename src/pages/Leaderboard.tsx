@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import Header from "../components/Layout/Header";
 import LocationSelector from "../components/common/LocationSelector";
-import LeaderboardSkeleton from "../components/Layout/LeaderboardSkeleton";
 import { fetchCropTypes, CropType } from "../lib/fetchCropTypes";
 import {
   fetchLocationLeaderboard,
@@ -370,9 +370,19 @@ const LeaderboardPage: React.FC = () => {
     );
   };
 
-  // Show skeleton during initial loading
+  // Show loading spinner during initial loading
   if (isPageLoading) {
-    return <LeaderboardSkeleton />;
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Loading leaderboards...</p>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
