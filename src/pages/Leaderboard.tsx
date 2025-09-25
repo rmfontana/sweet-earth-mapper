@@ -236,26 +236,33 @@ const LeaderboardPage: React.FC = () => {
   ) => {
     if (leaderboardType === "user") return; // Users not clickable
     
+    console.log('Navigation entry:', entry, 'type:', leaderboardType);
+    
     const filters: Record<string, string> = {};
     
     if (leaderboardType === 'location') {
-      // For location leaderboard, use the location_id to filter by specific location
-      // Pass both the location and place info for precise filtering
-      if (entry.location_id) filters.location = entry.location_name || entry.location_label;
-      if (entry.city) filters.city = entry.city;
-      if (entry.state) filters.state = entry.state;
-      if (entry.country) filters.country = entry.country;
+      // For location leaderboard, get the location name from the entry
+      const locationName = entry.entity_name || entry.location_name || entry.location_label;
+      if (locationName) filters.location = locationName;
+      
+      // Also add geographic filters if available from current location context
+      if (location?.city) filters.city = location.city;
+      if (location?.state) filters.state = location.state;
+      if (location?.country) filters.country = location.country;
       if (crop) filters.crop = crop;
     } else if (leaderboardType === 'brand') {
-      // For brand leaderboard, use brand name and current geographic filters
-      const brandName = entry.brand_label || entry.brand_name;
+      // For brand leaderboard, get the brand name from the entry
+      const brandName = entry.entity_name || entry.brand_name || entry.brand_label;
       if (brandName) filters.brand = brandName;
       if (crop) filters.crop = crop;
+      
       // Include current location context to show brand only in this area
       if (location?.country) filters.country = location.country;
       if (location?.state) filters.state = location.state;
       if (location?.city) filters.city = location.city;
     }
+    
+    console.log('Navigation filters:', filters);
     
     const params = new URLSearchParams(
       Object.entries(filters).filter(([_, v]) => v && v.trim() !== '')
