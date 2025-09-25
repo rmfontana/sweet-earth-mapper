@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Layout/Header";
 import LocationSelector from "../components/common/LocationSelector";
+import LeaderboardSkeleton from "../components/Layout/LeaderboardSkeleton";
 import { fetchCropTypes, CropType } from "../lib/fetchCropTypes";
 import {
   fetchLocationLeaderboard,
@@ -42,6 +43,7 @@ const LeaderboardPage: React.FC = () => {
   }));
   const [crop, setCrop] = useState("");
   const [allCrops, setAllCrops] = useState<CropType[]>([]);
+  const [cropsLoading, setCropsLoading] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
   const [dataScopeMessage, setDataScopeMessage] = useState<string>("");
 
@@ -49,6 +51,9 @@ const LeaderboardPage: React.FC = () => {
   const [brandData, setBrandData] = useState<LeaderboardEntry[]>([]);
   const [userData, setUserData] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+
+  // Computed loading state for full page
+  const isPageLoading = isInitializing || loading || cropsLoading;
 
   // Initialize codes for LocationSelector
   useEffect(() => {
@@ -112,11 +117,14 @@ const LeaderboardPage: React.FC = () => {
   // Load crop types
   useEffect(() => {
     const load = async () => {
+      setCropsLoading(true);
       try {
         const crops = await fetchCropTypes();
         setAllCrops(crops || []);
       } catch (err) {
         console.error("Failed to load crops:", err);
+      } finally {
+        setCropsLoading(false);
       }
     };
     load();
@@ -362,6 +370,11 @@ const LeaderboardPage: React.FC = () => {
     );
   };
 
+  // Show skeleton during initial loading
+  if (isPageLoading) {
+    return <LeaderboardSkeleton />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
@@ -435,11 +448,6 @@ const LeaderboardPage: React.FC = () => {
           </section>
         </div>
       </main>
-      {loading && (
-        <div className="fixed bottom-4 right-4 p-3 bg-white border rounded shadow">
-          Updating leaderboards…
-        </div>
-      )}
     </div>
   );
 };
