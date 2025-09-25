@@ -25,7 +25,7 @@ import SubmissionTableRow from '../common/SubmissionTableRow';
 import { useAuth } from '../../contexts/AuthContext';
 import { Command, CommandInput, CommandItem, CommandList, CommandEmpty } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Range, getTrackBackground } from 'react-range';
+import { Slider } from "@/components/ui/slider";
 import DataPointDetailModal from '../common/DataPointDetailModal';
 import { useStaticData } from '../../hooks/useStaticData';
 import { fetchCropCategories } from '../../lib/fetchCropCategories';
@@ -43,53 +43,70 @@ const BrixRangeSlider = ({
   brixRange: [number, number];
   onChange: (range: [number, number]) => void;
 }) => {
+  const [localValues, setLocalValues] = useState(brixRange);
+
+  useEffect(() => {
+    setLocalValues(brixRange);
+  }, [brixRange]);
+
+  const handleSliderChange = (values: number[]) => {
+    const newRange: [number, number] = [values[0], values[1]];
+    setLocalValues(newRange);
+    onChange(newRange);
+  };
+
+  const handleInputChange = (index: 0 | 1, value: string) => {
+    const numValue = parseFloat(value);
+    if (!isNaN(numValue) && numValue >= MIN_BRIX && numValue <= MAX_BRIX) {
+      const newRange: [number, number] = [...localValues];
+      newRange[index] = numValue;
+      
+      // Ensure min <= max
+      if (newRange[0] <= newRange[1]) {
+        setLocalValues(newRange);
+        onChange(newRange);
+      }
+    }
+  };
+
   return (
-    <Range
-      values={brixRange}
-      step={STEP}
-      min={MIN_BRIX}
-      max={MAX_BRIX}
-      onChange={(values) => onChange([values[0], values[1]])}
-      renderTrack={({ props, children }) => (
-        <div
-          {...props}
-          style={{
-            ...props.style,
-            height: '6px',
-            width: '100%',
-            background: getTrackBackground({
-              values: brixRange,
-              colors: ['#ccc', '#3b82f6', '#ccc'],
-              min: MIN_BRIX,
-              max: MAX_BRIX,
-            }),
-            borderRadius: '4px',
-          }}
-        >
-          {children}
+    <div className="space-y-3">
+      <Slider
+        value={localValues}
+        onValueChange={handleSliderChange}
+        max={MAX_BRIX}
+        min={MIN_BRIX}
+        step={STEP}
+        className="w-full"
+      />
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <div className="flex items-center gap-1">
+          <span className="text-muted-foreground">Min:</span>
+          <Input
+            type="number"
+            value={localValues[0]}
+            onChange={(e) => handleInputChange(0, e.target.value)}
+            min={MIN_BRIX}
+            max={MAX_BRIX}
+            step={STEP}
+            className="w-16 h-7 text-xs"
+          />
         </div>
-      )}
-      renderThumb={({ props, index }) => (
-        <div
-          {...props}
-          style={{
-            ...props.style,
-            height: '24px',
-            width: '24px',
-            backgroundColor: '#3b82f6',
-            borderRadius: '50%',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            boxShadow: '0 0 2px #00000044',
-          }}
-        >
-          <span style={{ color: '#fff', fontSize: '12px' }}>
-            {brixRange[index].toFixed(1)}
-          </span>
+        <span className="text-muted-foreground">to</span>
+        <div className="flex items-center gap-1">
+          <span className="text-muted-foreground">Max:</span>
+          <Input
+            type="number"
+            value={localValues[1]}
+            onChange={(e) => handleInputChange(1, e.target.value)}
+            min={MIN_BRIX}
+            max={MAX_BRIX}
+            step={STEP}
+            className="w-16 h-7 text-xs"
+          />
         </div>
-      )}
-    />
+      </div>
+    </div>
   );
 };
 
@@ -374,7 +391,7 @@ const DataTable: React.FC = () => {
 
       {showFilters && (
         <Card className="mb-6">
-          <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <Label className="text-sm font-medium mb-2 block">Crop Types</Label>
               {filters.cropTypes.length > 0 && (
@@ -487,53 +504,9 @@ const DataTable: React.FC = () => {
               </div>
             </div>
 
-            <div>
-              <Label className="text-sm font-medium mb-2 block">Crop Category</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between text-sm"
-                    aria-haspopup="listbox"
-                  >
-                    {filters.category || 'Select Category'}
-                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0">
-                  <Command>
-                    <CommandInput
-                      placeholder="Search category..."
-                      className="h-9"
-                      value={cropCategoryQuery}
-                      onValueChange={setCropCategoryQuery}
-                      aria-label="Search crop categories"
-                    />
-                    <CommandList role="listbox" aria-label="Crop categories">
-                      <CommandEmpty>No category found.</CommandEmpty>
-                      {filteredCategories.map((category) => (
-                        <CommandItem
-                          key={category}
-                          onSelect={() => {
-                            handleFilterChange('category', category);
-                            setCropCategoryQuery('');
-                          }}
-                          aria-selected={filters.category === category}
-                          role="option"
-                          className="flex justify-between items-center"
-                        >
-                          <span>{category}</span>
-                          {filters.category === category && <Check className="h-4 w-4" />}
-                        </CommandItem>
-                      ))}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
 
             <div>
-              <Label className="text-sm font-medium mb-2 block">Brand Name</Label>
+              <Label className="text-sm font-medium mb-2 block">Brand/Farm Name</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -578,7 +551,7 @@ const DataTable: React.FC = () => {
             </div>
 
             <div>
-              <Label className="text-sm font-medium mb-2 block">Location Name</Label>
+              <Label className="text-sm font-medium mb-2 block">Point of Purchase</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button

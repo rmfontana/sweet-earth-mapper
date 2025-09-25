@@ -35,16 +35,22 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
       return false;
     }
 
-    // Brand filter
+    // Brand filter - map filters.brand to point.brandName
     // Check if a brand is set AND it's different from the default (empty string)
-    if (filters.brand && filters.brand !== DEFAULT_MAP_FILTERS.brand && point.brandName !== filters.brand) {
-      return false;
+    if (filters.brand && filters.brand !== DEFAULT_MAP_FILTERS.brand) {
+      console.log('Filtering by brand:', filters.brand, 'vs point.brandName:', point.brandName);
+      if (point.brandName !== filters.brand) {
+        return false;
+      }
     }
 
-    // Place filter
+    // Place filter - map filters.place to point.placeName
     // Check if a place is set AND it's different from the default (empty string)
-    if (filters.place && filters.place !== DEFAULT_MAP_FILTERS.place && point.placeName !== filters.place) {
-      return false;
+    if (filters.place && filters.place !== DEFAULT_MAP_FILTERS.place) {
+      console.log('Filtering by place:', filters.place, 'vs point.placeName:', point.placeName);
+      if (point.placeName !== filters.place) {
+        return false;
+      }
     }
 
     // Brix range filter
@@ -92,18 +98,27 @@ export function applyFilters(data: BrixDataPoint[], filters: MapFilter, isAdmin:
 
     // Geographic location filters
     // City filter
-    if (filters.city && filters.city !== DEFAULT_MAP_FILTERS.city && point.city.toLowerCase() !== filters.city.toLowerCase()) {
-      return false;
+    if (filters.city && filters.city !== DEFAULT_MAP_FILTERS.city) {
+      console.log('Filtering by city:', filters.city, 'vs point.city:', point.city);
+      if (point.city?.toLowerCase() !== filters.city.toLowerCase()) {
+        return false;
+      }
     }
 
     // State filter
-    if (filters.state && filters.state !== DEFAULT_MAP_FILTERS.state && point.state.toLowerCase() !== filters.state.toLowerCase()) {
-      return false;
+    if (filters.state && filters.state !== DEFAULT_MAP_FILTERS.state) {
+      console.log('Filtering by state:', filters.state, 'vs point.state:', point.state);
+      if (point.state?.toLowerCase() !== filters.state.toLowerCase()) {
+        return false;
+      }
     }
 
     // Country filter
-    if (filters.country && filters.country !== DEFAULT_MAP_FILTERS.country && point.country.toLowerCase() !== filters.country.toLowerCase()) {
-      return false;
+    if (filters.country && filters.country !== DEFAULT_MAP_FILTERS.country) {
+      console.log('Filtering by country:', filters.country, 'vs point.country:', point.country);
+      if (point.country?.toLowerCase() !== filters.country.toLowerCase()) {
+        return false;
+      }
     }
 
     return true;
@@ -142,12 +157,14 @@ export function getFilterSummary(filters: MapFilter, isAdmin: boolean): string {
     activeFilters.push(`category: ${filters.category}`);
   }
   
+  // Brand filter - use user-friendly name
   if (filters.brand && filters.brand !== DEFAULT_MAP_FILTERS.brand) {
-    activeFilters.push(`brand: ${filters.brand}`);
+    activeFilters.push(`Brand/Farm: ${filters.brand}`);
   }
   
+  // Place filter - use user-friendly name
   if (filters.place && filters.place !== DEFAULT_MAP_FILTERS.place) {
-    activeFilters.push(`place: ${filters.place}`);
+    activeFilters.push(`Point of Purchase: ${filters.place}`);
   }
   
   // Brix range: check if either bound is different from default
