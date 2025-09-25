@@ -1,6 +1,7 @@
 // src/components/DataBrowser/DataTable.tsx
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { BrixDataPoint, MapFilter } from '../../types';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
@@ -28,6 +29,7 @@ import { Range, getTrackBackground } from 'react-range';
 import DataPointDetailModal from '../common/DataPointDetailModal';
 import { useStaticData } from '../../hooks/useStaticData';
 import { fetchCropCategories } from '../../lib/fetchCropCategories';
+import { parseURLSearchParams, mergeFiltersWithDefaults } from '../../lib/urlFilterUtils';
 
 // Constants for Brix Range Slider
 const STEP = 0.5;
@@ -94,6 +96,8 @@ const BrixRangeSlider = ({
 const DataTable: React.FC = () => {
   const { filters, setFilters, isAdmin, setFilteredCount } = useFilters();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [urlFiltersApplied, setUrlFiltersApplied] = useState(false);
 
   // Corrected destructuring: useStaticData hook returns 'locations' not 'stores'.
   const { crops, brands, locations, isLoading: isLoadingStaticData } = useStaticData();
@@ -123,6 +127,22 @@ const DataTable: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDataPoint, setSelectedDataPoint] = useState<BrixDataPoint | null>(null);
+  const [fromLeaderboard, setFromLeaderboard] = useState(false);
+
+  // Apply URL filters on component mount
+  useEffect(() => {
+    if (!urlFiltersApplied && searchParams.toString()) {
+      const urlFilters = parseURLSearchParams(searchParams);
+      if (Object.keys(urlFilters).length > 0) {
+        const mergedFilters = mergeFiltersWithDefaults(urlFilters);
+        setFilters(mergedFilters);
+        setUrlFiltersApplied(true);
+        setFromLeaderboard(true);
+        // Clear URL params after applying to prevent re-application on re-renders
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, urlFiltersApplied, setFilters, setSearchParams]);
 
   // Use a single useEffect to fetch submissions and categories
   useEffect(() => {
@@ -242,6 +262,7 @@ const DataTable: React.FC = () => {
     // Refactored state from 'setStoreQuery' to 'setLocationQuery'
     setLocationQuery('');
     setCropQuery('');
+    setFromLeaderboard(false);
   };
 
   const filteredCategories = useMemo(() =>
@@ -304,6 +325,27 @@ const DataTable: React.FC = () => {
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-8">
       <h2 className="text-3xl font-bold text-gray-900 mb-6">All Submissions</h2>
+
+      {fromLeaderboard && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <div className="flex items-center justify-between">
+            <p className="text-blue-800 text-sm">
+              Showing filtered results from leaderboard selection
+            </p>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => {
+                setFromLeaderboard(false);
+                window.history.back();
+              }}
+              className="text-blue-600 hover:text-blue-800"
+            >
+              ← Back to Leaderboard
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="mb-6 flex flex-col md:flex-row gap-4 items-center">
         <div className="relative w-full md:w-1/3">

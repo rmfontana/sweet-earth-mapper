@@ -216,12 +216,31 @@ const LeaderboardPage: React.FC = () => {
   }, [location, crop, isInitializing]);
 
   const handleNavigate = (
-    filters: Record<string, string | undefined>,
-    labelKey: string
+    entry: any,
+    leaderboardType: 'location' | 'brand' | 'user'
   ) => {
-    if (labelKey === "user") return; // Users not clickable
+    if (leaderboardType === "user") return; // Users not clickable
+    
+    const filters: Record<string, string> = {};
+    
+    if (leaderboardType === 'location') {
+      // For location leaderboard, use place name and location context
+      if (entry.place_name) filters.place = entry.place_name;
+      if (entry.city) filters.city = entry.city;
+      if (entry.state) filters.state = entry.state;
+      if (entry.country) filters.country = entry.country;
+      if (crop) filters.crop = crop;
+    } else if (leaderboardType === 'brand') {
+      // For brand leaderboard, use brand name and location context
+      if (entry.brand_name) filters.brand = entry.brand_name;
+      if (crop) filters.crop = crop;
+      if (location?.country) filters.country = location.country;
+      if (location?.state) filters.state = location.state;
+      if (location?.city) filters.city = location.city;
+    }
+    
     const params = new URLSearchParams(
-      Object.entries(filters).filter(([_, v]) => v)
+      Object.entries(filters).filter(([_, v]) => v && v.trim() !== '')
     ).toString();
     navigate(`/data?${params}`);
   };
@@ -285,20 +304,8 @@ const LeaderboardPage: React.FC = () => {
                       key={(entry as any)[`${labelKey}_id`] ?? label ?? idx}
                       onClick={() =>
                         handleNavigate(
-                          {
-                            crop,
-                            ...(labelKey === "location" && {
-                              place: (entry as any).location_label,
-                              city: (entry as any).city,
-                              state: (entry as any).state,
-                              country: (entry as any).country,
-                            }),
-                            ...(labelKey === "brand" && {
-                              brand: (entry as any).brand_label,
-                              country: (entry as any).country,
-                            }),
-                          },
-                          labelKey
+                          entry,
+                          labelKey as 'location' | 'brand' | 'user'
                         )
                       }
                       className={`grid grid-cols-3 items-center px-4 py-2 border-b last:border-0 odd:bg-white even:bg-gray-50 hover:bg-gray-100 text-sm ${

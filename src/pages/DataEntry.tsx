@@ -735,10 +735,10 @@ const DataEntry = () => {
       {/* Sticky footer submit button */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4">
       <div className="max-w-5xl mx-auto flex justify-end">
-      <Button
-        onClick={() => handleSubmit()}
-        className="w-full sm:w-auto px-12 py-6 text-lg font-semibold"
-        disabled={isLoading}
+        <Button
+          onClick={(e) => handleSubmit(e)}
+          className="w-full sm:w-auto px-12 py-6 text-lg font-semibold"
+          disabled={isLoading}
         >
          {isLoading ? (
           <>
