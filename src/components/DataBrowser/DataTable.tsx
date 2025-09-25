@@ -149,14 +149,18 @@ const DataTable: React.FC = () => {
   // Apply URL filters on component mount
   useEffect(() => {
     if (!urlFiltersApplied && searchParams.toString()) {
+      console.log('🔍 Raw URL search params:', searchParams.toString());
       const urlFilters = parseURLSearchParams(searchParams);
+      console.log('📋 Parsed URL filters:', urlFilters);
+      
       if (Object.keys(urlFilters).length > 0) {
         const mergedFilters = mergeFiltersWithDefaults(urlFilters);
+        console.log('✅ Merged filters being applied:', mergedFilters);
         setFilters(mergedFilters);
         setUrlFiltersApplied(true);
         setFromLeaderboard(true);
-        // Clear URL params after applying to prevent re-application on re-renders
-        setSearchParams({}, { replace: true });
+        // Keep URL params for debugging - don't clear them immediately
+        // setSearchParams({}, { replace: true });
       }
     }
   }, [searchParams, urlFiltersApplied, setFilters, setSearchParams]);

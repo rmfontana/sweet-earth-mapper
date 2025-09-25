@@ -236,23 +236,23 @@ const LeaderboardPage: React.FC = () => {
   ) => {
     if (leaderboardType === "user") return; // Users not clickable
     
-    console.log('Navigation entry:', entry, 'type:', leaderboardType);
+    console.log('🔍 Navigation entry:', entry, 'type:', leaderboardType);
     
     const filters: Record<string, string> = {};
     
     if (leaderboardType === 'location') {
-      // For location leaderboard, get the location name from the entry
-      const locationName = entry.entity_name || entry.location_name || entry.location_label;
+      // Location leaderboard returns: location_label, location_name, city, state, country
+      const locationName = entry.location_label || entry.location_name;
       if (locationName) filters.location = locationName;
       
-      // Also add geographic filters if available from current location context
-      if (location?.city) filters.city = location.city;
-      if (location?.state) filters.state = location.state;
-      if (location?.country) filters.country = location.country;
+      // Use the geographic data from the leaderboard entry itself
+      if (entry.city) filters.city = entry.city;
+      if (entry.state) filters.state = entry.state;
+      if (entry.country) filters.country = entry.country;
       if (crop) filters.crop = crop;
     } else if (leaderboardType === 'brand') {
-      // For brand leaderboard, get the brand name from the entry
-      const brandName = entry.entity_name || entry.brand_name || entry.brand_label;
+      // Brand leaderboard returns: brand_label, brand_name
+      const brandName = entry.brand_label || entry.brand_name;
       if (brandName) filters.brand = brandName;
       if (crop) filters.crop = crop;
       
@@ -262,11 +262,13 @@ const LeaderboardPage: React.FC = () => {
       if (location?.city) filters.city = location.city;
     }
     
-    console.log('Navigation filters:', filters);
+    console.log('🎯 Navigation filters being set:', filters);
     
     const params = new URLSearchParams(
       Object.entries(filters).filter(([_, v]) => v && v.trim() !== '')
     ).toString();
+    
+    console.log('🔗 Navigating to URL with params:', params);
     navigate(`/data?${params}`);
   };
 
